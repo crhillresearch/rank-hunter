@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -74,7 +75,14 @@ def test_windows_installer_branding_and_finish_launch_contract() -> None:
     assert "Flags: postinstall nowait skipifsilent shellexec" in package
     assert "Check: ShouldOfferRunRankHunter" in package
     assert "function ShouldOfferRunRankHunter: Boolean;" in package
-    assert "Result := AppCheck.Checked;" in package
+    assert "FileExists(ExpandConstant('{localappdata}\\RankHunter\\setup-shortcut-ready'))" in package
+    assert "FileExists(ExpandConstant('{autoprograms}\\Rank Hunter\\Rank Hunter.lnk'))" in package
+    assert '$ReadyMarkerPath = Join-Path $StateRoot "setup-shortcut-ready"' in setup
+    assert "Remove-Item -Force -ErrorAction SilentlyContinue $ReadyMarkerPath" in setup
+    assert 'Test-Path -LiteralPath $shortcutPath -PathType Leaf' in setup
+    assert 'Set-Content -Encoding ASCII -Path $ReadyMarkerPath -Value "ready"' in setup
+    assert setup.index("Install-RankHunterShortcut\n    $shortcutPath") < setup.index('Save-State "ready" "Rank Hunter is installed and ready."')
+    assert "Result := AppCheck.Checked" in package
 
     assert 'fill="#1E8BFF"' in icon_svg
     assert 'fill="#FFFFFF"' in icon_svg
@@ -346,9 +354,11 @@ def test_only_one_start_menu_shortcut_is_created_after_verification() -> None:
     cleanup_pos = setup.index("Remove-RankHunterShortcuts", setup.index("try {"))
     check_pos = setup.index('Write-Step "Checking installed environments"')
     verify_pos = setup.index('Write-Step "Verifying Rank Hunter"')
-    state_pos = setup.index('Save-State "ready"')
-    shortcut_pos = setup.index("Install-RankHunterShortcut", state_pos)
-    assert cleanup_pos < check_pos < verify_pos < state_pos < shortcut_pos
+    shortcut_pos = setup.index("Install-RankHunterShortcut", verify_pos)
+    shortcut_check_pos = setup.index("Test-Path -LiteralPath $shortcutPath -PathType Leaf", shortcut_pos)
+    state_pos = setup.index('Save-State "ready"', shortcut_check_pos)
+    ready_marker_pos = setup.index('Set-Content -Encoding ASCII -Path $ReadyMarkerPath -Value "ready"', state_pos)
+    assert cleanup_pos < check_pos < verify_pos < shortcut_pos < shortcut_check_pos < state_pos < ready_marker_pos
 
     assert '"Rank Hunter.lnk"' in setup
 
@@ -463,6 +473,68 @@ def test_launcher_uses_persisted_environment_state() -> None:
     assert "Rerun the Rank Hunter installer to repair" in launcher
     assert '$DistroName = [string]$state.distro' in stop
     assert '$DistroUser = [string]$state.distro_user' in stop
+
+
+def test_bundled_source_bootstrap_can_install_from_public_release_tag(tmp_path: Path) -> None:
+    """CI bundle branches and public release tags differ; installation must work."""
+    if os.geteuid() == 0:
+        pytest.skip("Bootstrap deliberately rejects running as root")
+
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(
+        ["git", "init", "-b", "rank-hunter-release-source"], cwd=source, check=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    (source / "install.sh").write_text(
+        "#!/usr/bin/env bash\nset -euo pipefail\necho fixture-installed\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "install.sh"], cwd=source, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=RankHunterTest",
+         "-c", "user.email=test@example.invalid", "commit", "-m", "Fixture"],
+        cwd=source, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=source, text=True,
+    ).strip()
+    bundle = tmp_path / "release.bundle"
+    subprocess.run(
+        ["git", "bundle", "create", str(bundle),
+         "refs/heads/rank-hunter-release-source"],
+        cwd=source, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+
+    science = tmp_path / "science-python"
+    science.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    science.chmod(0o755)
+    home = tmp_path / "home"
+    home.mkdir()
+    command = [
+        "bash", str(WIN / "bootstrap-user.sh"),
+        "--repo-url", "https://github.com/crhillresearch/rank-hunter.git",
+        "--repo-ref", "v0.9.2",
+        "--repo-dir", "rank-hunter",
+        "--science-python", str(science),
+        "--source-bundle", str(bundle),
+        "--source-commit", sha,
+    ]
+    for _ in range(2):  # fresh install and idempotent update
+        result = subprocess.run(
+            command, cwd=ROOT, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env={**os.environ, "HOME": str(home)},
+        )
+        assert result.returncode == 0, (result.stdout, result.stderr)
+        checkout = home / "rank-hunter"
+        assert checkout.exists()
+        assert subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=checkout, text=True,
+        ).strip() == sha
+        assert subprocess.check_output(
+            ["git", "remote", "get-url", "origin"], cwd=checkout, text=True,
+        ).strip() == "https://github.com/crhillresearch/rank-hunter.git"
 
 
 def test_release_workflow_bundles_exact_source_with_public_origin() -> None:

@@ -7,6 +7,9 @@ REPO_DIR_NAME="rank-hunter"
 SCIENCE_PYTHON="/opt/rankhunter/miniforge3/envs/sage/bin/python"
 SOURCE_BUNDLE=""
 SOURCE_COMMIT=""
+# This is the branch that CI writes INTO the standalone source bundle. It is
+# intentionally not the public release tag (e.g. v0.9.2).
+BUNDLE_BRANCH="rank-hunter-release-source"
 
 usage() {
   cat <<'EOF'
@@ -95,7 +98,7 @@ fi
 if [[ ! -e "$ROOT" ]]; then
   if [[ -n "$SOURCE_BUNDLE" ]]; then
     log "Installing bundled Rank Hunter source..."
-    git clone --branch "$REPO_REF" "$SOURCE_BUNDLE" "$ROOT"
+    git clone --branch "$BUNDLE_BRANCH" "$SOURCE_BUNDLE" "$ROOT"
   else
     log "Cloning Rank Hunter..."
     git clone "$REPO_URL" "$ROOT"
@@ -114,7 +117,7 @@ if [[ -n "$SOURCE_BUNDLE" ]]; then
     log "Checkout has local changes; preserving them and installing the current tree."
   else
     log "Loading pinned Rank Hunter source from bundled Git data..."
-    git fetch "$SOURCE_BUNDLE" "$REPO_REF"
+    git fetch "$SOURCE_BUNDLE" "refs/heads/$BUNDLE_BRANCH"
     git checkout --detach "$SOURCE_COMMIT"
     [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]] || {
       echo "[Rank Hunter / WSL] ERROR: bundled source commit verification failed." >&2

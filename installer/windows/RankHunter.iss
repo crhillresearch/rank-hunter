@@ -315,7 +315,11 @@ end;
 
 function ShouldOfferRunRankHunter: Boolean;
 begin
-  Result := AppCheck.Checked;
+  { The worker creates the Start-menu shortcut only after it verifies setup.
+    Do not offer launch after cancelled or failed installation. }
+  Result := AppCheck.Checked
+    and FileExists(ExpandConstant('{localappdata}\RankHunter\setup-shortcut-ready'))
+    and FileExists(ExpandConstant('{autoprograms}\Rank Hunter\Rank Hunter.lnk'));
 end;
 
 function GetSetupUiParameters(Param: String): String;

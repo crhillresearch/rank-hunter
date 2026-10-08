@@ -26,6 +26,7 @@ $ProgressPreference = "SilentlyContinue"
 
 $StateRoot = Join-Path $env:LOCALAPPDATA "RankHunter"
 $StatePath = Join-Path $StateRoot "setup-state.json"
+$ReadyMarkerPath = Join-Path $StateRoot "setup-shortcut-ready"
 $DownloadRoot = Join-Path $StateRoot "downloads"
 $WslRoot = Join-Path $StateRoot "wsl"
 if (-not $ProgressPath) { $ProgressPath = Join-Path $StateRoot "setup-progress.json" }
@@ -577,6 +578,8 @@ function Test-RepoInstalled([string]$Distro, [string]$User) {
 }
 
 try {
+    # A previous run must never authorize Finish-screen launch for this run.
+    Remove-Item -Force -ErrorAction SilentlyContinue $ReadyMarkerPath
     Remove-RankHunterShortcuts
 
     if ($RepoDirName -notmatch '^[A-Za-z0-9._-]+$') {
@@ -674,8 +677,13 @@ try {
         throw "Rank Hunter installation finished without a runnable scripts/run-ui.sh."
     }
 
-    Save-State "ready" "Rank Hunter is installed and ready." $science.Distro $science.User $science.Python
     Install-RankHunterShortcut
+    $shortcutPath = Join-Path ([Environment]::GetFolderPath("Programs")) "Rank Hunter\Rank Hunter.lnk"
+    if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
+        throw "Rank Hunter was installed, but its Start-menu shortcut was not created: $shortcutPath"
+    }
+    Save-State "ready" "Rank Hunter is installed and ready." $science.Distro $science.User $science.Python
+    Set-Content -Encoding ASCII -Path $ReadyMarkerPath -Value "ready"
     Write-SetupProgress "Rank Hunter is ready" "Installation completed successfully. The Rank Hunter Start-menu shortcut is now available." 100
 
     if (-not $Quiet) {
