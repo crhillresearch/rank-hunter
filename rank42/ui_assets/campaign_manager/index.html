@@ -1,0 +1,374 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --rh-text: #31333f;
+    --rh-muted: rgba(49,51,63,.58);
+    --rh-hover: rgba(127,127,127,.08);
+    --rh-border: rgba(127,127,127,.24);
+    --rh-surface: #ffffff;
+    --rh-shadow: rgba(49,51,63,.10);
+    --rh-primary: #2563eb;
+    --rh-success: #1fa65d;
+    --rh-warn: #d39b25;
+    --rh-danger: #c94a4a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background:transparent; overflow:hidden; }
+  body {
+    color: var(--rh-text);
+    font-family: var(--rh-font, "Source Sans Pro", system-ui, sans-serif);
+  }
+  .campaign {
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:12px;
+    align-items:center;
+    min-height:72px;
+    padding:10px 10px 10px 14px;
+    border:1px solid var(--rh-border);
+    border-radius:10px;
+    background:var(--rh-surface);
+    cursor:pointer;
+    box-shadow:0 1px 3px var(--rh-shadow);
+    transition:border-color .12s ease,box-shadow .12s ease,transform .12s ease;
+  }
+  .campaign:hover {
+    border-color:color-mix(in srgb,var(--rh-primary) 26%,var(--rh-border));
+    box-shadow:0 4px 12px var(--rh-shadow);
+    transform:translateY(-1px);
+  }
+  .campaign.active {
+    border-color:color-mix(in srgb,var(--rh-primary) 58%,var(--rh-border));
+    background:var(--rh-surface);
+    box-shadow:inset 3px 0 0 var(--rh-primary),0 3px 10px var(--rh-shadow);
+  }
+  .copy { min-width:0; }
+  .headline {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-width:0;
+  }
+  .name {
+    font-size:15px;
+    line-height:1.2;
+    font-weight:700;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+  }
+  .badge {
+    flex:0 0 auto;
+    padding:2px 7px;
+    border-radius:999px;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.04em;
+    color:var(--rh-primary);
+    background:color-mix(in srgb,var(--rh-primary) 10%,transparent);
+    border:1px solid color-mix(in srgb,var(--rh-primary) 25%,transparent);
+  }
+  .meta,.objective {
+    margin-top:4px;
+    color:var(--rh-muted);
+    font-size:12px;
+    line-height:1.2;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+  }
+  .objective { margin-top:3px; }
+  .progress-wrap {
+    margin-top:8px;
+    max-width:520px;
+  }
+  .progress-head {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    color:var(--rh-muted);
+    font-size:11px;
+    line-height:1.1;
+  }
+  .progress-track {
+    width:100%;
+    height:6px;
+    margin-top:5px;
+    border-radius:999px;
+    overflow:hidden;
+    background:color-mix(in srgb,var(--rh-text) 9%,transparent);
+  }
+  .progress-fill {
+    height:100%;
+    width:0;
+    border-radius:999px;
+    background:var(--rh-primary);
+  }
+  .progress-wrap.blocked .progress-fill {
+    background:var(--rh-danger);
+  }
+  .progress-wrap.neutral .progress-fill {
+    background:var(--rh-muted);
+  }
+  .actions {
+    display:flex;
+    gap:5px;
+    align-items:center;
+  }
+  button.action {
+    width:36px;
+    height:36px;
+    border:0;
+    border-radius:8px;
+    padding:0;
+    background:transparent;
+    color:var(--rh-muted);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+  }
+  button.action:hover {
+    color:var(--rh-text);
+    background:var(--rh-hover);
+  }
+  button.activate { color:var(--rh-success); }
+  button.pause { color:var(--rh-warn); }
+  button.complete { color:var(--rh-success); }
+  button.archive:hover { color:var(--rh-danger); }
+  .confirm-label {
+    color:var(--rh-muted);
+    font-size:12px;
+    font-weight:650;
+    white-space:nowrap;
+  }
+  button.confirm-choice {
+    border:0;
+    border-radius:7px;
+    padding:7px 9px;
+    background:transparent;
+    color:var(--rh-text);
+    font:inherit;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  button.confirm-choice.ok { color:var(--rh-success); }
+  button.confirm-choice.cancel { color:var(--rh-muted); }
+  button.confirm-choice:hover { background:var(--rh-hover); }
+  .fa-icon { width:15px; height:15px; fill:currentColor; display:block; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const ICONS = {
+  "play": {viewBox:"0 0 384 512", path:"M73 39C54.3 27.6 31 27 11.7 37.8S-20 69.5-20 92l0 328c0 22.5 12.3 43.3 31.7 54.2S54.3 484.4 73 473l268-164c18-11 29-30.6 29-53s-11-42-29-53L73 39z"},
+  "pause": {viewBox:"0 0 320 512", path:"M48 64C21.5 64 0 85.5 0 112l0 288c0 26.5 21.5 48 48 48l32 0c26.5 0 48-21.5 48-48l0-288c0-26.5-21.5-48-48-48L48 64zm192 0c-26.5 0-48 21.5-48 48l0 288c0 26.5 21.5 48 48 48l32 0c26.5 0 48-21.5 48-48l0-288c0-26.5-21.5-48-48-48l-32 0z"},
+  "check": {viewBox:"0 0 448 512", path:"M438.6 105.4c12.5 12.5 12.5 32.8 0 45.3l-256 256c-12.5 12.5-32.8 12.5-45.3 0l-128-128c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L160 338.7 393.4 105.4c12.5-12.5 32.8-12.5 45.3 0z"},
+  "box-archive": {viewBox:"0 0 512 512", path:"M32 32C14.3 32 0 46.3 0 64s14.3 32 32 32l448 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 32zm0 96 448 0 0 320c0 17.7-14.3 32-32 32L64 480c-17.7 0-32-14.3-32-32l0-320zm160 64c-17.7 0-32 14.3-32 32s14.3 32 32 32l128 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-128 0z"}
+};
+
+function sendMessageToStreamlitClient(type,data){
+  window.parent.postMessage(Object.assign({isStreamlitMessage:true,type},data),"*");
+}
+function init(){ sendMessageToStreamlitClient("streamlit:componentReady",{apiVersion:1}); }
+function setFrameHeight(){
+  sendMessageToStreamlitClient("streamlit:setFrameHeight",{height:Math.max(1,document.documentElement.scrollHeight)});
+}
+function sendValue(value){ sendMessageToStreamlitClient("streamlit:setComponentValue",{value}); }
+function emit(action){ sendValue({action,nonce:Date.now()}); }
+function icon(name){
+  const i=ICONS[name];
+  return '<svg class="fa-icon" data-icon="'+name+'" viewBox="'+i.viewBox+'" aria-hidden="true"><path d="'+i.path+'"></path></svg>';
+}
+function applyTheme(theme,palette){
+  const root=document.documentElement.style;
+  if(theme){
+    if(theme.textColor)root.setProperty("--rh-text",theme.textColor);
+    const surface=theme.secondaryBackgroundColor||theme.backgroundColor;
+    if(surface)root.setProperty("--rh-surface",surface);
+    if(theme.primaryColor)root.setProperty("--rh-primary",theme.primaryColor);
+    if(theme.font)root.setProperty("--rh-font",theme.font);
+    const text=theme.textColor||"#31333f";
+    root.setProperty("--rh-muted","color-mix(in srgb, "+text+" 58%, transparent)");
+    root.setProperty("--rh-border","color-mix(in srgb, "+text+" 20%, transparent)");
+    root.setProperty("--rh-hover","color-mix(in srgb, "+text+" 8%, transparent)");
+    root.setProperty("--rh-shadow","color-mix(in srgb, "+text+" 12%, transparent)");
+  }
+  if(palette){
+    if(palette["rh-text"]){
+      root.setProperty("--rh-text",palette["rh-text"]);
+      root.setProperty("--rh-shadow","color-mix(in srgb, "+palette["rh-text"]+" 12%, transparent)");
+    }
+    if(palette["rh-muted"])root.setProperty("--rh-muted",palette["rh-muted"]);
+    if(palette["rh-card"])root.setProperty("--rh-surface",palette["rh-card"]);
+    if(palette["rh-surface-hover"])root.setProperty("--rh-hover",palette["rh-surface-hover"]);
+    if(palette["rh-border"])root.setProperty("--rh-border",palette["rh-border"]);
+    if(palette["rh-primary"])root.setProperty("--rh-primary",palette["rh-primary"]);
+    if(palette["rh-success"])root.setProperty("--rh-success",palette["rh-success"]);
+    if(palette["rh-warning"])root.setProperty("--rh-warn",palette["rh-warning"]);
+    if(palette["rh-danger"])root.setProperty("--rh-danger",palette["rh-danger"]);
+  }
+}
+function action(actionName,iconName,title,className){
+  const b=document.createElement("button");
+  b.type="button";
+  b.className="action "+className;
+  b.title=title;
+  b.setAttribute("aria-label",title);
+  b.innerHTML=icon(iconName);
+  b.addEventListener("click",e=>{
+    e.stopPropagation();
+    if(!actionName.startsWith("confirm-"))emit(actionName);
+  });
+  return b;
+}
+let currentArgs={};
+
+function confirmLifecycle(actions,actionName,label){
+  actions.replaceChildren();
+  const prompt=document.createElement("span");
+  prompt.className="confirm-label";
+  prompt.textContent=label;
+
+  const ok=document.createElement("button");
+  ok.type="button";
+  ok.className="confirm-choice ok";
+  ok.textContent="OK";
+  ok.addEventListener("click",e=>{e.stopPropagation();emit(actionName);});
+
+  const cancel=document.createElement("button");
+  cancel.type="button";
+  cancel.className="confirm-choice cancel";
+  cancel.textContent="Cancel";
+  cancel.addEventListener("click",e=>{e.stopPropagation();render(currentArgs);});
+
+  actions.append(prompt,ok,cancel);
+}
+
+function render(args){
+  currentArgs=args||{};
+  const root=document.getElementById("root");
+  root.replaceChildren();
+
+  const row=document.createElement("div");
+  row.className="campaign"+(args.active?" active":"");
+  row.addEventListener("click",()=>emit("open"));
+
+  const copy=document.createElement("div");
+  copy.className="copy";
+  const headline=document.createElement("div");
+  headline.className="headline";
+  const name=document.createElement("div");
+  name.className="name";
+  name.textContent=args.name||"Campaign";
+  headline.appendChild(name);
+  if(args.active){
+    const badge=document.createElement("span");
+    badge.className="badge";
+    badge.textContent="CURRENT";
+    headline.appendChild(badge);
+  }
+  const meta=document.createElement("div");
+  meta.className="meta";
+  meta.textContent=args.meta||"";
+  copy.append(headline,meta);
+  if(args.objective){
+    const objective=document.createElement("div");
+    objective.className="objective";
+    objective.textContent=args.objective;
+    copy.appendChild(objective);
+  }
+
+  const progress=document.createElement("div");
+  progress.className="progress-wrap";
+  if(args.progress_blocked)progress.classList.add("blocked");
+  if(args.progress_fraction===null || args.progress_fraction===undefined){
+    progress.classList.add("neutral");
+  }
+  const progressHead=document.createElement("div");
+  progressHead.className="progress-head";
+  const progressLabel=document.createElement("span");
+  progressLabel.textContent=args.progress_label||"";
+  progressHead.appendChild(progressLabel);
+  const progressTrack=document.createElement("div");
+  progressTrack.className="progress-track";
+  const progressFill=document.createElement("div");
+  progressFill.className="progress-fill";
+  const fraction=(
+    args.progress_fraction===null || args.progress_fraction===undefined
+      ? 0
+      : Math.max(0,Math.min(1,Number(args.progress_fraction)||0))
+  );
+  progressFill.style.width=(fraction*100).toFixed(1)+"%";
+  progressTrack.appendChild(progressFill);
+  progress.append(progressHead,progressTrack);
+  copy.appendChild(progress);
+
+  const actions=document.createElement("div");
+  actions.className="actions";
+  if(args.status==="active"){
+    if(args.active){
+      actions.appendChild(action("pause","pause","Pause campaign","pause"));
+    } else {
+      actions.appendChild(action("activate","play","Set current campaign","activate"));
+    }
+  } else if(args.status==="paused"){
+    actions.appendChild(
+      action(
+        "resume",
+        "play",
+        args.active ? "Resume campaign" : "Resume & set current campaign",
+        "activate"
+      )
+    );
+  } else if(args.status==="completed" || args.status==="archived"){
+    actions.appendChild(
+      action(
+        "reopen",
+        "play",
+        args.active ? "Reopen campaign" : "Reopen & set current campaign",
+        "activate"
+      )
+    );
+  }
+  if(args.status!=="completed" && args.status!=="archived"){
+    const complete=action("confirm-complete","check","Mark completed","complete");
+    complete.addEventListener("click",e=>{
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      confirmLifecycle(actions,"complete","Mark completed?");
+    });
+    actions.appendChild(complete);
+  }
+  if(args.status!=="archived"){
+    const archive=action("confirm-archive","box-archive","Archive campaign","archive");
+    archive.addEventListener("click",e=>{
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      confirmLifecycle(actions,"archive","Archive campaign?");
+    });
+    actions.appendChild(archive);
+  }
+
+  row.append(copy,actions);
+  root.appendChild(row);
+  requestAnimationFrame(setFrameHeight);
+}
+function onDataFromPython(event){
+  if(event.data.type!=="streamlit:render")return;
+  const args=event.data.args||{};
+  applyTheme(event.data.theme,args.palette||{});
+  render(args);
+}
+window.addEventListener("message",onDataFromPython);
+window.addEventListener("load",()=>setTimeout(setFrameHeight,0));
+init();
+</script>
+</body>
+</html>

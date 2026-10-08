@@ -1,0 +1,797 @@
+/*
+ * Axiom dark appearance — Primer-inspired neutral developer palette.
+ *
+ * Palette reference:
+ *   canvas/default  #0D1117
+ *   canvas/subtle   #161B22
+ *   raised/hover    #21262D
+ *   border/default  #30363D
+ *   border/strong   #484F58
+ *   fg/default      #E6EDF3
+ *   fg/secondary    #C9D1D9
+ *   fg/muted        #9DA7B1
+ *   accent          #58A6FF
+ *
+ * This file loads after every base Axiom stylesheet so dark mode owns all
+ * remaining native/light surfaces without adding page-local dark-mode code.
+ */
+
+html,
+body,
+[data-testid="stAppViewContainer"],
+.stApp {
+    color-scheme: dark;
+    background: var(--rh-bg) !important;
+    color: var(--rh-text) !important;
+}
+
+/* ---------- Global readable text hierarchy ---------- */
+
+:is(
+    [data-testid="stMarkdownContainer"],
+    [data-testid="stCaptionContainer"],
+    [data-testid="stWidgetLabel"],
+    [data-testid="stMetric"],
+    [data-testid="stNotification"],
+    [data-testid="stAlert"],
+    [data-testid="stToast"],
+    [data-testid="stExpander"],
+    [data-testid="stForm"],
+    [role="dialog"]
+) {
+    color: var(--rh-text) !important;
+}
+
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] span,
+label,
+legend {
+    color: var(--rh-text-secondary) !important;
+}
+
+[data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] *,
+small,
+.rh-system-detail,
+.rh-plugin-meta {
+    color: var(--rh-muted) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--rh-muted-2) !important;
+    opacity: 1 !important;
+}
+
+/* Keep headings and important values crisp rather than inheriting muted text. */
+:is(h1, h2, h3, h4, h5, h6),
+[data-testid="stMetricValue"],
+strong,
+b {
+    color: var(--rh-text) !important;
+}
+
+/* ---------- Sidebar / navigation ---------- */
+
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div {
+    background: var(--rh-nav) !important;
+}
+
+[data-testid="stSidebar"] {
+    border-right-color: var(--rh-border) !important;
+    box-shadow: 10px 0 35px rgba(0, 0, 0, .24) !important;
+}
+
+[data-testid="stSidebar"] details,
+[data-testid="stSidebar"] [data-testid="stExpander"],
+[data-testid="stSidebar"] details > summary {
+    background: transparent !important;
+    color: var(--rh-muted) !important;
+    border-color: transparent !important;
+}
+
+[data-testid="stSidebar"] details[open] > summary {
+    background: var(--rh-card) !important;
+    color: var(--rh-text-secondary) !important;
+    border: 1px solid var(--rh-border) !important;
+}
+
+[data-testid="stSidebar"] details > summary :is(p, span, svg) {
+    color: inherit !important;
+    fill: currentColor !important;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="secondary"],
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-secondary"] {
+    background: transparent !important;
+    border-color: transparent !important;
+    color: var(--rh-text-secondary) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover,
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-secondary"]:hover {
+    background: var(--rh-surface-hover) !important;
+    color: var(--rh-text) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="primary"],
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"] {
+    background: var(--rh-surface-active) !important;
+    background-image: none !important;
+    border: 1px solid color-mix(in srgb, var(--rh-primary) 34%, var(--rh-border)) !important;
+    color: var(--rh-primary-deep) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="primary"] :is(p, span, svg),
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"] :is(p, span, svg) {
+    color: inherit !important;
+    fill: currentColor !important;
+}
+
+/* Appearance toggle itself should read as a dark segmented control. */
+[class*="st-key-rh-appearance-toggle"] {
+    background: var(--rh-card) !important;
+    border-color: var(--rh-border) !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button[kind="secondary"] {
+    background: transparent !important;
+    color: var(--rh-muted) !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button[kind="primary"] {
+    background: var(--rh-surface-active) !important;
+    background-image: none !important;
+    border-color: var(--rh-border-strong) !important;
+    color: var(--rh-primary-deep) !important;
+}
+
+/* ---------- Buttons / page navigation ---------- */
+
+.stButton > button[kind="secondary"],
+.stDownloadButton > button,
+[data-testid="stPopover"] > button,
+button[data-testid="stBaseButton-secondary"] {
+    background: var(--rh-card) !important;
+    background-image: none !important;
+    border-color: var(--rh-border) !important;
+    color: var(--rh-text-secondary) !important;
+}
+
+.stButton > button[kind="secondary"]:hover,
+.stDownloadButton > button:hover,
+[data-testid="stPopover"] > button:hover,
+button[data-testid="stBaseButton-secondary"]:hover {
+    background: var(--rh-surface-hover) !important;
+    border-color: var(--rh-border-strong) !important;
+    color: var(--rh-text) !important;
+}
+
+.stButton > button[kind="primary"],
+[data-testid="stFormSubmitButton"] > button[kind="primary"],
+button[data-testid="stBaseButton-primary"] {
+    color: var(--rh-text-on-accent) !important;
+}
+
+.stButton > button[kind="primary"] :is(p, span, svg),
+[data-testid="stFormSubmitButton"] > button[kind="primary"] :is(p, span, svg),
+button[data-testid="stBaseButton-primary"] :is(p, span, svg) {
+    color: inherit !important;
+    fill: currentColor !important;
+}
+
+[data-testid="stLinkButton"] a,
+a[data-testid="stBaseButton-secondary"],
+a[data-testid="stBaseButton-primary"] {
+    background: var(--rh-card) !important;
+    background-image: none !important;
+    border: 1px solid var(--rh-border) !important;
+    color: var(--rh-text-secondary) !important;
+    box-shadow: none !important;
+}
+
+[data-testid="stLinkButton"] a:hover,
+a[data-testid="stBaseButton-secondary"]:hover,
+a[data-testid="stBaseButton-primary"]:hover {
+    background: var(--rh-surface-hover) !important;
+    border-color: var(--rh-border-strong) !important;
+    color: var(--rh-text) !important;
+}
+
+[data-testid="stLinkButton"] a :is(p, span, svg),
+a[data-testid="stBaseButton-secondary"] :is(p, span, svg),
+a[data-testid="stBaseButton-primary"] :is(p, span, svg) {
+    color: inherit !important;
+    fill: currentColor !important;
+}
+
+/* ---------- Inputs, selects, number controls ---------- */
+
+[data-baseweb="input"],
+[data-baseweb="textarea"],
+[data-baseweb="select"] > div,
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stDateInput"] input,
+[data-testid="stTimeInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stNumberInputContainer"],
+[data-testid="stSelectbox"] [role="combobox"],
+[data-testid="stMultiSelect"] [role="combobox"] {
+    background: var(--rh-card) !important;
+    background-color: var(--rh-card) !important;
+    color: var(--rh-text) !important;
+    border-color: var(--rh-control-border) !important;
+    caret-color: var(--rh-text) !important;
+}
+
+:is(
+    [data-testid="stTextInput"],
+    [data-testid="stTextArea"],
+    [data-testid="stDateInput"],
+    [data-testid="stTimeInput"],
+    [data-testid="stNumberInput"],
+    [data-testid="stSelectbox"],
+    [data-testid="stMultiSelect"]
+) :is(input, textarea, [role="combobox"]) {
+    color: var(--rh-text) !important;
+    -webkit-text-fill-color: var(--rh-text) !important;
+}
+
+/* Streamlit/BaseWeb can paint the select caret and number +/- endcaps white.
+   Force every control-side button back onto the elevated dark surface. */
+:is(
+    [data-testid="stSelectbox"],
+    [data-testid="stMultiSelect"],
+    [data-testid="stNumberInput"],
+    [data-testid="stDateInput"],
+    [data-testid="stTimeInput"]
+) button {
+    background: var(--rh-surface-soft) !important;
+    background-color: var(--rh-surface-soft) !important;
+    border-color: var(--rh-control-border) !important;
+    color: var(--rh-text-secondary) !important;
+    box-shadow: none !important;
+}
+
+:is(
+    [data-testid="stSelectbox"],
+    [data-testid="stMultiSelect"],
+    [data-testid="stNumberInput"],
+    [data-testid="stDateInput"],
+    [data-testid="stTimeInput"]
+) button:hover {
+    background: var(--rh-surface-hover) !important;
+    color: var(--rh-text) !important;
+}
+
+:is(
+    [data-testid="stSelectbox"],
+    [data-testid="stMultiSelect"],
+    [data-testid="stNumberInput"],
+    [data-testid="stDateInput"],
+    [data-testid="stTimeInput"]
+) button :is(svg, span) {
+    color: inherit !important;
+    fill: currentColor !important;
+}
+
+[data-baseweb="select"] *,
+[data-testid="stSelectbox"] *,
+[data-testid="stMultiSelect"] * {
+    border-color: var(--rh-control-border);
+}
+
+:is([data-testid="stSelectbox"], [data-testid="stMultiSelect"])
+div:has(> [role="combobox"]) {
+    background: var(--rh-card) !important;
+    border-color: var(--rh-control-border) !important;
+}
+
+:is([data-testid="stSelectbox"], [data-testid="stMultiSelect"])
+[role="combobox"] ~ * {
+    background: var(--rh-surface-soft) !important;
+    color: var(--rh-text-secondary) !important;
+    border-color: var(--rh-control-border) !important;
+}
+
+:is([data-testid="stSelectbox"], [data-testid="stMultiSelect"])
+:is(svg, path) {
+    color: var(--rh-text-secondary) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+
+/* Current Streamlit React-Aria selects can place the Open trigger/endcap under
+   the BaseWeb select shell rather than the legacy stSelectbox button selector. */
+[data-baseweb="select"] button,
+[data-baseweb="select"] button[aria-label="Open"],
+[data-baseweb="select"] button[aria-haspopup="listbox"],
+[data-baseweb="select"] [role="combobox"] + button,
+[data-baseweb="select"] [role="combobox"] ~ button {
+    background: var(--rh-card) !important;
+    background-color: var(--rh-card) !important;
+    color: var(--rh-text-secondary) !important;
+    border-color: var(--rh-control-border) !important;
+    box-shadow: none !important;
+}
+
+[data-baseweb="select"] button:hover,
+[data-baseweb="select"] button[aria-label="Open"]:hover {
+    background: var(--rh-surface-hover) !important;
+    color: var(--rh-text) !important;
+}
+
+[data-baseweb="select"] button :is(svg, path, span) {
+    color: inherit !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+
+/* Widget help affordances and portal-rendered tooltips need their own Dark
+   cascade because they are not descendants of the form control. */
+[data-testid="stTooltipIcon"] button,
+.stTooltipIcon button,
+button[aria-label^="Help for "] {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--rh-text-secondary) !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+[data-testid="stTooltipIcon"] button:hover,
+.stTooltipIcon button:hover,
+button[aria-label^="Help for "]:hover {
+    background: var(--rh-surface-hover) !important;
+    color: var(--rh-text) !important;
+}
+
+[data-testid="stTooltipIcon"] button :is(svg, path),
+.stTooltipIcon button :is(svg, path),
+button[aria-label^="Help for "] :is(svg, path) {
+    color: inherit !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+}
+
+[role="tooltip"],
+[data-baseweb="tooltip"],
+[data-testid="stTooltipContent"] {
+    background: var(--rh-card-2) !important;
+    background-color: var(--rh-card-2) !important;
+    color: var(--rh-text) !important;
+    border: 1px solid var(--rh-border-strong) !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .32) !important;
+}
+
+[role="tooltip"] *,
+[data-baseweb="tooltip"] *,
+[data-testid="stTooltipContent"] * {
+    color: var(--rh-text) !important;
+}
+
+/* Streamlit 1.63 can hard-code white on the icon glyph itself. Override the
+   rendered shapes, not only the parent button color. */
+button[aria-label="Open"],
+button[aria-haspopup="listbox"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 2rem !important;
+    padding: 0 .5rem 0 .58rem !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--rh-text-secondary) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+
+button[aria-label="Open"] :is(svg, span),
+button[aria-haspopup="listbox"] :is(svg, span) {
+    color: var(--rh-text-secondary) !important;
+    -webkit-text-fill-color: var(--rh-text-secondary) !important;
+    background: transparent !important;
+}
+
+button[aria-label="Open"] svg,
+button[aria-haspopup="listbox"] svg {
+    display: none !important;
+}
+
+button[aria-label="Open"]::after,
+button[aria-haspopup="listbox"]::after {
+    content: "";
+    display: block;
+    width: .38rem;
+    height: .38rem;
+    margin: -.16rem 0 .08rem 0;
+    border-right: 1.7px solid var(--rh-text-secondary);
+    border-bottom: 1.7px solid var(--rh-text-secondary);
+    transform: rotate(45deg);
+    transform-origin: center;
+}
+
+[data-testid="stTooltipIcon"] button,
+.stTooltipIcon button,
+button[aria-label^="Help for "] {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--rh-muted-2) !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+[data-testid="stTooltipIcon"] button > span,
+.stTooltipIcon button > span,
+button[aria-label^="Help for "] > span,
+button[aria-label^="Help for "] :is(svg, span) {
+    color: var(--rh-muted-2) !important;
+    -webkit-text-fill-color: var(--rh-muted-2) !important;
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+button[aria-label^="Help for "] svg circle {
+    fill: transparent !important;
+    stroke: var(--rh-muted-2) !important;
+}
+
+button[aria-label^="Help for "] svg path,
+button[aria-label^="Help for "] svg text {
+    fill: var(--rh-muted-2) !important;
+    stroke: var(--rh-muted-2) !important;
+}
+
+/* Radios / checkboxes / toggles */
+[data-testid="stRadio"] label,
+[data-testid="stCheckbox"] label,
+[data-testid="stToggle"] label {
+    color: var(--rh-text-secondary) !important;
+}
+
+[data-testid="stRadio"] label :is(p, span),
+[data-testid="stCheckbox"] label :is(p, span),
+[data-testid="stToggle"] label :is(p, span) {
+    color: inherit !important;
+}
+
+[data-baseweb="checkbox"] > div,
+[data-baseweb="radio"] > div {
+    border-color: var(--rh-border-strong) !important;
+}
+
+/* ---------- Popovers, menus, dialogs ---------- */
+
+[data-baseweb="popover"],
+[data-baseweb="menu"],
+[data-testid="stPopoverBody"],
+[data-testid="stDialog"],
+[role="dialog"],
+[role="listbox"],
+[role="menu"] {
+    background: var(--rh-card) !important;
+    background-color: var(--rh-card) !important;
+    color: var(--rh-text) !important;
+    border-color: var(--rh-border) !important;
+}
+
+:is(
+    [data-baseweb="popover"],
+    [data-baseweb="menu"],
+    [data-testid="stPopoverBody"],
+    [role="dialog"],
+    [role="listbox"],
+    [role="menu"]
+) * {
+    color: var(--rh-text-secondary);
+}
+
+:is([role="option"], [role="menuitem"]):hover,
+:is([role="option"], [role="menuitem"])[aria-selected="true"] {
+    background: var(--rh-surface-hover) !important;
+    color: var(--rh-text) !important;
+}
+
+/* ---------- Expanders / tabs / segmented controls ---------- */
+
+[data-testid="stExpander"],
+[data-testid="stExpander"] > details,
+[data-testid="stExpander"] > details > summary {
+    background: var(--rh-card) !important;
+    color: var(--rh-text-secondary) !important;
+    border-color: var(--rh-border) !important;
+}
+
+[data-testid="stExpander"] > details > summary:hover {
+    background: var(--rh-surface-hover) !important;
+    color: var(--rh-text) !important;
+}
+
+[data-baseweb="tab-list"] {
+    background: var(--rh-card) !important;
+    border-color: var(--rh-border) !important;
+}
+
+button[data-baseweb="tab"] {
+    background: transparent !important;
+    color: var(--rh-muted) !important;
+}
+
+button[data-baseweb="tab"][aria-selected="true"] {
+    background: var(--rh-surface-active) !important;
+    color: var(--rh-primary-deep) !important;
+}
+
+button[data-variant="segmented_control"] {
+    background: var(--rh-card) !important;
+    border-color: var(--rh-border) !important;
+    color: var(--rh-text-secondary) !important;
+}
+
+button[data-variant="segmented_control"][data-selected="true"] {
+    background: var(--rh-surface-active) !important;
+    border-color: var(--rh-border-strong) !important;
+    color: var(--rh-primary-deep) !important;
+}
+
+/* ---------- Tables / data surfaces ---------- */
+
+[data-testid="stDataFrame"],
+[data-testid="stDataEditor"],
+[data-testid="stTable"],
+[data-testid="stCodeBlock"],
+[data-testid="stForm"],
+[data-testid="stMetric"],
+[data-testid="stVerticalBlockBorderWrapper"],
+[class*="-region-card"] {
+    background: var(--rh-card) !important;
+    background-color: var(--rh-card) !important;
+    color: var(--rh-text) !important;
+    border-color: var(--rh-border) !important;
+}
+
+[data-testid="stDataFrame"] *,
+[data-testid="stDataEditor"] *,
+[data-testid="stTable"] * {
+    border-color: var(--rh-border) !important;
+}
+
+[data-testid="stTable"] table,
+table {
+    background: var(--rh-card) !important;
+    color: var(--rh-text-secondary) !important;
+}
+
+[data-testid="stTable"] th,
+table th {
+    background: var(--rh-surface-soft) !important;
+    color: var(--rh-text) !important;
+    border-color: var(--rh-border) !important;
+}
+
+[data-testid="stTable"] td,
+table td {
+    background: var(--rh-card) !important;
+    color: var(--rh-text-secondary) !important;
+    border-color: var(--rh-border-subtle) !important;
+}
+
+[data-testid="stTable"] tr:hover td,
+table tr:hover td {
+    background: var(--rh-surface-hover) !important;
+}
+
+/* Glide Data Grid uses the native Streamlit theme for its canvas. Keep its
+   surrounding chrome dark as well. */
+[data-testid="stDataFrame"] > div,
+[data-testid="stDataEditor"] > div,
+[data-testid="stDataFrame"] [role="grid"],
+[data-testid="stDataEditor"] [role="grid"] {
+    background: var(--rh-card) !important;
+    color: var(--rh-text) !important;
+}
+
+/* ---------- Alerts / code / status ---------- */
+
+[data-testid="stAlert"],
+[data-testid="stToast"],
+[data-testid="stNotification"] {
+    background: var(--rh-card) !important;
+    color: var(--rh-text) !important;
+    border-color: var(--rh-border) !important;
+}
+
+[data-testid="stCodeBlock"],
+pre,
+code {
+    background: #010409 !important;
+    color: var(--rh-text) !important;
+    border-color: var(--rh-border) !important;
+}
+
+[data-testid="stCodeBlock"] button {
+    background: var(--rh-card) !important;
+    color: var(--rh-text-secondary) !important;
+    border-color: var(--rh-border) !important;
+}
+
+/* ---------- Existing Axiom research surfaces ---------- */
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button,
+[data-testid="stExpandSidebarButton"] button,
+[data-testid="stVerticalBlockBorderWrapper"],
+.rh-dashboard-metric,
+[class*="-region-card"] {
+    box-shadow: 0 7px 22px rgba(0, 0, 0, .20) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button,
+[data-testid="stExpandSidebarButton"] button {
+    background: var(--rh-card-2) !important;
+    border: 1px solid color-mix(in srgb, var(--rh-primary) 68%, var(--rh-border-strong)) !important;
+    color: var(--rh-primary) !important;
+    opacity: 1 !important;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--rh-primary) 12%, transparent) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button:hover,
+[data-testid="stExpandSidebarButton"] button:hover {
+    background: var(--rh-surface-hover) !important;
+    border-color: var(--rh-primary) !important;
+    color: var(--rh-text) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] button :is(svg, path),
+[data-testid="stExpandSidebarButton"] button :is(svg, path) {
+    color: inherit !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+    opacity: 1 !important;
+}
+
+.rh-dashboard-progress {
+    background: var(--rh-border) !important;
+}
+
+.rh-rank-box {
+    border-color: var(--rh-border-strong) !important;
+}
+
+.rh-status-dot.on {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--rh-success) 18%, transparent) !important;
+}
+
+.rh-status-dot.off {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--rh-danger) 18%, transparent) !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-local-frontier"],
+    [class*="st-key-rh-dashboard-icarm-leaderboard"],
+    [class*="st-key-rh-dashboard-pipeline"],
+    [class*="st-key-rh-dashboard-search"],
+    [class*="st-key-rh-dashboard-latest-activity"],
+    [class*="st-key-rh-dashboard-research-landscape"],
+    [class*="st-key-rh-dashboard-chart-"],
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-rank-certification"],
+    [class*="st-key-rh-dashboard-unresolved"],
+    [class*="st-key-rh-dashboard-lattices"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"],
+    [class*="st-key-rh-dashboard-torsion-rank"],
+    [class*="st-key-rh-dashboard-torsion-overview"],
+    [class*="st-key-rh-dashboard-torsion-distribution"],
+    [class*="st-key-rh-dashboard-torsion-records"],
+    [class*="st-key-rh-dashboard-torsion-signals"],
+    [class*="st-key-rh-dashboard-icarm-torsion-filter"]
+) {
+    background: var(--rh-dashboard-section-bg) !important;
+    color: var(--rh-text) !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-local-frontier"],
+    [class*="st-key-rh-dashboard-icarm-leaderboard"],
+    [class*="st-key-rh-dashboard-pipeline"],
+    [class*="st-key-rh-dashboard-search"],
+    [class*="st-key-rh-dashboard-latest-activity"],
+    [class*="st-key-rh-dashboard-research-landscape"],
+    [class*="st-key-rh-dashboard-chart-"],
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-rank-certification"],
+    [class*="st-key-rh-dashboard-unresolved"],
+    [class*="st-key-rh-dashboard-lattices"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"],
+    [class*="st-key-rh-dashboard-torsion-rank"]
+) > [data-testid="stVerticalBlockBorderWrapper"] {
+    box-shadow: 0 7px 22px rgba(0, 0, 0, .18) !important;
+}
+
+.rh-frontier-marker i {
+    box-shadow: 0 0 0 3px var(--rh-dashboard-section-bg) !important;
+}
+
+.rh-frontier-stats > div,
+.rh-dashboard-mini-grid > div {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, .16) !important;
+}
+
+/* Research Landscape owns the single card surface; its four child chart
+   regions stay flat/transparent in Dark as well as Light. */
+:is(
+    [class*="st-key-rh-dashboard-chart-rank-distribution"],
+    [class*="st-key-rh-dashboard-chart-search-progress"],
+    [class*="st-key-rh-dashboard-chart-root-rank"],
+    [class*="st-key-rh-dashboard-chart-parameter-yield"]
+) {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-chart-rank-distribution"],
+    [class*="st-key-rh-dashboard-chart-search-progress"],
+    [class*="st-key-rh-dashboard-chart-root-rank"],
+    [class*="st-key-rh-dashboard-chart-parameter-yield"]
+) > [data-testid="stVerticalBlockBorderWrapper"] {
+    background: transparent !important;
+    background-color: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+/* ---------- Charts ---------- */
+
+[data-testid="stPlotlyChart"] .main-svg,
+[data-testid="stPlotlyChart"] .bg,
+[data-testid="stPlotlyChart"] .plot-container {
+    background: var(--rh-card) !important;
+    fill: var(--rh-card) !important;
+}
+
+[data-testid="stPlotlyChart"] :is(
+    .xtick text,
+    .ytick text,
+    .gtitle,
+    .legendtext,
+    .annotation-text
+) {
+    fill: var(--rh-text-secondary) !important;
+    color: var(--rh-text-secondary) !important;
+}
+
+[data-testid="stPlotlyChart"] :is(.xgrid, .ygrid, .gridlayer path) {
+    stroke: var(--rh-border) !important;
+}
+
+/* ---------- System telemetry ---------- */
+
+.rh-system-metrics {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.rh-system-head {
+    color: var(--rh-text-secondary) !important;
+}
+
+.rh-system-head > strong {
+    color: var(--rh-text) !important;
+}
+
+.rh-system-track {
+    background: var(--rh-border) !important;
+}
+
+.rh-system-detail {
+    color: var(--rh-muted) !important;
+}

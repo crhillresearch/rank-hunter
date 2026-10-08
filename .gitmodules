@@ -1,0 +1,6 @@
+[submodule "vendor/ratpoints-gpu"]
+	path = vendor/ratpoints-gpu
+	url = https://github.com/wgxli/ratpoints-gpu.git
+[submodule "vendor/ratpoints"]
+	path = vendor/ratpoints
+	url = https://github.com/MichaelStollBayreuth/ratpoints.git

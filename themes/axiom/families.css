@@ -1,0 +1,141 @@
+/* Families page refinements for Rank Hunter v0.8.8.
+ * Keep family rank badges on the same soft stat surface used by Axiom's
+ * dashboard inner statistics while preserving semantic theme colors. */
+.rh-rank-box {
+    background: var(--ax-surface-soft);
+    border-color: var(--rh-border) !important;
+}
+
+/* Keep the family action centered vertically, but pull it slightly inward
+ * from the card edge. These selectors intentionally outrank the page-level
+ * family button sizing rules rendered later by Streamlit. */
+html body [class*="st-key-rh-plugin-family-action-"] {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transform: translateX(-.38rem);
+}
+
+html body [class*="st-key-rh-plugin-family-action-"] > div {
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+html body [class*="st-key-rh-plugin-family-action-"] button {
+    box-sizing: border-box !important;
+    width: 3.65rem !important;
+    min-width: 3.65rem !important;
+    max-width: 3.65rem !important;
+    padding-inline: .22rem !important;
+}
+
+/* Disabled families keep a quieter card surface while content stays at normal
+ * visual strength; lifecycle state is communicated by the status dot/badge. */
+[class*="st-key-rh-plugin-family-"]:has(.rh-status-dot.off) > [data-testid="stVerticalBlockBorderWrapper"] {
+    background: color-mix(in srgb, var(--rh-card) 54%, var(--rh-bg)) !important;
+    border-color: color-mix(in srgb, var(--rh-border) 58%, var(--rh-bg)) !important;
+    box-shadow: 0 3px 10px rgba(31, 45, 75, .018) !important;
+}
+
+/* Families / Extensions header: keep the switch tight to the page title,
+ * let the center spacer absorb width, and pin the install action to the same
+ * far-right edge as the card grid. */
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-families),
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-extensions) {
+    width: 100% !important;
+    gap: .42rem !important;
+    align-items: center !important;
+}
+
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-families) > [data-testid="stColumn"]:nth-child(1),
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-extensions) > [data-testid="stColumn"]:nth-child(1) {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-families) > [data-testid="stColumn"]:nth-child(2),
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-extensions) > [data-testid="stColumn"]:nth-child(2) {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 2.55rem !important;
+    margin-left: -.08rem !important;
+}
+
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-families) > [data-testid="stColumn"]:nth-child(3),
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-extensions) > [data-testid="stColumn"]:nth-child(3) {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-families) > [data-testid="stColumn"]:nth-child(4),
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-extensions) > [data-testid="stColumn"]:nth-child(4),
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-families) > [data-testid="stColumn"]:nth-child(5),
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-extensions) > [data-testid="stColumn"]:nth-child(5) {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+}
+
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-families) > [data-testid="stColumn"]:nth-child(5),
+[data-testid="stHorizontalBlock"]:has(.st-key-rh-page-header-extensions) > [data-testid="stColumn"]:nth-child(5) {
+    margin-left: .6rem !important;
+}
+
+[class*="st-key-rh-plugin-families-active-only"],
+[class*="st-key-rh-plugin-extensions-active-only"] {
+    position: relative;
+    width: auto !important;
+    min-width: 2.55rem !important;
+    overflow: visible !important;
+    transform: translateY(.44rem);
+}
+
+[class*="st-key-rh-plugin-families-active-only"]::after,
+[class*="st-key-rh-plugin-extensions-active-only"]::after {
+    content: "Active only";
+    position: absolute;
+    left: 50%;
+    top: calc(100% + .28rem);
+    z-index: 30;
+    padding: .28rem .48rem;
+    border: 1px solid var(--rh-border);
+    border-radius: .4rem;
+    background: var(--rh-raised);
+    color: var(--rh-text);
+    box-shadow: 0 5px 14px rgba(31, 45, 75, .12);
+    font-size: .68rem;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -.18rem);
+    transition: opacity .12s ease, transform .12s ease;
+}
+
+[class*="st-key-rh-plugin-families-active-only"]:hover::after,
+[class*="st-key-rh-plugin-extensions-active-only"]:hover::after {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+.rh-family-toolbar-summary {
+    transform: translateY(.24rem);
+}
+
+[class*="st-key-rh-plugins-install-action-"] {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+}
+
+[class*="st-key-rh-plugins-install-action-"] > div,
+[class*="st-key-rh-plugins-install-action-"] [data-testid="stVerticalBlock"] {
+    width: auto !important;
+    align-items: flex-end !important;
+}

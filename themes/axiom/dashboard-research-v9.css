@@ -1,0 +1,33 @@
+/* Axiom v1.0.34 cumulative evidence-depth hierarchy. */
+
+/* Evidence Depth uses a purple intensity ladder while inheriting the same card,
+   heading, annotation, and legend typography as Rank Certification.  Every
+   retained curve belongs to exactly one deepest continuous completed stage. */
+.rh-evidence-depth-none {
+    background: color-mix(in srgb, var(--rh-purple) 5%, var(--rh-card));
+    border: 1px solid var(--rh-border-subtle);
+}
+
+.rh-evidence-depth-points {
+    background: color-mix(in srgb, var(--rh-purple) 20%, var(--rh-card));
+}
+
+.rh-evidence-depth-mw {
+    background: color-mix(in srgb, var(--rh-purple) 40%, var(--rh-card));
+}
+
+.rh-evidence-depth-descent {
+    background: color-mix(in srgb, var(--rh-purple) 60%, var(--rh-card));
+}
+
+.rh-evidence-depth-saturation {
+    background: color-mix(in srgb, var(--rh-purple) 80%, var(--rh-card));
+}
+
+.rh-evidence-depth-full {
+    background: color-mix(in srgb, var(--rh-purple) 100%, var(--rh-card));
+}
+
+.rh-evidence-depth-legend {
+    row-gap: .38rem;
+}

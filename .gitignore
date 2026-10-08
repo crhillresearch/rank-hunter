@@ -1,0 +1,44 @@
+# Rank Hunter runtime state
+rank42.db
+rank42.db-*
+rank42.db.*
+*.sqlite
+*.sqlite3
+.rank42-cache/
+.rank42-ui/
+
+# Generated search/job artifacts
+*.log
+*.pid
+candidates/
+candidate_exports/
+certs/
+certificates/
+search_outputs/
+backups/
+
+# Local development links / backups
+*.symlink-backup.*
+plugins.symlink-backup.*
+themes.symlink-backup.*
+
+# Python / tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+.venv-ui/
+venv/
+
+# Generated MkDocs output (not source docs)
+/site/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Installer-managed official plugin checkout
+/plugins/

@@ -1,0 +1,19 @@
+:root {
+  --rh-docs-width: 78rem;
+}
+
+.md-grid {
+  max-width: var(--rh-docs-width);
+}
+
+.md-typeset h1 {
+  font-weight: 700;
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.82rem;
+}
+
+.md-typeset code {
+  word-break: normal;
+}

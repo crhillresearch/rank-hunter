@@ -1,0 +1,278 @@
+/* Axiom v1.0.32 dashboard hierarchy and evidence-card refinements. */
+
+/* Rank Certification and Evidence Depth share one compact summary row beneath
+   the four headline cards. Their Streamlit wrappers stay visually invisible so
+   the intentional white cards are the only surfaces. */
+:is(
+    [class*="st-key-rh-dashboard-rank-certification-summary"],
+    [class*="st-key-rh-dashboard-evidence-depth-summary"],
+    [class*="st-key-rh-dashboard-chart-conductor-records"]
+) > [data-testid="stVerticalBlockBorderWrapper"] {
+    border: 0 !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-rank-certification-summary"],
+    [class*="st-key-rh-dashboard-evidence-depth-summary"]
+) {
+    margin: .72rem 0 1rem !important;
+    background: transparent !important;
+}
+
+.rh-frontier-certification-standalone,
+.rh-evidence-depth {
+    height: 100%;
+    margin: 0 !important;
+    padding: .78rem .9rem .72rem;
+    border: 0 !important;
+    border-radius: 16px;
+    background: var(--rh-card);
+    box-shadow: 0 9px 28px rgba(31, 45, 75, .07);
+}
+
+/* Exact/lower evidence uses the heatmap-blue intensity family. */
+.rh-frontier-cert-exact,
+.rh-rank-evidence-exact,
+.rh-rank-evidence-legend-exact {
+    background: color-mix(in srgb, var(--rh-primary) 100%, var(--rh-card));
+}
+
+.rh-frontier-cert-lower,
+.rh-rank-evidence-rigorous,
+.rh-rank-evidence-legend-rigorous {
+    background: color-mix(in srgb, var(--rh-primary) 50%, var(--rh-card));
+}
+
+/* Evidence Depth now uses the same card/title/text palette as Rank
+   Certification. Only its progress scale remains purple to distinguish the
+   depth categories themselves. */
+.rh-evidence-depth-head,
+.rh-evidence-depth-legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .65rem;
+}
+
+.rh-evidence-depth-head > span {
+    color: var(--rh-primary-deep);
+    font-size: .64rem;
+    font-weight: 800;
+    letter-spacing: .075em;
+}
+
+.rh-evidence-depth-head > small {
+    color: var(--rh-muted);
+    font-size: .61rem;
+}
+
+.rh-evidence-depth-track {
+    display: flex;
+    width: 100%;
+    height: .66rem;
+    margin-top: .46rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--rh-border-subtle);
+}
+
+.rh-evidence-depth-segment {
+    display: block;
+    height: 100%;
+    min-width: 1px;
+}
+
+.rh-evidence-depth-points {
+    background: color-mix(in srgb, var(--rh-purple) 15%, var(--rh-card));
+}
+.rh-evidence-depth-descent {
+    background: color-mix(in srgb, var(--rh-purple) 30%, var(--rh-card));
+}
+.rh-evidence-depth-mw {
+    background: color-mix(in srgb, var(--rh-purple) 50%, var(--rh-card));
+}
+.rh-evidence-depth-analytic {
+    background: color-mix(in srgb, var(--rh-purple) 72%, var(--rh-card));
+}
+.rh-evidence-depth-full {
+    background: color-mix(in srgb, var(--rh-purple) 100%, var(--rh-card));
+}
+
+.rh-evidence-depth-legend {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: .4rem;
+    color: var(--rh-muted);
+    font-size: .58rem;
+}
+
+.rh-evidence-depth-legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: .28rem;
+}
+
+.rh-evidence-depth-legend > span > i {
+    width: .42rem;
+    height: .42rem;
+    border-radius: 999px;
+}
+
+.rh-evidence-depth-legend strong {
+    color: var(--rh-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Compact ICARM-style rank evidence card legacy selectors remain harmless for
+   cached reruns, but the dashboard no longer renders this section. */
+[class*="st-key-rh-dashboard-chart-conductor-records"] {
+    margin: .78rem 0 !important;
+    background: transparent !important;
+}
+
+.rh-rank-evidence-chart-shell {
+    position: relative;
+    overflow: hidden;
+    padding: .72rem .86rem .58rem;
+    border: 0 !important;
+    border-radius: 16px;
+    background: var(--rh-card);
+    box-shadow: 0 9px 28px rgba(31, 45, 75, .07);
+}
+
+.rh-rank-evidence-track {
+    display: grid;
+    grid-template-columns: repeat(var(--rh-rank-columns), minmax(1.8rem, 1fr));
+    align-items: end;
+    gap: 0;
+    width: 100%;
+    min-height: 6.15rem;
+    padding: .08rem .12rem 0;
+    overflow-x: auto;
+    border-radius: 12px;
+    background-color: var(--rh-card-2);
+    background-image:
+        linear-gradient(to top,
+            transparent 24%, var(--rh-border-subtle) 24%,
+            var(--rh-border-subtle) 25%, transparent 25%,
+            transparent 49%, var(--rh-border-subtle) 49%,
+            var(--rh-border-subtle) 50%, transparent 50%,
+            transparent 74%, var(--rh-border-subtle) 74%,
+            var(--rh-border-subtle) 75%, transparent 75%);
+}
+
+.rh-rank-evidence-column {
+    display: grid;
+    grid-template-rows: 4.95rem auto;
+    justify-items: center;
+    min-width: 1.65rem;
+    gap: .12rem;
+    border-left: 1px solid color-mix(in srgb, var(--rh-border-subtle) 78%, transparent);
+}
+
+.rh-rank-evidence-column:first-child {
+    border-left: 0;
+}
+
+.rh-rank-evidence-lane {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 4.95rem;
+}
+
+.rh-rank-evidence-dot {
+    position: absolute;
+    left: 50%;
+    display: block;
+    width: .72rem;
+    height: .72rem;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    box-sizing: border-box;
+    box-shadow: 0 1px 3px rgba(31, 45, 75, .10);
+}
+
+.rh-rank-evidence-rigorous {
+    border: 1px solid color-mix(in srgb, var(--rh-primary) 64%, var(--rh-card));
+}
+
+.rh-rank-evidence-exact {
+    width: .78rem;
+    height: .78rem;
+    border: 1px solid var(--rh-primary-deep);
+    box-shadow: 0 2px 5px color-mix(in srgb, var(--rh-primary) 18%, transparent);
+}
+
+.rh-rank-evidence-column small {
+    min-height: .7rem;
+    color: var(--rh-muted);
+    font-size: .54rem;
+    font-weight: 700;
+    line-height: .7rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.rh-rank-evidence-legend {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1.15rem;
+    margin-top: .54rem;
+    padding: .56rem .18rem 0;
+    border-top: 1px solid var(--rh-border-subtle);
+    color: var(--rh-text-secondary);
+    font-size: .68rem;
+    font-weight: 680;
+}
+
+.rh-rank-evidence-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+}
+
+.rh-rank-evidence-legend i {
+    display: inline-block;
+    width: .56rem;
+    height: .56rem;
+    border-radius: 999px;
+}
+
+.rh-rank-evidence-legend-exact {
+    border: 1px solid var(--rh-primary-deep);
+}
+
+.rh-rank-evidence-legend-rigorous {
+    border: 1px solid color-mix(in srgb, var(--rh-primary) 62%, var(--rh-card));
+}
+
+/* Keep the Research Frontier evidence key on the right side of its footer. */
+.rh-frontier-legend {
+    justify-content: flex-end;
+}
+
+/* Secondary stat surfaces should read as nested information rather than
+   competing with the primary white cards. */
+.rh-frontier-stats > div,
+.rh-dashboard-pipeline-stats > div {
+    background: var(--ax-surface-soft) !important;
+    border: 1px solid var(--rh-border-subtle) !important;
+    box-shadow: none !important;
+}
+
+@media (max-width: 900px) {
+    .rh-rank-evidence-track {
+        grid-template-columns: repeat(var(--rh-rank-columns), minmax(1.65rem, 1fr));
+    }
+
+    .rh-rank-evidence-legend {
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+}

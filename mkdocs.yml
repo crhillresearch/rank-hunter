@@ -1,0 +1,111 @@
+site_name: Rank Hunter Docs
+site_description: User manual, CLI reference, mathematics, and developer documentation for Rank Hunter
+site_url: https://docs.rankhunter.net/
+repo_url: https://github.com/crhillresearch/rank-hunter
+repo_name: crhillresearch/rank-hunter
+edit_uri: edit/main/docs/
+use_directory_urls: true
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Light mode
+  icon:
+    repo: fontawesome/brands/github
+
+plugins:
+  - search:
+      lang: en
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Install Rank Hunter: getting-started/installation.md
+      - Your First Hunt: getting-started/first-hunt.md
+      - What Counts as Proof?: getting-started/evidence.md
+  - Using Rank Hunter:
+      - The Interface: manual/interface.md
+      - Search: manual/search.md
+      - Candidate Pools: manual/candidates.md
+      - Target Search: manual/target.md
+      - Curves & Points: manual/curves.md
+      - Pipelines: manual/pipelines.md
+      - Jobs & Campaigns: manual/jobs-campaigns.md
+      - Analysis Overview: manual/analysis.md
+      - Descent & Rank Bounds: manual/descent.md
+      - Independence: manual/independence.md
+      - Saturation: manual/saturation.md
+      - Lattices & Heights: manual/lattices.md
+      - Quartics & Coverings: manual/quartics.md
+  - Command Line:
+      - CLI Overview: cli/index.md
+      - Search & Candidates: cli/searching.md
+      - Curve Research: cli/curve-research.md
+      - Pipelines, Data & Operations: cli/operations.md
+      - Command Catalog: cli/all-commands.md
+      - UI → CLI Map: cli/ui-map.md
+      - rank-bounds: cli/rank-bounds.md
+      - saturate: cli/saturate.md
+  - Plugins:
+      - Plugin Overview: plugins/index.md
+      - Official Plugins: plugins/official.md
+      - Official Families: plugins/families.md
+      - Features & Workspaces: plugins/workspaces-official.md
+      - Write a Family Plugin: plugins/family.md
+      - Write a Feature Plugin: plugins/feature.md
+      - Write a Workspace Plugin: plugins/workspace.md
+  - Mathematics:
+      - Rank & Evidence: mathematics/rank.md
+      - Independence: mathematics/independence.md
+      - Heights & Lattices: mathematics/heights-lattices.md
+      - Nagao-Style Scoring: mathematics/nagao.md
+  - Reference:
+      - Architecture: reference/architecture.md
+      - Data Model: reference/data-model.md
+      - Configuration: reference/configuration.md
+      - Troubleshooting: reference/troubleshooting.md
+      - Documentation Build: reference/docs-build.md

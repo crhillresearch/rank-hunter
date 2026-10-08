@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --rh-text:#31333f;
+    --rh-muted:rgba(49,51,63,.66);
+    --rh-hover:rgba(37,99,235,.10);
+    --rh-blue:#2563eb;
+    --rh-danger:#c94a4a;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; background:transparent; overflow:hidden; }
+  body {
+    color:var(--rh-text);
+    font-family:var(--rh-font,"Source Sans Pro",system-ui,sans-serif);
+  }
+  .strip {
+    width:100%;
+    min-height:32px;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:8px;
+    align-items:center;
+    padding:2px 4px 2px 8px;
+    cursor:pointer;
+  }
+  .copy {
+    min-width:0;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    overflow:hidden;
+    white-space:nowrap;
+  }
+  .work-icon {
+    color:var(--rh-blue);
+    width:14px;
+    height:14px;
+    flex:0 0 auto;
+  }
+  .title {
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:12px;
+    font-weight:700;
+  }
+  .detail {
+    color:var(--rh-muted);
+    font-size:11px;
+    font-weight:500;
+  }
+  .actions {
+    display:flex;
+    align-items:center;
+    gap:2px;
+    min-height:28px;
+  }
+  button.action {
+    width:28px;
+    height:28px;
+    border:0;
+    border-radius:6px;
+    padding:0;
+    background:transparent;
+    color:var(--rh-muted);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+  }
+  button.action:hover {
+    background:var(--rh-hover);
+    color:var(--rh-text);
+  }
+  button.pause,button.resume { color:var(--rh-blue); }
+  button.force:hover { color:var(--rh-danger); }
+  .fa-icon { width:13px; height:13px; fill:currentColor; display:block; }
+  .confirm-label {
+    color:var(--rh-muted);
+    font-size:11px;
+    font-weight:650;
+    white-space:nowrap;
+    margin-right:2px;
+  }
+  button.confirm-choice {
+    border:0;
+    border-radius:6px;
+    padding:5px 7px;
+    background:transparent;
+    color:var(--rh-text);
+    font:inherit;
+    font-size:11px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  button.confirm-choice.ok { color:var(--rh-danger); }
+  button.confirm-choice.cancel { color:var(--rh-muted); }
+  button.confirm-choice:hover { background:var(--rh-hover); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const ICONS={
+  "briefcase":{viewBox:"0 0 512 512",path:"M184 48l144 0c4.4 0 8 3.6 8 8l0 40L176 96l0-40c0-4.4 3.6-8 8-8zm-56 8l0 40L64 96C28.7 96 0 124.7 0 160L0 224l208 0 0-16c0-8.8 7.2-16 16-16l64 0c8.8 0 16 7.2 16 16l0 16 208 0 0-64c0-35.3-28.7-64-64-64l-64 0 0-40c0-30.9-25.1-56-56-56L184 0c-30.9 0-56 25.1-56 56zM512 256l-208 0 0 16c0 8.8-7.2 16-16 16l-64 0c-8.8 0-16-7.2-16-16l0-16L0 256 0 416c0 35.3 28.7 64 64 64l384 0c35.3 0 64-28.7 64-64l0-160z"},
+  "play":{viewBox:"0 0 384 512",path:"M73 39C54.3 27.6 31 27 11.7 37.8S-20 69.5-20 92l0 328c0 22.5 12.3 43.3 31.7 54.2S54.3 484.4 73 473l268-164c18-11 29-30.6 29-53s-11-42-29-53L73 39z"},
+  "pause":{viewBox:"0 0 320 512",path:"M48 64C21.5 64 0 85.5 0 112l0 288c0 26.5 21.5 48 48 48l32 0c26.5 0 48-21.5 48-48l0-288c0-26.5-21.5-48-48-48L48 64zm192 0c-26.5 0-48 21.5-48 48l0 288c0 26.5 21.5 48 48 48l32 0c26.5 0 48-21.5 48-48l0-288c0-26.5-21.5-48-48-48l-32 0z"},
+  "stop":{viewBox:"0 0 448 512",path:"M64 32C28.7 32 0 60.7 0 96L0 416c0 35.3 28.7 64 64 64l320 0c35.3 0 64-28.7 64-64l0-320c0-35.3-28.7-64-64-64L64 32z"},
+  "xmark":{viewBox:"0 0 384 512",path:"M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"}
+};
+function sendMessageToStreamlitClient(type,data){window.parent.postMessage(Object.assign({isStreamlitMessage:true,type},data),"*");}
+function init(){sendMessageToStreamlitClient("streamlit:componentReady",{apiVersion:1});}
+function setFrameHeight(){sendMessageToStreamlitClient("streamlit:setFrameHeight",{height:Math.max(32,document.documentElement.scrollHeight)});}
+function sendValue(value){sendMessageToStreamlitClient("streamlit:setComponentValue",{value});}
+function emit(action){sendValue({action,nonce:Date.now()});}
+function icon(name,extraClass=""){
+  const i=ICONS[name];
+  return '<svg class="fa-icon '+extraClass+'" data-icon="'+name+'" viewBox="'+i.viewBox+'" aria-hidden="true"><path d="'+i.path+'"></path></svg>';
+}
+function applyPalette(palette){
+  if(!palette)return;
+  const root=document.documentElement.style;
+  if(palette.text)root.setProperty("--rh-text",palette.text);
+  if(palette.muted)root.setProperty("--rh-muted",palette.muted);
+  if(palette.primary)root.setProperty("--rh-blue",palette.primary);
+  if(palette.danger)root.setProperty("--rh-danger",palette.danger);
+  if(palette.hover)root.setProperty("--rh-hover",palette.hover);
+}
+function applyTheme(theme){
+  if(!theme)return;
+  const root=document.documentElement.style;
+  if(theme.textColor)root.setProperty("--rh-text",theme.textColor);
+  if(theme.primaryColor)root.setProperty("--rh-blue",theme.primaryColor);
+  if(theme.font)root.setProperty("--rh-font",theme.font);
+  const text=theme.textColor||"#31333f";
+  root.setProperty("--rh-muted","color-mix(in srgb, "+text+" 64%, transparent)");
+}
+function action(actionName,iconName,title,className){
+  const b=document.createElement("button");
+  b.type="button"; b.className="action "+className; b.title=title;
+  b.setAttribute("aria-label",title); b.innerHTML=icon(iconName);
+  b.addEventListener("click",e=>{e.stopPropagation();emit(actionName);});
+  return b;
+}
+let currentArgs={};
+function confirmAction(actions,actionName,label){
+  actions.replaceChildren();
+  const prompt=document.createElement("span");
+  prompt.className="confirm-label"; prompt.textContent=label;
+  const ok=document.createElement("button");
+  ok.type="button"; ok.className="confirm-choice ok"; ok.textContent="OK";
+  ok.addEventListener("click",e=>{e.stopPropagation();emit(actionName);});
+  const cancel=document.createElement("button");
+  cancel.type="button"; cancel.className="confirm-choice cancel"; cancel.textContent="Cancel";
+  cancel.addEventListener("click",e=>{e.stopPropagation();render(currentArgs);});
+  actions.append(prompt,ok,cancel);
+}
+function destructive(actions,actionName,iconName,title,label,className){
+  const b=document.createElement("button");
+  b.type="button"; b.className="action "+className; b.title=title;
+  b.setAttribute("aria-label",title); b.innerHTML=icon(iconName);
+  b.addEventListener("click",e=>{
+    e.stopPropagation();
+    confirmAction(actions,actionName,label);
+  });
+  return b;
+}
+function render(args){
+  currentArgs=args||{};
+  const root=document.getElementById("root"); root.replaceChildren();
+  const row=document.createElement("div"); row.className="strip";
+  row.addEventListener("click",()=>emit("open"));
+  const copy=document.createElement("div"); copy.className="copy";
+  const work=document.createElement("span"); work.innerHTML=icon("briefcase","work-icon");
+  const title=document.createElement("span"); title.className="title"; title.textContent=args.title||"Active work";
+  const detail=document.createElement("span"); detail.className="detail"; detail.textContent=args.detail||"";
+  copy.append(work,title,detail);
+  const actions=document.createElement("div"); actions.className="actions";
+  if(args.mode==="pause"){
+    actions.appendChild(action("pause","pause","Pause job","pause"));
+  } else if(args.mode==="resume"){
+    actions.appendChild(action("resume","play","Resume job","resume"));
+  }
+  if(args.can_stop){
+    actions.appendChild(destructive(actions,"stop","stop","Stop job","Stop job?","stop"));
+  }
+  if(args.can_force){
+    actions.appendChild(destructive(actions,"force_stop","xmark","Force stop job","Force stop?","force"));
+  }
+  row.append(copy,actions); root.appendChild(row);
+  requestAnimationFrame(setFrameHeight);
+}
+function onDataFromPython(event){
+  if(event.data.type!=="streamlit:render")return;
+  applyTheme(event.data.theme);
+  applyPalette((event.data.args||{}).palette);
+  render(event.data.args||{});
+}
+window.addEventListener("message",onDataFromPython);
+window.addEventListener("load",()=>setTimeout(setFrameHeight,0));
+init();
+</script>
+</body>
+</html>

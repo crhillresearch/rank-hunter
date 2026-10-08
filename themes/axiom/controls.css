@@ -1,0 +1,97 @@
+/* Axiom form-control contrast.
+ *
+ * Streamlit 1.59+ moved several controls away from BaseWeb.  Target the
+ * stable Streamlit widget test IDs and ARIA roles instead of framework-private
+ * implementation classes.  Use an inset ring so the border remains visible
+ * even when Streamlit zeroes or replaces its native border.
+ */
+
+:where(
+  [data-testid="stTextInput"],
+  [data-testid="stNumberInput"],
+  [data-testid="stTextArea"],
+  [data-testid="stDateInput"],
+  [data-testid="stTimeInput"]
+) :is(input, textarea) {
+    background: var(--rh-card) !important;
+    border-color: var(--rh-control-border, var(--rh-border-strong)) !important;
+    box-shadow:
+        inset 0 0 0 1px var(--rh-control-border, var(--rh-border-strong)),
+        0 1px 2px rgba(31, 45, 75, .035) !important;
+}
+
+/* React-Aria selectbox/multiselect controls used by current Streamlit. */
+:where(
+  [data-testid="stSelectbox"],
+  [data-testid="stMultiSelect"]
+) [role="combobox"] {
+    background: var(--rh-card) !important;
+    border-color: var(--rh-control-border, var(--rh-border-strong)) !important;
+    box-shadow:
+        inset 0 0 0 1px var(--rh-control-border, var(--rh-border-strong)),
+        0 1px 2px rgba(31, 45, 75, .035) !important;
+}
+
+/* Where the combobox input sits inside a shared trigger shell, outline that
+ * shell too so the caret/button side gets the same visual boundary. */
+:where(
+  [data-testid="stSelectbox"],
+  [data-testid="stMultiSelect"]
+) div:has(> [role="combobox"]) {
+    border-radius: 9px !important;
+    box-shadow: inset 0 0 0 1px var(--rh-control-border, var(--rh-border-strong)) !important;
+}
+
+:where(
+  [data-testid="stTextInput"],
+  [data-testid="stNumberInput"],
+  [data-testid="stTextArea"],
+  [data-testid="stDateInput"],
+  [data-testid="stTimeInput"],
+  [data-testid="stSelectbox"],
+  [data-testid="stMultiSelect"]
+):hover :is(input, textarea, [role="combobox"]) {
+    border-color: color-mix(in srgb, var(--rh-control-border, var(--rh-border-strong)) 72%, var(--rh-text-secondary)) !important;
+}
+
+:where(
+  [data-testid="stTextInput"],
+  [data-testid="stNumberInput"],
+  [data-testid="stTextArea"],
+  [data-testid="stDateInput"],
+  [data-testid="stTimeInput"],
+  [data-testid="stSelectbox"],
+  [data-testid="stMultiSelect"]
+):focus-within :is(input, textarea, [role="combobox"]) {
+    border-color: var(--rh-primary) !important;
+    box-shadow:
+        inset 0 0 0 1px var(--rh-primary),
+        0 0 0 2px color-mix(in srgb, var(--rh-primary) 11%, transparent) !important;
+}
+
+
+/* Auto schedule mode is a compact icon toggle beside the primary launch action.
+   Streamlit keeps the accessible button label; Axiom visually reduces it to the
+   Material schedule glyph and lets normal primary/secondary states show mode. */
+[class*="st-key-auto-schedule-toggle"] .stButton > button {
+    min-width: 2.35rem !important;
+    min-height: 2.35rem !important;
+    height: 2.35rem !important;
+    padding: .28rem !important;
+    justify-content: center !important;
+}
+
+[class*="st-key-auto-schedule-toggle"] .stButton > button p {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    clip-path: inset(50%) !important;
+    white-space: nowrap !important;
+}
+
+[class*="st-key-auto-schedule-toggle"] [data-testid="stIconMaterial"] {
+    margin: 0 !important;
+    font-size: 1.2rem !important;
+}

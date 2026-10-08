@@ -1,0 +1,139 @@
+/* Dashboard plugin inventory/status card.  Colors remain entirely theme-owned. */
+
+[class*="st-key-rh-dashboard-plugins"] {
+    background: var(--rh-dashboard-section-bg, var(--rh-card)) !important;
+    background-image: none !important;
+    border-radius: var(--rh-radius) !important;
+}
+
+.rh-dashboard-plugin-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .65rem;
+}
+
+.rh-dashboard-plugin-health {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.35rem;
+    padding: .18rem .48rem;
+    border-radius: 999px;
+    font-size: .60rem;
+    font-weight: 780;
+    white-space: nowrap;
+}
+
+.rh-dashboard-plugin-health.ok {
+    background: color-mix(in srgb, var(--rh-success) 12%, var(--rh-card));
+    color: var(--rh-success);
+}
+
+.rh-dashboard-plugin-health.warning {
+    background: color-mix(in srgb, var(--rh-warning) 14%, var(--rh-card));
+    color: color-mix(in srgb, var(--rh-warning) 78%, var(--rh-text));
+}
+
+.rh-dashboard-plugin-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .48rem;
+    margin: .08rem 0 .72rem;
+}
+
+.rh-dashboard-plugin-stats > div {
+    min-width: 0;
+    padding: .62rem .42rem .54rem;
+    border: 1px solid var(--rh-border-subtle);
+    border-radius: 10px;
+    background: var(--rh-card);
+    text-align: center;
+}
+
+.rh-dashboard-plugin-stats span,
+.rh-dashboard-plugin-stats small {
+    display: block;
+    overflow: hidden;
+    color: var(--rh-muted);
+    font-size: .60rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rh-dashboard-plugin-stats strong {
+    display: block;
+    margin: .10rem 0 .02rem;
+    color: var(--rh-text);
+    font-size: 1.02rem;
+    font-weight: 820;
+    letter-spacing: -.025em;
+}
+
+.rh-dashboard-plugin-active-label {
+    margin: .05rem 0 .28rem;
+    color: var(--rh-muted);
+    font-size: .58rem;
+    font-weight: 800;
+    letter-spacing: .065em;
+}
+
+.rh-dashboard-plugin-list {
+    border-top: 1px solid var(--rh-border-subtle);
+}
+
+.rh-dashboard-plugin-row {
+    display: grid;
+    grid-template-columns: .52rem minmax(0, 1fr) auto;
+    align-items: center;
+    gap: .42rem;
+    min-height: 2rem;
+    border-bottom: 1px solid var(--rh-border-subtle);
+}
+
+.rh-dashboard-plugin-row > i {
+    width: .48rem;
+    height: .48rem;
+    border-radius: 999px;
+    background: var(--rh-success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--rh-success) 10%, transparent);
+}
+
+.rh-dashboard-plugin-row > span {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--rh-text-secondary);
+    font-size: .75rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rh-dashboard-plugin-row > small {
+    color: var(--rh-muted) !important;
+    font-size: .60rem;
+    white-space: nowrap;
+}
+
+.rh-dashboard-plugin-empty,
+.rh-dashboard-plugin-more {
+    padding: .45rem 0 .10rem;
+    color: var(--rh-muted);
+    font-size: .66rem;
+}
+
+.rh-dashboard-plugin-more {
+    text-align: right;
+}
+
+.rh-dashboard-plugin-summary {
+    margin: .55rem 0 .48rem;
+    color: var(--rh-muted);
+    font-size: .66rem;
+    text-align: center;
+}
+
+.rh-dashboard-plugin-summary strong {
+    color: var(--rh-text-secondary);
+    font-weight: 800;
+}

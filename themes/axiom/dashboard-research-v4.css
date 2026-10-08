@@ -1,0 +1,194 @@
+/* Axiom v1.0.19 arithmetic-dashboard research surfaces. */
+
+/* Six frontier summary tiles now fill the primary research width. */
+.rh-frontier-stats {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+}
+
+/* New post-chart research sections use the same soft surface hierarchy as the
+   rest of the dashboard body. */
+:is(
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-rank-certification"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"]
+) {
+    margin-top: .68rem;
+    background: var(--rh-dashboard-section-bg, #F8FAFD) !important;
+    border-radius: var(--rh-radius) !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-rank-certification"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"]
+) > [data-testid="stVerticalBlockBorderWrapper"] {
+    background: transparent !important;
+    box-shadow: 0 7px 22px rgba(31, 45, 75, .04);
+}
+
+.rh-dashboard-research-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: .72rem;
+}
+
+.rh-dashboard-research-heading > small {
+    max-width: 68%;
+    color: var(--rh-muted);
+    font-size: .66rem;
+    font-weight: 560;
+    line-height: 1.35;
+    text-align: right;
+}
+
+/* Arithmetic-record and exceptional-arithmetic tables. */
+.rh-dashboard-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--rh-border-subtle);
+    border-radius: 11px;
+    background: var(--rh-card);
+}
+
+.rh-dashboard-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: var(--rh-text);
+    font-size: .70rem;
+}
+
+.rh-dashboard-data-table th {
+    padding: .58rem .62rem;
+    border-bottom: 1px solid var(--rh-border);
+    color: var(--rh-muted);
+    font-size: .60rem;
+    font-weight: 780;
+    letter-spacing: .035em;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.rh-dashboard-data-table td {
+    padding: .62rem;
+    border-bottom: 1px solid var(--rh-border-subtle);
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+.rh-dashboard-data-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.rh-dashboard-data-table tbody tr:hover td {
+    background: var(--rh-surface-hover);
+}
+
+.rh-dashboard-data-table td.rh-num {
+    font-variant-numeric: tabular-nums;
+}
+
+.rh-dashboard-data-table td.rh-curve-cell strong,
+.rh-dashboard-data-table td.rh-curve-cell small {
+    display: block;
+}
+
+.rh-dashboard-data-table td.rh-curve-cell small {
+    margin-top: .12rem;
+    color: var(--rh-muted);
+    font-size: .58rem;
+}
+
+/* Certification breakdown: counts and proportions are visually primary; the
+   proof categories themselves stay explicit and mutually non-equivalent. */
+.rh-certification {
+    display: grid;
+    gap: .72rem;
+}
+
+.rh-cert-row {
+    min-width: 0;
+}
+
+.rh-cert-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .8rem;
+    margin-bottom: .30rem;
+}
+
+.rh-cert-label span {
+    color: var(--rh-text-secondary);
+    font-size: .70rem;
+    font-weight: 690;
+}
+
+.rh-cert-label strong {
+    color: var(--rh-text);
+    font-size: .68rem;
+    font-weight: 780;
+    font-variant-numeric: tabular-nums;
+}
+
+.rh-cert-track {
+    height: .52rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--rh-border-subtle);
+}
+
+.rh-cert-track > i {
+    display: block;
+    height: 100%;
+    min-width: 0;
+    border-radius: inherit;
+}
+
+.rh-cert-exact .rh-cert-track > i {
+    background: var(--rh-success);
+}
+
+.rh-cert-lower .rh-cert-track > i {
+    background: var(--rh-primary);
+}
+
+.rh-cert-interval .rh-cert-track > i {
+    background: var(--rh-purple);
+}
+
+.rh-cert-none .rh-cert-track > i {
+    background: var(--rh-muted-2);
+}
+
+/* Six pipeline tiles remain a 3x2 grid. Throughput needs a quieter, smaller
+   value treatment because its unit is deliberately spelled out. */
+.rh-dashboard-pipeline-throughput strong {
+    font-size: .78rem !important;
+    line-height: 1.18;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+    .rh-frontier-stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    .rh-dashboard-research-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: .30rem;
+    }
+
+    .rh-dashboard-research-heading > small {
+        max-width: 100%;
+        text-align: left;
+    }
+}
+
+@media (max-width: 760px) {
+    .rh-frontier-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}

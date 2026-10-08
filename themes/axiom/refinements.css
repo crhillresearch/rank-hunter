@@ -1,0 +1,277 @@
+/* Axiom v1.0.2 interaction, readability, and family-card refinements. */
+
+html {
+    font-size: 16px;
+}
+
+/* Keep the theme readable without globally inflating every layout primitive. */
+[data-testid="stCaptionContainer"] {
+    font-size: .78rem !important;
+    line-height: 1.38 !important;
+}
+
+[data-testid="stWidgetLabel"] p,
+.stButton > button,
+.stDownloadButton > button,
+[data-testid="stFormSubmitButton"] > button,
+button[data-baseweb="tab"],
+button[data-variant="segmented_control"] {
+    font-size: .88rem !important;
+}
+
+[data-testid="stSidebar"] .stButton > button {
+    min-height: 2.38rem;
+    font-size: .92rem !important;
+}
+
+[data-testid="stSidebar"] details > summary {
+    font-size: .72rem;
+}
+
+.rh-system-head {
+    font-size: .9rem;
+}
+
+.rh-system-head > strong {
+    font-size: .94rem;
+}
+
+.rh-system-detail {
+    font-size: .8rem;
+    line-height: 1.25;
+}
+
+/* Selected sidebar items stay light and readable in every pointer state.
+   This also prevents the global primary-button gradient from flashing through. */
+[data-testid="stSidebar"] .stButton > button[kind="primary"],
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:active,
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:focus,
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"],
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"]:active,
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"]:focus {
+    background: var(--rh-surface-active) !important;
+    background-image: none !important;
+    border-color: transparent !important;
+    color: var(--rh-primary-deep) !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="primary"] :is(p, span),
+[data-testid="stSidebar"] .stButton > button[data-testid="stBaseButton-primary"] :is(p, span) {
+    color: var(--rh-primary-deep) !important;
+}
+
+/* The existing native Dashboard button becomes a transparent hit target over
+   the logo. It keeps Streamlit's normal widget rerun and avoids href/page reloads. */
+:is([class*="st-key-rh-sidebar-logo"], [class*="st-key-sidebar-logo"]) {
+    justify-content: center !important;
+    padding: .82rem .65rem .72rem !important;
+    pointer-events: none;
+}
+
+:is([class*="st-key-rh-sidebar-logo"], [class*="st-key-sidebar-logo"]) [data-testid="stImage"] {
+    justify-content: center !important;
+}
+
+:is([class*="st-key-rh-sidebar-logo"], [class*="st-key-sidebar-logo"]) img {
+    width: var(--rh-logo-width) !important;
+    margin: 0 auto !important;
+}
+
+[class*="st-key-rh-nav-dashboard"] {
+    position: relative !important;
+    z-index: 20;
+    min-height: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+}
+
+[class*="st-key-rh-nav-dashboard"] .stButton {
+    position: absolute !important;
+    left: .52rem;
+    right: .52rem;
+    top: -3.9rem;
+    height: 3.55rem;
+    margin: 0 !important;
+}
+
+[data-testid="stSidebar"] [class*="st-key-rh-nav-dashboard"] .stButton > button,
+[data-testid="stSidebar"] [class*="st-key-rh-nav-dashboard"] .stButton > button:hover,
+[data-testid="stSidebar"] [class*="st-key-rh-nav-dashboard"] .stButton > button:active,
+[data-testid="stSidebar"] [class*="st-key-rh-nav-dashboard"] .stButton > button:focus {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 100% !important;
+    opacity: 0 !important;
+    background: transparent !important;
+    background-image: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    cursor: pointer !important;
+}
+
+/* Dashboard: keep hierarchy legible while preserving the compact card layout. */
+.rh-dashboard-subheader {
+    font-size: .78rem;
+}
+
+.rh-dashboard-subheader b {
+    font-size: .64rem;
+}
+
+.rh-dashboard-metric-head {
+    font-size: .76rem;
+}
+
+.rh-dashboard-metric-status {
+    font-size: .59rem;
+}
+
+.rh-dashboard-metric > strong {
+    font-size: 1.72rem;
+}
+
+.rh-dashboard-metric > small {
+    font-size: .70rem;
+}
+
+.rh-dashboard-card-heading h3 {
+    font-size: 1.04rem;
+}
+
+.rh-dashboard-eyebrow {
+    font-size: .60rem;
+}
+
+.rh-dashboard-card-kicker {
+    font-size: .67rem;
+}
+
+.rh-dashboard-hero-stat > span {
+    font-size: .78rem;
+}
+
+.rh-dashboard-hero-stat > small {
+    font-size: .70rem;
+}
+
+.rh-dashboard-mini-grid strong {
+    font-size: .90rem;
+}
+
+.rh-dashboard-mini-grid span {
+    font-size: .64rem;
+}
+
+.rh-dashboard-pipeline-row {
+    font-size: .79rem;
+}
+
+.rh-dashboard-pipeline-row strong {
+    font-size: .90rem;
+}
+
+.rh-dashboard-progress-label {
+    font-size: .68rem;
+}
+
+.rh-dashboard-activity small {
+    font-size: .64rem;
+}
+
+.rh-dashboard-activity p {
+    font-size: .78rem;
+    line-height: 1.42;
+}
+
+/* Family/feature/extension status dots need explicit geometry; otherwise the
+   empty inline span collapses and the green/red state disappears. */
+.rh-status-dot {
+    display: inline-block !important;
+    flex: 0 0 .56rem;
+    width: .56rem !important;
+    height: .56rem !important;
+    min-width: .56rem !important;
+    min-height: .56rem !important;
+    margin-right: .10rem;
+    border-radius: 999px;
+    vertical-align: .04rem;
+}
+
+.rh-status-dot.on {
+    background: var(--rh-success) !important;
+    box-shadow: 0 0 0 3px rgba(40, 183, 116, .10);
+}
+
+.rh-status-dot.off {
+    background: var(--rh-danger) !important;
+    box-shadow: 0 0 0 3px rgba(228, 82, 114, .09);
+}
+
+/* Compact rank tiles: value first, small semantic label below. */
+.rh-rank-box {
+    flex: 0 0 4.55rem !important;
+    width: 4.55rem !important;
+    height: 4.55rem !important;
+    min-width: 4.55rem !important;
+    min-height: 4.55rem !important;
+    max-width: 4.55rem !important;
+    max-height: 4.55rem !important;
+    padding: .30rem .28rem !important;
+}
+
+.rh-rank-box .value {
+    order: 1 !important;
+    display: block;
+    margin: 0 !important;
+    color: var(--rh-primary-deep);
+    font-size: 1.34rem !important;
+    font-weight: 830;
+    line-height: 1;
+    letter-spacing: -.04em;
+}
+
+.rh-rank-box .label {
+    order: 2 !important;
+    display: block;
+    margin-top: .26rem !important;
+    color: var(--rh-muted);
+    font-size: .49rem !important;
+    font-weight: 820;
+    line-height: 1.05;
+    letter-spacing: .075em;
+    text-align: center;
+}
+
+.rh-plugin-name {
+    font-size: 1rem;
+}
+
+.rh-plugin-meta {
+    font-size: .80rem;
+}
+
+/* Dashboard launch surface embeds the real search controls; avoid an extra
+   heavy visual frame around the compact family search branch. */
+[class*="st-key-rh-dashboard-search"] [data-testid="stForm"] {
+    margin-top: .15rem;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-testid="stSegmentedControl"] {
+    margin-bottom: .55rem;
+}
+
+@media (max-width: 760px) {
+    html {
+        font-size: 15.5px;
+    }
+
+    [class*="st-key-rh-nav-dashboard"] .stButton {
+        top: -3.65rem;
+        height: 3.35rem;
+    }
+}

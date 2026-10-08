@@ -1,0 +1,56 @@
+/* Axiom v1.0.21 compact conductor-record chart refinements. */
+
+/* The conductor record is a full primary-column strip between the two 2-up
+   chart rows. Give it deliberate breathing room without inheriting the tall
+   equal-card geometry used by the four square research charts. */
+[class*="st-key-rh-dashboard-chart-conductor-records"] {
+    margin: .82rem 0 !important;
+    background: var(--rh-dashboard-section-bg, #F8FAFD) !important;
+    background-image: none !important;
+    border-radius: var(--rh-radius) !important;
+}
+
+[class*="st-key-rh-dashboard-chart-conductor-records"] > [data-testid="stVerticalBlockBorderWrapper"] {
+    min-height: 0 !important;
+    padding-top: .74rem !important;
+    padding-bottom: .62rem !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: 0 7px 22px rgba(31, 45, 75, .04);
+}
+
+[class*="st-key-rh-dashboard-chart-conductor-records"] .rh-dashboard-chart-title-compact {
+    height: 2.35rem !important;
+    min-height: 2.35rem !important;
+    margin-bottom: .12rem !important;
+    overflow: hidden;
+}
+
+[class*="st-key-rh-dashboard-chart-conductor-records"] .rh-dashboard-chart-title-compact > span {
+    display: block !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+}
+
+[class*="st-key-rh-dashboard-chart-conductor-records"] [data-testid="stVegaLiteChart"] {
+    margin-top: -.08rem !important;
+    margin-bottom: 0 !important;
+}
+
+@media (max-width: 760px) {
+    [class*="st-key-rh-dashboard-chart-conductor-records"] {
+        margin: .64rem 0 !important;
+    }
+
+    [class*="st-key-rh-dashboard-chart-conductor-records"] .rh-dashboard-chart-title-compact {
+        height: auto !important;
+        min-height: 2.25rem !important;
+    }
+
+    [class*="st-key-rh-dashboard-chart-conductor-records"] .rh-dashboard-chart-title-compact > span {
+        white-space: normal;
+    }
+}

@@ -1,0 +1,241 @@
+/* Axiom v1.0.25 compact ICARM rank evidence chart, rank certification, complexity records, and compact research tables. */
+
+/* The dashboard ICARM-style chart is rebuilt as a compact rank-evidence SVG:
+   gray rigorous-lower dots follow the rank progression and exact-rank dots sit
+   just above them, echoing the plugin chart without a scale-heavy metric axis. */
+[class*="st-key-rh-dashboard-chart-conductor-records"] {
+    margin: .78rem 0 !important;
+    background: transparent !important;
+    background-image: none !important;
+}
+
+[class*="st-key-rh-dashboard-chart-conductor-records"] > [data-testid="stVerticalBlockBorderWrapper"] {
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+}
+
+.rh-rank-evidence-chart-shell {
+    position: relative;
+    overflow: hidden;
+    padding: .68rem .8rem .18rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 16px;
+    background: var(--rh-card);
+    box-shadow: 0 9px 28px rgba(31, 45, 75, .07);
+}
+
+.rh-rank-evidence-chart-shell svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 10.8rem;
+}
+
+.rh-rank-evidence-legend {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0 .25rem .2rem;
+    color: var(--rh-text-secondary);
+    font-size: .62rem;
+    font-weight: 700;
+}
+
+.rh-rank-evidence-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: .36rem;
+}
+
+.rh-rank-evidence-legend i {
+    width: .5rem;
+    height: .5rem;
+    border-radius: 999px;
+}
+
+.rh-rank-evidence-legend-exact {
+    background: var(--rh-primary);
+}
+
+.rh-rank-evidence-legend-rigorous {
+    background: color-mix(in srgb, var(--rh-text-secondary) 48%, var(--rh-card));
+    border: 1px solid color-mix(in srgb, var(--rh-text-secondary) 62%, var(--rh-card));
+}
+
+.rh-rank-evidence-guide {
+    fill: color-mix(in srgb, var(--rh-border-strong) 62%, var(--rh-card));
+    opacity: .56;
+}
+
+.rh-rank-evidence-point {
+    stroke-width: 1.35;
+}
+
+.rh-rank-evidence-rigorous {
+    fill: color-mix(in srgb, var(--rh-text-secondary) 48%, var(--rh-card));
+    stroke: color-mix(in srgb, var(--rh-text-secondary) 68%, var(--rh-card));
+}
+
+.rh-rank-evidence-exact {
+    fill: var(--rh-primary);
+    stroke: var(--rh-primary-deep);
+    filter: drop-shadow(0 2px 3px color-mix(in srgb, var(--rh-primary) 18%, transparent));
+}
+
+.rh-rank-evidence-label {
+    fill: var(--rh-muted);
+    font: 10px Inter, system-ui, sans-serif;
+    font-weight: 700;
+}
+
+/* Rank certification reads as its own section directly beneath the research
+   frontier sequence. Its strength colors mirror the heatmap's blue intensity:
+   exact=100%, lower=50%, open interval=25%, uncertified=10%. */
+.rh-frontier-certification {
+    margin-top: .86rem;
+    padding: .72rem .78rem .66rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 13px;
+    background: var(--rh-card);
+    box-shadow: 0 5px 18px rgba(31, 45, 75, .035);
+}
+
+.rh-frontier-cert-head,
+.rh-frontier-cert-legend {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .65rem;
+}
+
+.rh-frontier-cert-head > span {
+    color: var(--rh-primary-deep);
+    font-size: .64rem;
+    font-weight: 800;
+    letter-spacing: .075em;
+}
+
+.rh-frontier-cert-head > small {
+    color: var(--rh-muted);
+    font-size: .61rem;
+}
+
+.rh-frontier-cert-track {
+    display: flex;
+    width: 100%;
+    height: .66rem;
+    margin-top: .46rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--rh-border-subtle);
+}
+
+.rh-frontier-cert-segment {
+    display: block;
+    height: 100%;
+    min-width: 1px;
+}
+
+.rh-frontier-cert-exact {
+    background: color-mix(in srgb, var(--rh-primary) 100%, var(--rh-card));
+}
+.rh-frontier-cert-lower {
+    background: color-mix(in srgb, var(--rh-primary) 50%, var(--rh-card));
+}
+.rh-frontier-cert-interval {
+    background: color-mix(in srgb, var(--rh-primary) 25%, var(--rh-card));
+}
+.rh-frontier-cert-none {
+    background: color-mix(in srgb, var(--rh-primary) 10%, var(--rh-card));
+}
+
+.rh-frontier-cert-legend {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    margin-top: .4rem;
+    color: var(--rh-muted);
+    font-size: .58rem;
+}
+
+.rh-frontier-cert-legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: .28rem;
+}
+
+.rh-frontier-cert-legend > span > i {
+    width: .42rem;
+    height: .42rem;
+    border-radius: 999px;
+}
+
+.rh-frontier-cert-legend strong {
+    color: var(--rh-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Torsion × Rank replaces the former standalone certification card beside
+   Record by Complexity. */
+:is(
+    [class*="st-key-rh-dashboard-torsion-rank"],
+    [class*="st-key-rh-dashboard-record-complexity"]
+) {
+    margin-top: .76rem;
+    background: var(--rh-dashboard-section-bg) !important;
+    border-radius: var(--rh-radius) !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-torsion-rank"],
+    [class*="st-key-rh-dashboard-record-complexity"]
+) > [data-testid="stVerticalBlockBorderWrapper"] {
+    min-height: 16.8rem;
+    background: transparent !important;
+    box-shadow: 0 7px 22px rgba(31, 45, 75, .04);
+}
+
+[class*="st-key-rh-dashboard-record-complexity"] .rh-dashboard-research-heading {
+    margin-bottom: .58rem;
+}
+
+/* Table research sections show about five body rows, then scroll internally.
+   Sticky headers keep the evidence columns readable during the scroll. */
+.rh-dashboard-table-scroll,
+[class*="st-key-rh-dashboard-exceptional-arithmetic"] .rh-dashboard-table-wrap {
+    max-height: 15.4rem;
+    overflow-x: auto;
+    overflow-y: auto;
+}
+
+:is(
+    .rh-dashboard-table-scroll,
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"] .rh-dashboard-table-wrap
+) .rh-dashboard-data-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--rh-card);
+}
+
+/* The legacy full-width Records section is no longer rendered; keep its old
+   selector from reserving visual space if a cached rerun briefly preserves it. */
+[class*="st-key-rh-dashboard-arithmetic-records"] {
+    display: none !important;
+}
+
+@media (max-width: 900px) {
+    :is(
+        [class*="st-key-rh-dashboard-torsion-rank"],
+        [class*="st-key-rh-dashboard-record-complexity"]
+    ) > [data-testid="stVerticalBlockBorderWrapper"] {
+        min-height: 0;
+    }
+
+    .rh-rank-evidence-chart-shell svg {
+        max-height: 9.25rem;
+    }
+}

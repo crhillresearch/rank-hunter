@@ -1,0 +1,12 @@
+{
+  "repo_url": "https://github.com/crhillresearch/rank-hunter.git",
+  "repo_ref": "main",
+  "source_bundle": "",
+  "source_commit": "",
+  "sage_wsl_version": "10.10",
+  "sage_wsl_distro": "RankHunter-Sage-10.10",
+  "sage_wsl_url": "https://github.com/sagemath/sage-binder-env/releases/download/v10.10/sagemath-10.10-wsl.zip",
+  "sage_wsl_sha256": "87d2f2542a48ab0bee07defcad196335576b3c1b621233f5461a9aedd44edff6",
+  "sage_wsl_size_bytes": 1376792539,
+  "sage_wsl_tar_name": "sagemath-10.10-wsl.tar"
+}

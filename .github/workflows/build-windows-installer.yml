@@ -1,0 +1,124 @@
+name: Build Windows Installer
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+    paths:
+      - "installer/windows/**"
+      - "tests/test_windows_installer_assets.py"
+      - ".github/workflows/build-windows-installer.yml"
+      - ".gitattributes"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+
+      - name: Run Windows installer contract tests
+        run: python -m pytest -q tests/test_windows_installer_assets.py
+
+  build-installer:
+    needs:
+      - contract-tests
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate Windows installer sources
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer\windows\validate.ps1
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile exact-source installer
+        shell: powershell
+        run: |
+          $sourceCommit = (git rev-parse HEAD).Trim()
+          $sourceDir = "installer\windows\source-artifact"
+          New-Item -ItemType Directory -Force -Path $sourceDir | Out-Null
+          $sourceBundle = Join-Path $sourceDir "rank-hunter.bundle"
+          $bundleBranch = "rank-hunter-release-source"
+
+          git branch -f $bundleBranch $sourceCommit
+          if ($LASTEXITCODE -ne 0) { throw "Could not create the temporary release-source ref." }
+
+          git bundle create $sourceBundle "refs/heads/$bundleBranch"
+          if ($LASTEXITCODE -ne 0) { throw "Could not create bundled Rank Hunter source." }
+          git bundle verify $sourceBundle
+          if ($LASTEXITCODE -ne 0) { throw "Bundled Rank Hunter source failed verification." }
+
+          $smoke = Join-Path $env:RUNNER_TEMP "rank-hunter-bundle-smoke"
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $smoke
+          git clone --branch $bundleBranch $sourceBundle $smoke
+          if ($LASTEXITCODE -ne 0) { throw "Bundled source clone smoke test failed." }
+          $smokeCommit = (git -C $smoke rev-parse HEAD).Trim()
+          if ($smokeCommit -ne $sourceCommit) { throw "Bundled source cloned the wrong commit." }
+
+          $repoUrl = "https://github.com/crhillresearch/rank-hunter.git"
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $repoRef = $env:GITHUB_REF_NAME
+            $version = ($repoRef -replace "^v", "")
+          }
+          else {
+            $repoRef = "main"
+            $version = "0.9.2-release-candidate"
+          }
+
+          powershell -NoProfile -ExecutionPolicy Bypass `
+            -File installer\windows\build.ps1 `
+            -Version $version `
+            -RepoUrl $repoUrl `
+            -RepoRef $repoRef `
+            -SourceBundle $sourceBundle `
+            -SourceCommit $sourceCommit
+
+          $installer = Get-Item installer\windows\dist\RankHunter-Setup-x64.exe
+          $sizeMB = [Math]::Round($installer.Length / 1MB, 2)
+          Write-Host "[Rank Hunter] Installer size: $sizeMB MB"
+          if ($installer.Length -gt 100MB) {
+            throw "Windows installer exceeded 100 MB; a scientific runtime was embedded by mistake."
+          }
+
+      - name: Upload Setup.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: RankHunter-Windows-Installer
+          path: installer/windows/dist/RankHunter-Setup-x64.exe
+          compression-level: 0
+          if-no-files-found: error
+
+      - name: Publish Windows installer to public GitHub Release
+        if: github.repository == 'crhillresearch/rank-hunter' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/windows/dist/RankHunter-Setup-x64.exe
+          fail_on_unmatched_files: true
+          generate_release_notes: true

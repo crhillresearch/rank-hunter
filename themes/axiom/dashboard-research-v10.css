@@ -1,0 +1,146 @@
+/* Axiom v1.0.35 torsion research refinements. */
+
+[class*="st-key-rh-dashboard-torsion-rank"] .rh-dashboard-table-wrap {
+    margin-top: .42rem;
+}
+
+[class*="st-key-rh-dashboard-torsion-rank"] .rh-torsion-rank-table th,
+[class*="st-key-rh-dashboard-torsion-rank"] .rh-torsion-rank-table td,
+[class*="st-key-rh-dashboard-torsion-rank"] .rh-torsion-records-table th,
+[class*="st-key-rh-dashboard-torsion-rank"] .rh-torsion-records-table td {
+    padding-top: .38rem;
+    padding-bottom: .38rem;
+    white-space: nowrap;
+}
+
+.rh-torsion-records-title {
+    margin-top: .78rem;
+    color: var(--rh-primary-deep);
+    font-size: .62rem;
+    font-weight: 800;
+    letter-spacing: .075em;
+}
+
+.rh-torsion-rank-table td.rh-num:not(:first-child) {
+    min-width: 2.7rem;
+    text-align: center;
+}
+
+
+/* Torsion research layout: distribution chart + follow-up share the compact
+   two-column row; Records and Exact Rank remain full-width evidence tables. */
+[class*="st-key-rh-dashboard-torsion-distribution"],
+[class*="st-key-rh-dashboard-torsion-signals"] {
+    min-width: 0;
+}
+
+[class*="st-key-rh-dashboard-torsion-records"],
+[class*="st-key-rh-dashboard-torsion-rank"] {
+    margin-top: .42rem !important;
+}
+
+[class*="st-key-rh-dashboard-torsion-records"] .rh-dashboard-table-wrap,
+[class*="st-key-rh-dashboard-torsion-rank"] .rh-dashboard-table-wrap {
+    overflow-x: auto;
+}
+
+.rh-torsion-distribution-chart {
+    display: grid;
+    gap: .52rem;
+    margin-top: .46rem;
+}
+
+.rh-torsion-dist-row {
+    display: grid;
+    grid-template-columns: minmax(4.6rem, 5.6rem) minmax(0, 1fr);
+    align-items: center;
+    gap: .55rem;
+}
+
+.rh-torsion-dist-label {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .35rem;
+    min-width: 0;
+}
+
+.rh-torsion-dist-label strong {
+    overflow: hidden;
+    color: var(--rh-text);
+    font-size: .68rem;
+    font-weight: 780;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rh-torsion-dist-label span {
+    color: var(--rh-muted);
+    font-size: .58rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.rh-torsion-dist-track {
+    display: flex;
+    width: 100%;
+    height: .72rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--rh-border-subtle);
+}
+
+.rh-torsion-dist-segment {
+    display: block;
+    height: 100%;
+    min-width: 1px;
+}
+
+.rh-torsion-dist-exact {
+    background: var(--rh-primary);
+}
+
+.rh-torsion-dist-lower {
+    background: color-mix(in srgb, var(--rh-primary) 52%, var(--rh-card));
+}
+
+.rh-torsion-dist-conflict {
+    background: var(--rh-danger);
+}
+
+.rh-torsion-dist-other {
+    background: var(--rh-border-strong);
+}
+
+.rh-torsion-dist-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem .8rem;
+    margin-top: .18rem;
+    padding-top: .46rem;
+    border-top: 1px solid var(--rh-border-subtle);
+    color: var(--rh-muted);
+    font-size: .58rem;
+}
+
+.rh-torsion-dist-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: .28rem;
+}
+
+.rh-torsion-dist-legend i {
+    display: inline-block;
+    width: .5rem;
+    height: .5rem;
+    border-radius: 999px;
+}
+
+[class*="st-key-rh-dashboard-torsion-signals"] .rh-dashboard-table-scroll {
+    max-height: 17.4rem;
+    overflow: auto;
+}
+
+[class*="st-key-rh-dashboard-torsion-records"] .rh-torsion-records-table {
+    width: 100%;
+}
+

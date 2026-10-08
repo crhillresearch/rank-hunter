@@ -1,0 +1,449 @@
+/* Axiom v1.0.13 research dashboard and compact-launch refinements. */
+
+/* Compact mark used as the dashboard control. */
+:is([class*="st-key-rh-sidebar-logo"], [class*="st-key-sidebar-logo"]) {
+    padding: .72rem .65rem .62rem !important;
+}
+
+:is([class*="st-key-rh-sidebar-logo"], [class*="st-key-sidebar-logo"]) img {
+    width: var(--rh-logo-width) !important;
+    max-height: 6.5rem !important;
+    object-fit: contain !important;
+}
+
+[class*="st-key-rh-nav-dashboard"] .stButton {
+    top: -7.05rem !important;
+    height: 6.75rem !important;
+    left: .72rem !important;
+    right: .72rem !important;
+}
+
+/* Dashboard body sections sit one tone lighter than the app canvas. The semantic
+   container owns the surface; Streamlit's nested bordered wrapper stays clear. */
+:is(
+    [class*="st-key-rh-dashboard-local-frontier"],
+    [class*="st-key-rh-dashboard-icarm-leaderboard"],
+    [class*="st-key-rh-dashboard-pipeline"],
+    [class*="st-key-rh-dashboard-search"],
+    [class*="st-key-rh-dashboard-latest-activity"],
+    [class*="st-key-rh-dashboard-research-landscape"],
+    [class*="st-key-rh-dashboard-chart-rank-distribution"],
+    [class*="st-key-rh-dashboard-chart-search-progress"],
+    [class*="st-key-rh-dashboard-chart-root-rank"],
+    [class*="st-key-rh-dashboard-chart-parameter-yield"]
+) {
+    background: var(--rh-dashboard-section-bg, #F8FAFD) !important;
+    background-image: none !important;
+    border-radius: var(--rh-radius) !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-local-frontier"],
+    [class*="st-key-rh-dashboard-icarm-leaderboard"],
+    [class*="st-key-rh-dashboard-pipeline"],
+    [class*="st-key-rh-dashboard-search"],
+    [class*="st-key-rh-dashboard-latest-activity"],
+    [class*="st-key-rh-dashboard-research-landscape"],
+    [class*="st-key-rh-dashboard-chart-rank-distribution"],
+    [class*="st-key-rh-dashboard-chart-search-progress"],
+    [class*="st-key-rh-dashboard-chart-root-rank"],
+    [class*="st-key-rh-dashboard-chart-parameter-yield"]
+) > [data-testid="stVerticalBlockBorderWrapper"] {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: 0 7px 22px rgba(31, 45, 75, .04);
+}
+
+/* Give the page-level metrics a little air before the research body begins. */
+[class*="st-key-rh-dashboard-top-stats"] {
+    margin-bottom: 1.05rem !important;
+}
+
+/* The page status strip is now informational only: no ACTIVE/IDLE or DB-health pills. */
+.rh-dashboard-subheader {
+    justify-content: flex-start !important;
+}
+
+/* Dashboard section titles intentionally mirror Research Frontier typography.
+   Core emits only the semantic classes; Axiom owns the presentation. */
+.rh-dashboard-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: .82rem;
+    border-bottom: 1px solid var(--rh-border-subtle);
+}
+
+.rh-dashboard-section-title {
+    color: var(--rh-primary);
+    font-size: .68rem;
+    font-weight: 820;
+    letter-spacing: .12em;
+}
+
+/* Leaderboard torsion chooser shares the title row and aligns to its top edge. */
+[class*="st-key-rh-dashboard-icarm-torsion-menu"] {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+[class*="st-key-rh-dashboard-icarm-torsion-menu"] button {
+    width: auto !important;
+    min-height: 1.75rem !important;
+    height: 1.75rem !important;
+    padding: 0 .15rem !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--rh-text-secondary) !important;
+    font-size: .76rem !important;
+    font-weight: 600 !important;
+}
+
+[class*="st-key-rh-dashboard-icarm-torsion-menu"] button:hover {
+    background: transparent !important;
+    color: var(--rh-text) !important;
+}
+
+[class*="st-key-rh-dashboard-icarm-leaderboard"] {
+    background: var(--rh-dashboard-section-bg, #F8FAFD) !important;
+    background-image: none !important;
+}
+
+[class*="st-key-rh-dashboard-icarm-leaderboard"] > div {
+    background: transparent !important;
+    background-image: none !important;
+}
+
+.rh-dashboard-icarm-rank {
+    padding: 0 0 .34rem;
+    text-align: center;
+}
+
+.rh-dashboard-icarm-rank > span {
+    display: block;
+    color: var(--rh-text-secondary);
+    font-size: .76rem;
+    font-weight: 720;
+    text-transform: capitalize;
+}
+
+.rh-dashboard-icarm-rank > strong {
+    display: block;
+    margin-top: .28rem;
+    color: var(--rh-text-secondary);
+    font-size: 2.55rem;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: -.055em;
+}
+
+.rh-dashboard-icarm-rank > small {
+    display: block;
+    margin-top: .42rem;
+    color: var(--rh-muted) !important;
+    font-size: .68rem;
+}
+
+/* Pipeline stats stay compact and read as white tiles on the soft section surface. */
+.rh-dashboard-pipeline-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: .48rem;
+    margin: .05rem 0 .78rem;
+}
+
+.rh-dashboard-pipeline-stats > div {
+    min-width: 0;
+    padding: .66rem .52rem;
+    border: 1px solid var(--rh-border-subtle);
+    border-radius: 10px;
+    background: var(--rh-card);
+    text-align: center;
+}
+
+.rh-dashboard-pipeline-stats span {
+    display: block;
+    overflow: hidden;
+    color: var(--rh-muted);
+    font-size: .64rem;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rh-dashboard-pipeline-stats strong {
+    display: block;
+    margin-top: .18rem;
+    color: var(--rh-text);
+    font-size: 1.08rem;
+    font-weight: 820;
+}
+
+/* Research Landscape is one section card. Individual chart regions are
+   borderless/elevation-free inside it and use a common minimum height. */
+[class*="st-key-rh-dashboard-local-frontier"] {
+    margin-bottom: .42rem;
+}
+
+[class*="st-key-rh-dashboard-research-landscape"] {
+    margin-top: .42rem !important;
+}
+
+[class*="st-key-rh-dashboard-research-landscape"] > [data-testid="stVerticalBlockBorderWrapper"] {
+    padding: .82rem .86rem .92rem !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-chart-rank-distribution"],
+    [class*="st-key-rh-dashboard-chart-search-progress"],
+    [class*="st-key-rh-dashboard-chart-root-rank"],
+    [class*="st-key-rh-dashboard-chart-parameter-yield"]
+) {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-chart-rank-distribution"],
+    [class*="st-key-rh-dashboard-chart-search-progress"],
+    [class*="st-key-rh-dashboard-chart-root-rank"],
+    [class*="st-key-rh-dashboard-chart-parameter-yield"]
+) > [data-testid="stVerticalBlockBorderWrapper"] {
+    min-height: 20.5rem;
+    padding: .35rem .35rem .18rem !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.rh-dashboard-chart-title {
+    min-height: 2.55rem;
+    margin-bottom: .08rem;
+}
+
+.rh-dashboard-chart-title strong {
+    display: block;
+    color: var(--rh-text);
+    font-size: .92rem;
+    font-weight: 760;
+}
+
+.rh-dashboard-chart-title span {
+    display: block;
+    margin-top: .12rem;
+    color: var(--rh-muted);
+    font-size: .66rem;
+}
+
+[class*="st-key-rh-dashboard-chart-"] [data-testid="stVerticalBlockBorderWrapper"] {
+    min-height: 20.5rem;
+}
+
+/* Compact dashboard search: keep the mode switch on the SEARCH title line. */
+[class*="st-key-rh-dashboard-search"] > [data-testid="stVerticalBlockBorderWrapper"] {
+    padding-top: .85rem !important;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-testid="stHorizontalBlock"]:has([class*="st-key-dashboard-family-search-toggle"]) {
+    position: relative !important;
+    z-index: 2;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin-top: -2.18rem !important;
+    margin-bottom: .58rem !important;
+    gap: 0 !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-testid="stHorizontalBlock"]:has([class*="st-key-dashboard-family-search-toggle"]) > [data-testid="stColumn"]:first-child {
+    display: none !important;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-testid="stHorizontalBlock"]:has([class*="st-key-dashboard-family-search-toggle"]) > [data-testid="stColumn"]:last-child {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin-left: auto !important;
+}
+
+[class*="st-key-dashboard-family-search-toggle"] {
+    position: relative;
+    width: auto !important;
+    margin: 0 !important;
+}
+
+[class*="st-key-dashboard-family-search-toggle"] [data-testid="stCheckbox"] {
+    display: flex !important;
+    justify-content: flex-end !important;
+    min-height: 1.35rem !important;
+}
+
+/* Hide the redundant Family search text but keep the native control. */
+[class*="st-key-dashboard-family-search-toggle"] [data-testid="stWidgetLabel"] {
+    display: none !important;
+}
+
+/* Theme-owned hover help for the compact unlabeled mode switch. */
+[class*="st-key-dashboard-family-search-toggle"]::after {
+    content: "On: Family Search · Off: General Hunt";
+    position: absolute;
+    right: 0;
+    top: calc(100% + .38rem);
+    z-index: 20;
+    width: max-content;
+    max-width: 15rem;
+    padding: .38rem .52rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 8px;
+    background: var(--rh-card);
+    color: var(--rh-text-secondary);
+    box-shadow: 0 6px 18px rgba(31, 45, 75, .10);
+    font-size: .62rem;
+    font-weight: 650;
+    line-height: 1.25;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-.12rem);
+    transition: opacity .12s ease, transform .12s ease;
+}
+
+[class*="st-key-dashboard-family-search-toggle"]:hover::after,
+[class*="st-key-dashboard-family-search-toggle"]:focus-within::after {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.rh-dashboard-search-summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .6rem;
+    margin: -.05rem 0 .48rem;
+    padding: 0 .05rem .48rem;
+    border-bottom: 1px solid var(--rh-border-subtle);
+}
+
+.rh-dashboard-search-summary strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--rh-text);
+    font-size: .84rem;
+    font-weight: 780;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rh-dashboard-search-summary span {
+    flex: 0 0 auto;
+    color: var(--rh-muted);
+    font-size: .62rem;
+    font-weight: 650;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-testid="stWidgetLabel"] p {
+    font-size: .66rem !important;
+    font-weight: 680 !important;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-baseweb="select"] > div,
+[class*="st-key-rh-dashboard-search"] [data-testid="stNumberInputContainer"],
+[class*="st-key-rh-dashboard-search"] input {
+    min-height: 2.15rem !important;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-testid="stExpander"] {
+    margin-top: .25rem;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-testid="stExpander"] > details > summary {
+    min-height: 2.05rem;
+    font-size: .68rem;
+}
+
+[class*="st-key-rh-dashboard-search"] [data-testid="stForm"] {
+    margin-top: .1rem;
+    padding: 0 !important;
+    border: 0 !important;
+}
+
+[class*="st-key-rh-dashboard-search"] .stButton > button,
+[class*="st-key-rh-dashboard-search"] [data-testid="stFormSubmitButton"] > button {
+    min-height: 2.3rem !important;
+    font-size: .76rem !important;
+}
+
+/* Recent job activity uses semantic status dots rather than provenance event levels. */
+.rh-dashboard-activity i.level-succeeded {
+    background: var(--rh-success) !important;
+}
+
+.rh-dashboard-activity i.level-running,
+.rh-dashboard-activity i.level-queued,
+.rh-dashboard-activity i.level-stopping,
+.rh-dashboard-activity i.level-info {
+    background: var(--rh-info) !important;
+}
+
+.rh-dashboard-activity i.level-warning {
+    background: var(--rh-warning) !important;
+}
+
+.rh-dashboard-activity i.level-critical,
+.rh-dashboard-activity i.level-error,
+.rh-dashboard-activity i.level-failed,
+.rh-dashboard-activity i.level-killed,
+.rh-dashboard-activity i.level-stopped,
+.rh-dashboard-activity i.level-interrupted {
+    background: var(--rh-danger) !important;
+}
+
+/* Extension surface: denser three-column cards and clean collapsible sections. */
+[class*="st-key-rh-plugin-feature-"] .rh-plugin-name .rh-status-dot,
+[class*="st-key-rh-plugin-extension-"] .rh-plugin-name .rh-status-dot {
+    margin-right: .48rem !important;
+}
+
+[class*="st-key-rh-plugin-feature-"] [data-testid="stVerticalBlockBorderWrapper"],
+[class*="st-key-rh-plugin-extension-"] [data-testid="stVerticalBlockBorderWrapper"] {
+    min-height: 13.2rem;
+}
+
+[data-testid="stExpander"] > details > summary {
+    font-weight: 760;
+}
+
+@media (max-width: 1100px) {
+    [class*="st-key-rh-dashboard-chart-"] [data-testid="stVerticalBlockBorderWrapper"] {
+        min-height: 19rem;
+    }
+}
+
+@media (max-width: 900px) {
+    .rh-dashboard-pipeline-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    [class*="st-key-rh-nav-dashboard"] .stButton {
+        top: -6.72rem !important;
+        height: 6.45rem !important;
+    }
+
+    [class*="st-key-rh-dashboard-search"] [data-testid="stHorizontalBlock"]:has([class*="st-key-dashboard-family-search-toggle"]) {
+        margin-top: -2.05rem !important;
+        margin-bottom: .45rem !important;
+    }
+
+    [class*="st-key-dashboard-family-search-toggle"]::after {
+        right: -.1rem;
+        max-width: 12rem;
+    }
+}

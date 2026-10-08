@@ -1,0 +1,44 @@
+/*
+ * Axiom appearance controls.
+ * Loaded for both appearances; colors remain semantic theme tokens.
+ */
+
+[class*="st-key-rh-appearance-toggle"] {
+    margin: .08rem .28rem .6rem !important;
+    padding: .16rem !important;
+    border: 1px solid var(--rh-border-subtle);
+    border-radius: 10px;
+    background: var(--rh-surface-soft, var(--rh-card));
+}
+
+[class*="st-key-rh-appearance-toggle"] [data-testid="stHorizontalBlock"] {
+    gap: .18rem !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton {
+    margin: 0 !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button {
+    min-height: 1.95rem !important;
+    height: 1.95rem !important;
+    padding: .18rem .34rem !important;
+    justify-content: center !important;
+    border-radius: 7px !important;
+    font-size: .7rem !important;
+    font-weight: 760 !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button > div {
+    justify-content: center !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button[kind="secondary"] {
+    color: var(--rh-muted) !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button[kind="primary"] {
+    background: var(--rh-surface-active) !important;
+    border-color: var(--rh-border) !important;
+    color: var(--rh-primary-deep) !important;
+}

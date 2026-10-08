@@ -1,0 +1,152 @@
+/* Axiom v1.0.20 dashboard research/layout refinements. */
+
+/* The top metrics now read as quiet peer cards; remove the legacy colored
+   right-edge accent strip without changing the underlying metric semantics. */
+.rh-dashboard-metric::after {
+    display: none !important;
+    content: none !important;
+}
+
+/* Give all four chart headers the same reserved height. The chart specs already
+   share a 225px plot height; unequal wrapped subtitles were what made one card
+   grow taller than its row-mate at normal laptop widths. */
+.rh-dashboard-chart-title {
+    height: 3.45rem !important;
+    min-height: 3.45rem !important;
+    overflow: hidden;
+}
+
+.rh-dashboard-chart-title > span {
+    display: -webkit-box !important;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    line-height: 1.35;
+}
+
+[class*="st-key-rh-dashboard-chart-"] [data-testid="stVerticalBlockBorderWrapper"] {
+    min-height: 20.4rem !important;
+}
+
+/* Full-width research sequence below the two-column dashboard body. */
+:is(
+    [class*="st-key-rh-dashboard-torsion-rank"],
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-unresolved"],
+    [class*="st-key-rh-dashboard-lattices"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"]
+) {
+    margin-top: .72rem;
+    background: var(--rh-dashboard-section-bg, #F8FAFD) !important;
+    background-image: none !important;
+    border-radius: var(--rh-radius) !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-torsion-rank"],
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-unresolved"],
+    [class*="st-key-rh-dashboard-lattices"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"]
+) > [data-testid="stVerticalBlockBorderWrapper"] {
+    background: transparent !important;
+    background-image: none !important;
+    box-shadow: 0 7px 22px rgba(31, 45, 75, .04);
+}
+
+/* Certification now lives in the right rail above Pipeline. Keep it compact
+   enough to behave like the other rail sections rather than a full-width panel. */
+[class*="st-key-rh-dashboard-rank-certification"] {
+    margin-top: .68rem;
+    background: var(--rh-dashboard-section-bg, #F8FAFD) !important;
+    border-radius: var(--rh-radius) !important;
+}
+
+[class*="st-key-rh-dashboard-rank-certification"] > [data-testid="stVerticalBlockBorderWrapper"] {
+    background: transparent !important;
+    box-shadow: 0 7px 22px rgba(31, 45, 75, .04);
+}
+
+/* The three legacy renderers still carry their older verbose strings. Axiom
+   presents the requested compact section labels and suppresses their prose
+   descriptions while leaving the persisted-data tables/bars untouched. */
+:is(
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-rank-certification"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"]
+) .rh-dashboard-research-heading > small {
+    display: none !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-rank-certification"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"]
+) .rh-dashboard-research-heading > .rh-dashboard-eyebrow {
+    font-size: 0 !important;
+}
+
+[class*="st-key-rh-dashboard-arithmetic-records"] .rh-dashboard-research-heading > .rh-dashboard-eyebrow::after {
+    content: "RECORDS";
+}
+
+[class*="st-key-rh-dashboard-rank-certification"] .rh-dashboard-research-heading > .rh-dashboard-eyebrow::after {
+    content: "CERTIFICATION";
+}
+
+[class*="st-key-rh-dashboard-exceptional-arithmetic"] .rh-dashboard-research-heading > .rh-dashboard-eyebrow::after {
+    content: "EXCEPTIONAL";
+}
+
+:is(
+    [class*="st-key-rh-dashboard-arithmetic-records"],
+    [class*="st-key-rh-dashboard-rank-certification"],
+    [class*="st-key-rh-dashboard-exceptional-arithmetic"]
+) .rh-dashboard-research-heading > .rh-dashboard-eyebrow::after {
+    color: var(--rh-primary);
+    font-size: .60rem;
+    font-weight: 820;
+    letter-spacing: .12em;
+    line-height: 1.2;
+}
+
+.rh-dashboard-research-heading {
+    margin-bottom: .68rem;
+}
+
+/* Per Hour is now a label and the value is deliberately unit-free. */
+.rh-dashboard-pipeline-throughput strong {
+    font-size: 1.02rem !important;
+    line-height: 1.15;
+    overflow-wrap: normal;
+}
+
+/* Keep the truthful torsion-data availability note compact until torsion
+   structure becomes an authoritative persisted field. */
+[class*="st-key-rh-dashboard-torsion-rank"] [data-testid="stCaptionContainer"] {
+    margin-top: .1rem;
+}
+
+@media (max-width: 1100px) {
+    .rh-dashboard-chart-title {
+        height: 3.75rem !important;
+        min-height: 3.75rem !important;
+    }
+
+    [class*="st-key-rh-dashboard-chart-"] [data-testid="stVerticalBlockBorderWrapper"] {
+        min-height: 20.7rem !important;
+    }
+}
+
+@media (max-width: 760px) {
+    .rh-dashboard-chart-title {
+        height: auto !important;
+        min-height: 3.2rem !important;
+        overflow: visible;
+    }
+
+    [class*="st-key-rh-dashboard-chart-"] [data-testid="stVerticalBlockBorderWrapper"] {
+        min-height: 0 !important;
+    }
+}
