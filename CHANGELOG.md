@@ -6,14 +6,50 @@ All notable changes to Rank Hunter are documented here.
 
 ### Added
 
-- Added a core pencil registry and curve links that plugins can populate.
-- Added a database-backed Pencils Explored statistic in Research Frontier.
+- Added **Models**, a place to create and inspect genus-two curves and their
+  Jacobians. Genus-two Pipeline modules can check models, search for points and
+  divisors, establish supported rank lower bounds, and map findings back to a
+  linked elliptic curve.
+- Added **Casebook** for working through one curve's open questions and
+  **Rank Lab** for certifying points, proving rank, or searching a group of
+  promising curves.
+- Added **Tools** with a compact command bar for the existing proof and
+  discovery workbenches. New core Twists and Isogenies tools bring the former
+  Twist & Isogeny Lab research views into the main app.
+- Added **Sections** to search for exact rational-function points on a family,
+  and **Base Change** to pull a family through a rational parameter map and
+  search the result. Both save reproducible experiment records; a new section
+  is not called independent until that has been proved.
+- Added a core pencil registry, a Pencils page, and curve links that plugins
+  can populate. Research Frontier now counts explored pencils from the database.
+- Added Pipeline modules for classical Mestre–Nagao scoring, REA sorting and
+  height-Gram rank certificates, genus-two Jacobian work, and lattice-based
+  searches. Heuristic scores remain separate from rank proofs.
 
 ### Changed
 
-- Display Research Frontier above a separate dashboard navigation card.
-- Show the database's best exact rank beneath the best certified rank.
-- Refine the Axiom frontier presentation and restore the green Live Database badge.
+- Reworked the Dashboard around Research Frontier, torsion coverage, a compact
+  Genus Census, and a larger Research Landscape. Operations moved to the
+  sidebar. The hero now shows the best exact rank beneath the best certified
+  rank, and Axiom's grid background fades behind the main figures.
+- Redesigned Curves' **Hall of Fame** as a high-score page with the best three
+  distinct ranks, torsion-group records, and a large curve illustration.
+- Grouped Pipelines under Search and made its name and presets follow the
+  selected target type, including separate genus-two modules.
+- Simplified the Descent workbench and the Models inventory so researchers can
+  start from a curve or model and see the next useful action.
+- Put active Job controls above the raw log. The log has copy and full-screen
+  buttons, and full screen stays open during live refresh.
+- Refined Axiom's light and dark layouts, including smaller mobile dashboard
+  buttons and charts that respond to their filters.
+
+### Fixed
+
+- Made Hall of Fame rankings use current rigorous rank evidence, so stale
+  curve-table values and repeated ranks no longer distort the podium.
+- Fixed the Exceptional Curve Radar selection so changing its dropdown updates
+  the chart.
+- Fixed the Pencils overview crash and Geometry import and navigation errors.
 
 ## [0.9.2] — 2026-10-08
 
