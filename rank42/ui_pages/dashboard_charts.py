@@ -443,7 +443,7 @@ def render_landscape_charts(
     import pandas as pd
 
     chart_colors = _dashboard_chart_palette()
-    row1_left, row1_right = st.columns(2, gap="medium")
+    row1_left, row1_right = st.columns(2, gap="small")
     parameter_rows = _parameter_search_rows(db, pool_id=parameter_pool_id)
     scope_caption = str(parameter_scope_label or "All candidate pools · combined")
 
@@ -505,7 +505,7 @@ def render_landscape_charts(
                 st.caption("No searched candidates with numeric a/b parameter coordinates are stored yet.")
             st.caption(scope_caption)
 
-    row2_left, row2_right = st.columns(2, gap="medium")
+    row2_left, row2_right = st.columns(2, gap="small")
     neighborhood_rows = _with_local_density(parameter_rows)
     with row2_left:
         with region("dashboard-chart-search-progress", border=False, height="stretch"):
@@ -598,7 +598,7 @@ def render_landscape_charts(
                     "and rigorous specialization-rank evidence."
                 )
 
-    row3_left, row3_right = st.columns(2, gap="medium")
+    row3_left, row3_right = st.columns(2, gap="small")
     conductor_rows = _conductor_frontier_rows(db)
     torsion_rows = _torsion_rank_frontier_rows(db)
     with row3_left:

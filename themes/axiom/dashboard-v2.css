@@ -200,14 +200,9 @@
     font-weight: 820;
 }
 
-/* Keep the Frontier and Rank Landscape cards at the same spacing as other
-   dashboard sections; Streamlit's vertical stack supplies the standard gap. */
+/* Keep the Frontier aligned with the dashboard section spacing. */
 [class*="st-key-rh-dashboard-local-frontier"] {
     margin-bottom: 0 !important;
-}
-
-[class*="st-key-rh-dashboard-rank-landscape-region-card"] {
-    margin-top: 0 !important;
 }
 
 [class*="st-key-rh-dashboard-research-landscape"] > [data-testid="stVerticalBlockBorderWrapper"] {

@@ -36,6 +36,17 @@ from .dashboard_plugins import render_plugins_panel
 from .dashboard_sections import _torsion_research_data
 
 
+_DASHBOARD_NAV_GROUPS = (
+    ("Explore", ("Dashboard", "Curves", "Points", "Models")),
+    ("Search", ("Candidates", "Search", "Auto", "Target", "Pipelines")),
+    ("Analysis", ("Casebook", "Rank Lab", "Tools")),
+    ("Manage", ("Jobs", "Campaigns", "Plugins", "Settings")),
+)
+_COMMAND_BAR_JS = (
+    Path(__file__).resolve().parents[1] / "ui_assets" / "tools_command_bar.js"
+).read_text(encoding="utf-8")
+
+
 def _go_to(page):
     st.session_state["rh_page"] = page
 
@@ -280,8 +291,6 @@ def _frontier_certification_html(summary):
         )
     return (
         '<div class="rh-frontier-certification">'
-        '<div class="rh-frontier-cert-head"><span>RANK EVIDENCE</span>'
-        f'<small>{total:,} retained curves</small></div>'
         f'<div class="rh-frontier-cert-track">{"".join(segments)}</div>'
         f'<div class="rh-frontier-cert-legend">{"".join(legend)}</div>'
         '</div>'
@@ -355,9 +364,6 @@ def _torsion_findings_html(db):
             local["best_lower_only"] = lower_only
             local["best_lower_only_curve_id"] = record.get("best_lower_only_curve_id")
 
-    local_total = int(local_data["overview"]["curve_count"])
-    local_typed = int(local_data["overview"]["known_torsion"])
-    represented_external_groups = len(set(local_groups) & set(groups))
     all_keys = set(groups) | set(local_groups)
     comparison = []
     for key in all_keys:
@@ -407,30 +413,6 @@ def _torsion_findings_html(db):
     )
     status = catalog_status(db, "icarm")
     synced = _format_local_sync_time(status["fetched_at"] if status else None)
-
-    local_value = "—"
-    if local_leader and local_leader["local_best"] > 0:
-        local_exact_is_best = (
-            local_leader["local_exact"] is not None
-            and int(local_leader["local_exact"])
-            >= int(local_leader["local"]["best_lower"] or 0)
-        )
-        local_value = (
-            f'={local_leader["local_best"]}' if local_exact_is_best
-            else f'≥{local_leader["local_best"]}'
-        )
-    local_leader_detail = "No positive local rank bound"
-    if local_leader and local_leader["local_best"] > 0:
-        local_leader_detail = "Trivial" if local_leader["key"] == "trivial" else local_leader["label"]
-        if local_leader["local_curve"] is not None:
-            local_leader_detail += f' · curve #{int(local_leader["local_curve"])}'
-    external_value = "—" if not external_leader or not external_leader["external"] else f'≥{external_leader["external"]["best_rank"]}'
-    external_detail = "No ICARM rank bound"
-    if external_leader and external_leader["external"]:
-        external_detail = (
-            f'{external_leader["label"]} · ICARM '
-            f'#{external_leader["external"]["best_source_id"]}'
-        )
 
     torsion_cards = []
     for item in comparison:
@@ -520,13 +502,6 @@ def _torsion_findings_html(db):
         '</div>'
         f'<small>ICARM snapshot · synced {html.escape(synced)}</small>'
         '</div>'
-        '<div class="rh-torsion-summary">'
-        f'<span><small>LOCAL FRONTIER</small><strong>{local_value}</strong><em>{html.escape(local_leader_detail)}</em></span>'
-        f'<span><small>ICARM LEADER</small><strong>{external_value}</strong><em>{html.escape(external_detail)}</em></span>'
-        f'<span><small>LOCAL TORSION COVERAGE</small><strong>{local_typed:,} / {local_total:,}</strong>'
-        f'<em>{local_data["overview"]["coverage_pct"]:.1f}% · '
-        f'{represented_external_groups} of {len(groups)} ICARM groups represented locally</em></span>'
-        '</div>'
         f'<div class="rh-torsion-cards">{"".join(torsion_cards)}</div>'
         '<p class="rh-torsion-note">Local ranks use persisted, conflict-free evidence; ICARM ranks are source-provided lower bounds. '
         'The comparison badge is the difference between each side’s best bound, often on different curves.</p>'
@@ -604,19 +579,52 @@ def _world_record_panel(db, ctx):
         )
 
 
-def _research_frontier_actions():
-    pages = ("Candidates", "Search", "Curves", "Points", "Models", "Jobs")
-    columns = st.columns(len(pages), gap="small")
-    for column, page in zip(columns, pages):
-        with column:
-            st.button(
-                page,
-                key=f"rh-dashboard-frontier-{page.lower()}",
-                width="stretch",
-                icon=_route_icon(page),
-                on_click=_go_to,
-                args=(page,),
-            )
+def _dashboard_page_nav():
+    groups = [
+        {
+            "label": label,
+            "tools": [
+                {
+                    "name": page,
+                    "icon": _route_icon(page).removeprefix(":material/").removesuffix(":"),
+                    "description": f"Open {page}",
+                }
+                for page in pages
+            ],
+        }
+        for label, pages in _DASHBOARD_NAV_GROUPS
+    ]
+    config = json.dumps({
+        "selected": "Dashboard",
+        "groups": groups,
+        "rootId": "rh-dashboard-commandbar",
+        "bridgePrefix": "rh-dashboard-route-",
+        "controllerSlot": "__rhToolsCommandBar",
+        "queryParam": None,
+        "toolbarLabel": "Rank Hunter pages",
+        "itemNoun": "pages",
+        "currentNoun": "page",
+        "mobileLabel": "Pages",
+    }).replace("<", "\\u003c")
+    st.html(
+        '<div id="rh-dashboard-commandbar" class="rh-tools-commandbar-host" '
+        'aria-label="Rank Hunter pages; current page Dashboard"></div>'
+    )
+    with st.container(key="rh-dashboard-command-runtime"):
+        st.components.v1.html(
+            f"<script>{_COMMAND_BAR_JS}\nwindow.parent.__rhInitToolsCommandBar({config});</script>",
+            height=0,
+        )
+    with st.container(key="rh-dashboard-command-bridge"):
+        for _, pages in _DASHBOARD_NAV_GROUPS:
+            for page in pages:
+                slug = page.lower().replace(" ", "-")
+                st.button(
+                    page,
+                    key=f"rh-dashboard-route-{slug}",
+                    on_click=_go_to,
+                    args=(page,),
+                )
 
 
 def _local_frontier_panel(rows, research, db, ctx, genus2_model_count=0):
@@ -624,6 +632,7 @@ def _local_frontier_panel(rows, research, db, ctx, genus2_model_count=0):
     with region("dashboard-local-frontier", border=False):
         if not rows:
             st.info("No specialization has a rigorous rank certificate yet.")
+            st.html(_frontier_certification_html(research["certification"]))
         else:
             by_rank = {}
             for row in rows:
@@ -653,44 +662,12 @@ def _local_frontier_panel(rows, research, db, ctx, genus2_model_count=0):
                 if incumbent is None or score > incumbent[0]:
                     bucket[strongest_key] = (score, row)
 
-            rank_values = sorted(by_rank)
-            if len(rank_values) > 12:
-                rank_values = rank_values[-12:]
-
-            nodes = []
             best_rank = max(by_rank)
             best_exact = max((rank for rank, bucket in by_rank.items() if bucket["exact"]), default=None)
             best_exact_label = str(best_exact) if best_exact is not None else "—"
             best_kind = "exact" if by_rank[best_rank]["exact"] else "lower"
             best_row = by_rank[best_rank][f"strongest_{best_kind}"][1]
-            max_count = max(bucket["exact"] + bucket["lower"] for bucket in by_rank.values())
-            for rank_value in rank_values:
-                bucket = by_rank[rank_value]
-                marker_kind = "exact" if bucket["exact"] else "lower"
-                strongest = bucket[f"strongest_{marker_kind}"]
-                strongest_row = strongest[1] if strongest is not None else None
-                total_at_rank = bucket["exact"] + bucket["lower"]
-                tooltip_parts = [f"Rank {rank_value}", f"exact: {bucket['exact']:,}", f"lower-bound only: {bucket['lower']:,}"]
-                if strongest_row is not None:
-                    tooltip_parts.append(
-                        "strongest curve: "
-                        f"#{int(strongest_row['id'])} · {strongest_row['family']} · parameter {strongest_row['parameter']} · "
-                        f"{int(strongest_row['independent_points'] or 0)} rigorous independent points"
-                    )
-                tooltip = " · ".join(tooltip_parts)
-                fill = 22 + round(48 * math.log1p(total_at_rank) / math.log1p(max_count))
-                leader = " rh-frontier-node-leader" if rank_value == best_rank else ""
-                nodes.append(
-                    f'<div class="rh-frontier-node rh-frontier-node-{marker_kind}{leader}" title="{html.escape(tooltip, quote=True)}">'
-                    f'<small class="rh-frontier-bucket-count">{total_at_rank:,}</small>'
-                    f'<span class="rh-frontier-bar" style="--frontier-bar-height:{fill}px"><i></i></span>'
-                    f'<span class="rh-frontier-rank">{rank_value}</span>'
-                    f'<span class="rh-frontier-kind">{"EXACT" if marker_kind == "exact" else "&nbsp;"}</span>'
-                    '</div>'
-                )
-
             prefix = "=" if best_kind == "exact" else "&ge;"
-            certified_count = sum(bucket["exact"] + bucket["lower"] for bucket in by_rank.values())
             st.html(
                 '<section class="rh-frontier-shell rh-frontier-presentation" aria-label="Research Frontier">'
                 '<div class="rh-frontier-feature">'
@@ -698,35 +675,15 @@ def _local_frontier_panel(rows, research, db, ctx, genus2_model_count=0):
                 f'<div class="rh-frontier-best-value"><span>{prefix}</span><strong>{best_rank}</strong></div>'
                 + _frontier_curve_art_html(db, int(best_row["id"]))
                 + f'<div class="rh-frontier-best-exact"><span>BEST EXACT RANK</span><strong>{best_exact_label}</strong></div></div>'
-                f'<div class="rh-frontier-stats">{_frontier_stats_html(research, genus2_model_count)}</div></div>'
-                '</section>'
+                '<div class="rh-frontier-stat-column">'
+                f'<div class="rh-frontier-stats">{_frontier_stats_html(research, genus2_model_count)}</div>'
+                + _frontier_certification_html(research["certification"])
+                + '</div></div>'
+                + '</section>'
             )
-    if rows:
-        landscape_content = (
-            '<div class="rh-frontier-distribution-head"><span class="rh-dashboard-section-title">RANK LANDSCAPE</span>'
-            f'<small>{certified_count:,} curves with rigorous rank evidence</small></div>'
-            f'<div class="rh-frontier-sequence">{"".join(nodes)}</div>'
-            '<div class="rh-frontier-legend">'
-            '<span class="rh-frontier-chart-note">Counts by stored rank or lower bound &middot; bar heights use a log scale</span>'
-            f'<span class="rh-frontier-lead-curve">LEADING CURVE #{int(best_row["id"])}</span></div>'
-        )
-    else:
-        landscape_content = (
-            '<div class="rh-frontier-distribution-head"><span class="rh-dashboard-section-title">RANK LANDSCAPE</span>'
-            '<small>No specializations have a positive rigorous rank bound yet.</small></div>'
-        )
-    evidence_col, record_col = st.columns([1.4, .6], gap="medium")
-    with evidence_col:
-        with region("dashboard-rank-evidence", border=True):
-            st.html(_frontier_certification_html(research["certification"]))
-    with record_col:
-        _world_record_panel(db, ctx)
-    with region("dashboard-rank-landscape", border=True):
-        st.html(
-            '<section class="rh-frontier-shell rh-frontier-presentation" aria-label="Rank Landscape">'
-            + landscape_content
-            + '</section>'
-        )
+
+
+def _torsion_findings_panel(db):
     with region("dashboard-torsion-findings", border=True):
         st.html(_torsion_findings_html(db))
 
@@ -803,15 +760,15 @@ def _genus_census_html(research, genus2):
     total = int(rank["curve_count"])
 
     genus1_detail = (
-        f"Tracked elliptic curves · best rank ≥{int(rank['best_rigorous'])}"
+        f"Curves · best rank ≥{int(rank['best_rigorous'])}"
         if rank.get("best_rigorous") is not None
-        else "Tracked elliptic curves" if total else "No stored elliptic curves"
+        else "Curves · no certified rank" if total else "No curves yet"
     )
     genus2_count = int(genus2["count"])
     genus2_detail = (
-        f"Saved models · best Jacobian rank ≥{int(genus2['best_lower'])}"
+        f"Models · best rank ≥{int(genus2['best_lower'])}"
         if genus2.get("best_lower") is not None
-        else "Saved smooth genus-two models" if genus2_count else "No saved models yet"
+        else "Models · no certified rank" if genus2_count else "No models yet"
     )
     genus_cards = []
     for genus, value, detail, accent in (
@@ -835,7 +792,7 @@ def _genus_census_html(research, genus2):
             exact = int(row["exact"])
             lower = int(row["lower"])
             count = exact + lower
-            height = 14 + round(30 * math.log1p(count) / math.log1p(maximum))
+            height = 10 + round(24 * math.log1p(count) / math.log1p(maximum))
             tooltip = html.escape(
                 f"Rank {rank_value} · exact: {exact:,} · certified lower bound: {lower:,}",
                 quote=True,
@@ -853,12 +810,7 @@ def _genus_census_html(research, genus2):
             )
         return (
             f'<div class="rh-genus-rank-chart" role="group" aria-label="Rank counts by {unit}">'
-            f'<div class="rh-genus-rank-columns">{"".join(bars)}</div>'
-            '<div class="rh-genus-rank-legend">'
-            '<span><i class="rh-genus-rank-exact"></i>Exact rank</span>'
-            '<span><i class="rh-genus-rank-lower"></i>Certified lower bound</span>'
-            f'<small>Bar height uses a log scale · count of {unit}s above each bar</small>'
-            '</div></div>'
+            f'<div class="rh-genus-rank-columns">{"".join(bars)}</div></div>'
         )
 
     genus1_rank_counts = research.get("rank_counts") or []
@@ -869,23 +821,26 @@ def _genus_census_html(research, genus2):
 
     return (
         '<section class="rh-frontier-shell rh-frontier-presentation rh-genus-census" '
-        'aria-label="Genus census">'
+        'aria-label="Rank landscape by genus">'
         '<div class="rh-dashboard-section-heading">'
-        '<span class="rh-dashboard-section-title">GENUS CENSUS</span>'
-        '<small>Local curve and model inventory</small></div>'
+        '<span class="rh-dashboard-section-title">RANK LANDSCAPE</span>'
+        '<small>Local elliptic curves and genus 2 models</small></div>'
         '<div class="rh-genus-census-rows">'
         '<section class="rh-genus-census-row">'
         f'<div class="rh-genus-census-card">{genus_cards[0]}</div>'
-        '<div class="rh-genus-census-chart"><div class="rh-frontier-distribution-head">'
-        '<span class="rh-dashboard-section-title">GENUS 1 RANK COUNTS</span>'
-        f'<small>{genus1_unknown:,} without certified rank</small></div>{genus1_rank_html}</div>'
+        f'<div class="rh-genus-census-chart">{genus1_rank_html}'
+        f'<small class="rh-genus-census-unknown">{genus1_unknown:,} without certified rank</small></div>'
         '</section>'
         '<section class="rh-genus-census-row rh-genus-census-row-two">'
         f'<div class="rh-genus-census-card">{genus_cards[1]}</div>'
-        '<div class="rh-genus-census-chart"><div class="rh-frontier-distribution-head">'
-        '<span class="rh-dashboard-section-title">GENUS 2 RANK COUNTS</span>'
-        f'<small>{int(genus2["unknown_count"]):,} without certified rank</small></div>{genus2_rank_html}</div>'
+        f'<div class="rh-genus-census-chart">{genus2_rank_html}'
+        f'<small class="rh-genus-census-unknown">{int(genus2["unknown_count"]):,} without certified rank</small></div>'
         '</section>'
+        '</div>'
+        '<div class="rh-genus-rank-legend">'
+        '<span><i class="rh-genus-rank-exact"></i>Exact rank</span>'
+        '<span><i class="rh-genus-rank-lower"></i>Certified lower bound</span>'
+        '<small>Bar height uses a log scale · count of curves above each bar</small>'
         '</div>'
         '</section>'
     )
@@ -1194,16 +1149,6 @@ def _dashboard_header(ctx):
             f'<span class="rh-dashboard-version-badge">v{html.escape(__version__)}</span>'
             '</div>'
         )
-        st.button(
-            " ",
-            key="rh-dashboard-settings-shortcut",
-            icon=PAGE_ICONS["Settings"],
-            help="Open Settings",
-            type="tertiary",
-            width="content",
-            on_click=_go_to,
-            args=("Settings",),
-        )
 
 
 def _frontier_stats_html(research, genus2_model_count=0):
@@ -1286,9 +1231,6 @@ def _render_dashboard(db, ctx):
         operations=operations,
     )
 
-    # One Dashboard: every existing high-value widget is visible without
-    # switching between Overview / Research / Operations views.
-    _research_frontier_actions()
     _local_frontier_panel(
         research["frontier"],
         research,
@@ -1297,10 +1239,12 @@ def _render_dashboard(db, ctx):
         genus2["count"],
     )
     _genus_census_panel(db, research, genus2)
-    left, right = st.columns([2.05, 0.95], gap="medium")
+    _torsion_findings_panel(db)
+    left, right = st.columns([2.05, 0.95], gap="small")
     with left:
         render_research_charts(db)
     with right:
+        _world_record_panel(db, ctx)
         _attention_panel(ctx.db_path, attention)
         _operations_state_panel(operations)
         render_plugins_panel(db, ctx, health=operations["plugins"])
@@ -1309,5 +1253,6 @@ def _render_dashboard(db, ctx):
 
 def page(db, ctx):
     _dashboard_header(ctx)
+    _dashboard_page_nav()
     render_feature_hook(db, ctx, "dashboard.after_header")
     _render_dashboard(db, ctx)

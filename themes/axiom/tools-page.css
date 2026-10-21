@@ -1,11 +1,16 @@
-/* Research Tools command bar. Axiom tokens cover both light and dark modes. */
-.st-key-rh-tools-command-bridge {
+/* Shared Tools and Dashboard command bar. Axiom tokens cover both themes. */
+.st-key-rh-tools-command-bridge,
+.st-key-rh-dashboard-command-bridge {
     display: none !important;
 }
-.st-key-rh-tools-command-runtime {
+.st-key-rh-tools-command-runtime,
+.st-key-rh-dashboard-command-runtime {
     height: 0 !important;
     min-height: 0 !important;
     overflow: hidden !important;
+}
+.st-key-rh-dashboard-command-runtime {
+    display: none !important;
 }
 
 .rh-tools-commandbar-host {

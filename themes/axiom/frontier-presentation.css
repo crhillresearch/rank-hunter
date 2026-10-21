@@ -138,8 +138,7 @@
 .rh-frontier-point-summary > i { color: var(--rh-muted); font-size: 12px; font-style: normal; }
 
 /* Native navigation buttons share the frontier surface with its HTML sections. */
-.st-key-rh-dashboard-local-frontier .rh-frontier-presentation,
-.st-key-rh-dashboard-rank-landscape-region-card .rh-frontier-presentation {
+.st-key-rh-dashboard-local-frontier .rh-frontier-presentation {
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -147,12 +146,12 @@
     box-shadow: none;
     overflow: visible;
 }
-.st-key-rh-dashboard-local-frontier .rh-frontier-presentation::before,
-.st-key-rh-dashboard-rank-landscape-region-card .rh-frontier-presentation::before { display: none; }
+.st-key-rh-dashboard-local-frontier .rh-frontier-presentation::before { display: none; }
 .st-key-rh-dashboard-local-frontier.st-key-rh-dashboard-local-frontier {
     background-color: var(--rh-card) !important;
     background-image: radial-gradient(ellipse at 94% 0%, color-mix(in srgb, var(--rh-primary) 7%, transparent), transparent 54%) !important;
 }
+.st-key-rh-dashboard-local-frontier { margin-top: -1.7rem !important; }
 .st-key-rh-dashboard-local-frontier::before {
     display: block;
     z-index: 0;
@@ -178,18 +177,10 @@
 .rh-dashboard-brand-logo { display: inline-flex; flex: 0 0 auto; align-items: center; color: var(--rh-text); }
 .rh-dashboard-brand-logo img { display: block; height: 24px; width: 24px; max-width: none; object-fit: contain; }
 .rh-dashboard-version-badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--rh-border); border-radius: 999px; background: var(--rh-card); color: var(--rh-text-secondary); font-size: 11px; font-weight: 600; white-space: nowrap; }
-.st-key-rh-dashboard-settings-shortcut { position: absolute; top: 1.25rem; right: 0; z-index: 2; }
-.st-key-rh-dashboard-settings-shortcut [data-testid="stButton"] { display: flex; justify-content: flex-end; margin-right: 0; }
-.st-key-rh-dashboard-settings-shortcut button { display: grid !important; place-items: center !important; width: 24px !important; min-width: 24px !important; height: 28px !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; opacity: 1 !important; color: var(--rh-muted) !important; transition: color 140ms ease !important; }
-.st-key-rh-dashboard-settings-shortcut button [data-testid="stIconMaterial"],
-.st-key-rh-dashboard-settings-shortcut button svg { opacity: 1 !important; color: var(--rh-muted) !important; fill: var(--rh-muted) !important; transition: color 140ms ease, fill 140ms ease !important; }
-.st-key-rh-dashboard-settings-shortcut button [data-testid="stIconMaterial"] { font-size: 24px !important; line-height: 1 !important; }
-.st-key-rh-dashboard-settings-shortcut button:hover,
-.st-key-rh-dashboard-settings-shortcut button:hover [data-testid="stIconMaterial"],
-.st-key-rh-dashboard-settings-shortcut button:hover svg { background: transparent !important; color: var(--rh-primary) !important; fill: var(--rh-primary) !important; }
 .st-key-rh-dashboard-local-frontier .rh-frontier-feature { padding-top: 0; padding-bottom: 0; }
-.st-key-rh-dashboard-rank-landscape-region-card .rh-frontier-distribution-head { padding-top: 0; border-top: 0; }
-.st-key-rh-dashboard-rank-landscape-region-card { --frontier-muted: var(--rh-text-secondary); --frontier-accent: var(--rh-primary); }
+.st-key-rh-dashboard-local-frontier .rh-frontier-stat-column { min-width: 0; }
+.st-key-rh-dashboard-local-frontier .rh-frontier-stat-column .rh-frontier-certification { margin-top: .4rem !important; padding-top: .5rem !important; border-top: 1px solid var(--rh-border-subtle) !important; }
+.st-key-rh-dashboard-local-frontier .rh-frontier-cert-track { margin-top: 0; }
 
 .rh-world-record-card { display: grid; align-content: start; gap: 3px; min-height: 0; padding: 0 4.5rem .8rem 0; color: var(--rh-text); }
 .rh-world-record-title { display: flex; align-items: center; height: 1.2rem; color: var(--rh-primary-deep); font-size: 10px; font-weight: 800; letter-spacing: .075em; }
@@ -206,13 +197,6 @@
 .rh-torsion-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .rh-torsion-heading p { margin: 5px 0 0; color: var(--rh-text-secondary); font-size: 11px; }
 .rh-torsion-heading > small { color: var(--rh-muted); font-size: 9px; white-space: nowrap; }
-.rh-torsion-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 14px; padding: 0 0 13px; border-bottom: 1px solid var(--rh-border-subtle); }
-.rh-torsion-summary > span { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 9px; min-width: 0; }
-.rh-torsion-summary small { grid-column: 1 / -1; color: var(--rh-muted); font-size: 8px; font-weight: 750; letter-spacing: .09em; }
-.rh-torsion-summary strong { color: var(--rh-purple); font-size: 19px; font-weight: 740; }
-.rh-torsion-summary > span:first-child strong { color: var(--rh-primary); }
-.rh-torsion-summary > span:nth-child(3) strong { color: var(--rh-text); }
-.rh-torsion-summary em { overflow: hidden; color: var(--rh-text-secondary); font-size: 9px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
 .rh-torsion-cards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 9px; margin-top: 11px; }
 .rh-torsion-card { min-width: 0; padding: 10px 11px 9px; border: 1px solid var(--rh-border-subtle); border-radius: 10px; background: linear-gradient(145deg, color-mix(in srgb, var(--rh-card) 96%, var(--rh-primary) 4%), var(--rh-card)); transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
 .rh-torsion-card:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--rh-primary) 32%, var(--rh-border)); box-shadow: 0 5px 16px color-mix(in srgb, var(--rh-primary) 7%, transparent); }
@@ -254,7 +238,6 @@
 }
 @media (max-width: 700px) {
     .rh-torsion-heading { flex-direction: column; gap: 7px; }
-    .rh-torsion-summary { grid-template-columns: 1fr; gap: 10px; }
     .rh-torsion-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 480px) {
@@ -264,44 +247,47 @@
 /* Center the rank feature within its column to balance its open space. */
 .st-key-rh-dashboard-local-frontier .rh-frontier-best { display: flex; flex-direction: column; align-items: center; text-align: center; }
 .st-key-rh-dashboard-local-frontier .rh-frontier-best-value { justify-content: center; width: 100%; }
-.st-key-rh-dashboard-local-frontier .rh-frontier-best-exact { justify-content: center; margin-left: auto; margin-right: auto; }
+.st-key-rh-dashboard-local-frontier .rh-frontier-best-exact { justify-content: center; margin: 2rem auto 0; }
 
 .st-key-rh-dashboard-local-frontier .rh-frontier-feature { margin-bottom: 0; }
 .st-key-rh-dashboard-local-frontier [data-testid="stHorizontalBlock"] { margin-top: .55rem; margin-bottom: 0; }
 
-.rh-genus-census-rows { display: grid; gap: 0; margin-top: .55rem; }
-.rh-genus-census-row { display: grid; grid-template-columns: minmax(210px, .8fr) minmax(0, 2.2fr); align-items: stretch; gap: .9rem; min-width: 0; }
-.rh-genus-census-row-two { margin-top: .65rem; padding-top: .65rem; border-top: 1px solid var(--rh-border-subtle); }
+.rh-genus-census-rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-top: .3rem; }
+.rh-genus-census-row { display: grid; grid-template-columns: minmax(105px, .65fr) minmax(0, 2.35fr); align-items: center; gap: .55rem; min-width: 0; }
+.rh-genus-census-row-two { padding-left: .8rem; border-left: 1px solid var(--rh-border-subtle); }
 .rh-genus-census-card { display: flex; align-items: stretch; min-width: 0; }
-.rh-genus-census-card .rh-dashboard-metric { width: 100%; min-width: 0; min-height: 0; padding: 10px 13px; border: 1px solid var(--rh-border); border-radius: var(--rh-radius, 12px); background: var(--rh-card); box-shadow: 0 4px 14px rgba(31,45,75,.04); }
-.rh-genus-census-card .rh-dashboard-metric > strong { margin-top: .34rem; font-size: clamp(23px, 1.9vw, 29px); }
-.rh-genus-census-card .rh-dashboard-metric > small { margin-top: .3rem; line-height: 1.35; }
+.rh-genus-census-card .rh-dashboard-metric { width: 100%; min-width: 0; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.rh-genus-census-card .rh-dashboard-metric::after { display: none; }
+.rh-genus-census-card .rh-dashboard-metric > strong { margin-top: .15rem; font-size: 23px; }
+.rh-genus-census-card .rh-dashboard-metric > small { margin-top: .1rem; font-size: 9px; line-height: 1.2; }
 .rh-genus-census-chart { min-width: 0; padding: 0 2px; }
-.rh-genus-census-chart .rh-frontier-distribution-head { padding-top: 0; border-top: 0; }
-.rh-genus-census { padding: 14px 18px 12px; background: var(--rh-card); box-shadow: none; }
+.rh-genus-census-unknown { display: block; margin-top: 1px; color: var(--rh-muted); font-size: 9px; text-align: right; }
+.rh-genus-census { padding: 11px 14px 10px; background: var(--rh-card); box-shadow: none; }
 .rh-genus-census::before { display: none; }
-.rh-genus-rank-chart { min-width: 0; padding-top: 5px; }
-.rh-genus-rank-columns { display: flex; justify-content: space-around; align-items: flex-end; gap: 7px; min-width: 0; overflow-x: auto; padding: 0 1px 2px; }
-.rh-genus-rank-column { display: flex; flex: 1 0 30px; flex-direction: column; align-items: center; max-width: 54px; min-width: 30px; padding: 4px 3px 6px; border: 1px solid transparent; border-radius: 8px; font-variant-numeric: tabular-nums; }
+.rh-genus-census .rh-dashboard-section-heading { padding-bottom: .35rem; }
+.rh-genus-rank-chart { min-width: 0; padding-top: 2px; }
+.rh-genus-rank-columns { display: flex; justify-content: space-around; align-items: flex-end; gap: 4px; min-width: 0; overflow-x: auto; padding: 0 1px 2px; }
+.rh-genus-rank-column { display: flex; flex: 1 0 26px; flex-direction: column; align-items: center; max-width: 44px; min-width: 26px; padding: 2px 2px 3px; border: 1px solid transparent; border-radius: 8px; font-variant-numeric: tabular-nums; }
 .rh-genus-rank-column:last-child { border-color: color-mix(in srgb, var(--rh-primary) 24%, var(--rh-card)); background: color-mix(in srgb, var(--rh-primary) 4%, var(--rh-card)); }
-.rh-genus-rank-count { margin-bottom: 3px; color: var(--rh-text-secondary); font-size: 9px; white-space: nowrap; }
-.rh-genus-rank-bar { display: flex; flex-direction: column-reverse; width: min(100%, 32px); height: var(--rh-genus-bar-height); min-height: 18px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--rh-primary) 35%, var(--rh-card)); border-radius: 4px 4px 1px 1px; background: var(--ax-surface-soft, var(--rh-card)); }
+.rh-genus-rank-count { margin-bottom: 2px; color: var(--rh-text-secondary); font-size: 9px; white-space: nowrap; }
+.rh-genus-rank-bar { display: flex; flex-direction: column-reverse; width: min(100%, 30px); height: var(--rh-genus-bar-height); min-height: 18px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--rh-primary) 35%, var(--rh-card)); border-radius: 4px 4px 1px 1px; background: var(--ax-surface-soft, var(--rh-card)); }
 .rh-genus-rank-bar i { display: block; min-height: 2px; }
 .rh-genus-rank-exact { background: var(--rh-primary); }
 .rh-genus-rank-lower { background: color-mix(in srgb, var(--rh-primary) 30%, var(--rh-card)); }
-.rh-genus-rank-column > strong { margin-top: 4px; color: var(--rh-text); font-size: 12px; font-weight: 700; }
+.rh-genus-rank-column > strong { margin-top: 2px; color: var(--rh-text); font-size: 11px; font-weight: 700; }
 .rh-genus-rank-column:last-child > strong { color: var(--rh-primary-deep); }
 .rh-genus-rank-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding-top: 3px; color: var(--rh-text-secondary); font-size: 9px; }
 .rh-genus-rank-legend > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .rh-genus-rank-legend i { width: 8px; height: 8px; border-radius: 2px; }
 .rh-genus-rank-legend > small { margin-left: auto; color: var(--rh-muted); font-size: 10px; }
+.rh-genus-census > .rh-genus-rank-legend { margin-top: .25rem; padding-top: .3rem; border-top: 1px solid var(--rh-border-subtle); }
 .rh-genus-census > .rh-frontier-chart-note { margin: 0; padding-top: .6rem; }
-@media (max-width: 760px) {
-    .rh-genus-census-row { grid-template-columns: minmax(150px, .8fr) minmax(0, 2.2fr); gap: .75rem; }
+@media (max-width: 1100px) {
+    .rh-genus-census-rows { grid-template-columns: 1fr; }
+    .rh-genus-census-row-two { margin-top: .25rem; padding: .25rem 0 0; border-left: 0; border-top: 1px solid var(--rh-border-subtle); }
 }
 @media (max-width: 560px) {
-    .rh-genus-census-row { grid-template-columns: 1fr; gap: .7rem; }
+    .rh-genus-census-row { grid-template-columns: minmax(95px, .7fr) minmax(0, 2.3fr); gap: .4rem; }
     .rh-genus-census { padding: 12px; }
-    .rh-genus-census-card .rh-dashboard-metric { padding: 10px 12px; }
-    .rh-genus-rank-chart { padding-top: 5px; }
+    .st-key-rh-dashboard-local-frontier { margin-top: -1.2rem !important; }
 }

@@ -2,13 +2,19 @@ const appWindow = window.parent;
 const appDocument = appWindow.document;
 /* The visible controls use native DOM; hidden Streamlit buttons own navigation. */
 appWindow.__rhInitToolsCommandBar = function (config) {
-  const roots = appDocument.querySelectorAll("#rh-tools-commandbar");
+  const rootId = config.rootId || "rh-tools-commandbar";
+  const bridgePrefix = config.bridgePrefix || "tools-select-";
+  const controllerSlot = config.controllerSlot || "__rhToolsCommandBar";
+  const queryParam = config.queryParam === undefined ? "rh_tool" : config.queryParam;
+  const toolbarLabel = config.toolbarLabel || "Research tools";
+  const itemNoun = config.itemNoun || "tools";
+  const roots = appDocument.querySelectorAll("#" + rootId);
   const root = roots[roots.length - 1];
   if (!root) {
     appWindow.setTimeout(() => appWindow.__rhInitToolsCommandBar(config), 30);
     return;
   }
-  if (appWindow.__rhToolsCommandBar) appWindow.__rhToolsCommandBar.destroy();
+  if (appWindow[controllerSlot]) appWindow[controllerSlot].destroy();
   const controller = new AbortController();
   const signal = controller.signal;
   const tools = config.groups.flatMap(group =>
@@ -36,11 +42,12 @@ appWindow.__rhInitToolsCommandBar = function (config) {
     return node;
   }
   function updateUrl(name, replace) {
+    if (!queryParam) return;
     const url = new URL(appWindow.location.href);
-    if (url.searchParams.get("rh_tool") === name) return;
-    url.searchParams.set("rh_tool", name);
+    if (url.searchParams.get(queryParam) === name) return;
+    url.searchParams.set(queryParam, name);
     appWindow.history[replace ? "replaceState" : "pushState"](
-      Object.assign({}, appWindow.history.state, { rhTool: name }), "", url);
+      Object.assign({}, appWindow.history.state, { rhCommandSelection: name }), "", url);
   }
   function navigate(name, push) {
     if (!byName.has(name)) return;
@@ -48,16 +55,16 @@ appWindow.__rhInitToolsCommandBar = function (config) {
     closeSearch(false);
     if (push) updateUrl(name, false);
     const slug = name.toLowerCase().replace(/ /g, "-");
-    const bridge = appDocument.querySelector(".st-key-tools-select-" + slug + " button");
+    const bridge = appDocument.querySelector(".st-key-" + bridgePrefix + slug + " button");
     if (bridge) bridge.click();
   }
 
   root.replaceChildren();
   root.setAttribute("role", "toolbar");
-  root.setAttribute("aria-label", "Research tools");
+  root.setAttribute("aria-label", toolbarLabel);
   const currentItem = appDocument.createElement("div");
   currentItem.className = "rh-tools-current";
-  currentItem.setAttribute("aria-label", "Current tool: " + current.name);
+  currentItem.setAttribute("aria-label", "Current " + (config.currentNoun || "tool") + ": " + current.name);
   const currentLabel = appDocument.createElement("span");
   currentLabel.textContent = current.name;
   currentItem.append(icon(current.icon), currentLabel);
@@ -85,17 +92,17 @@ appWindow.__rhInitToolsCommandBar = function (config) {
     triggers.appendChild(trigger);
   });
   root.appendChild(triggers);
-  const mobileTrigger = button("Tools", "rh-tools-mobile-trigger");
+  const mobileTrigger = button(config.mobileLabel || "Tools", "rh-tools-mobile-trigger");
   mobileTrigger.setAttribute("aria-haspopup", "menu");
   mobileTrigger.setAttribute("aria-expanded", "false");
   mobileTrigger.appendChild(icon("keyboard_arrow_down"));
   mobileTrigger.addEventListener("click", () =>
-    menuAnchor === mobileTrigger ? closeMenu(true) : openMenu(mobileTrigger, "All tools"),
+    menuAnchor === mobileTrigger ? closeMenu(true) : openMenu(mobileTrigger, "All " + itemNoun),
     { signal });
   mobileTrigger.addEventListener("keydown", event => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      openMenu(mobileTrigger, "All tools", event.key === "ArrowUp");
+      openMenu(mobileTrigger, "All " + itemNoun, event.key === "ArrowUp");
     }
   }, { signal });
   root.appendChild(mobileTrigger);
@@ -103,11 +110,11 @@ appWindow.__rhInitToolsCommandBar = function (config) {
   spacer.className = "rh-tools-spacer";
   root.appendChild(spacer);
   const searchTrigger = button("", "rh-tools-search-trigger");
-  searchTrigger.setAttribute("aria-label", "Search tools, Control or Command K");
+  searchTrigger.setAttribute("aria-label", "Search " + itemNoun + ", Control or Command K");
   searchTrigger.appendChild(icon("search"));
   const searchLabel = appDocument.createElement("span");
   searchLabel.className = "rh-tools-search-label";
-  searchLabel.textContent = "Search tools";
+  searchLabel.textContent = "Search " + itemNoun;
   searchTrigger.appendChild(searchLabel);
   const hint = appDocument.createElement("kbd");
   hint.textContent = "Ctrl+K";
@@ -124,11 +131,11 @@ appWindow.__rhInitToolsCommandBar = function (config) {
   overlay.className = "rh-tools-search-overlay";
   overlay.hidden = true;
   overlay.innerHTML =
-    '<div class="rh-tools-search-dialog" role="dialog" aria-modal="true" aria-label="Search research tools">' +
+    '<div class="rh-tools-search-dialog" role="dialog" aria-modal="true" aria-label="Search ' + itemNoun + '">' +
     '<div class="rh-tools-search-input-wrap">' +
     '<span class="material-symbols-rounded rh-tools-icon" aria-hidden="true">search</span>' +
-    '<input type="search" role="combobox" aria-label="Search tools" aria-autocomplete="list" ' +
-    'aria-expanded="true" aria-controls="rh-tools-search-results" placeholder="Search research tools…">' +
+    '<input type="search" role="combobox" aria-label="Search ' + itemNoun + '" aria-autocomplete="list" ' +
+    'aria-expanded="true" aria-controls="rh-tools-search-results" placeholder="Search ' + itemNoun + '…">' +
     '<kbd>Esc</kbd></div>' +
     '<div id="rh-tools-search-results" class="rh-tools-search-results" role="listbox"></div></div>';
   appDocument.body.appendChild(overlay);
@@ -169,7 +176,7 @@ appWindow.__rhInitToolsCommandBar = function (config) {
     menuAnchor = anchor;
     anchor.setAttribute("aria-expanded", "true");
     menu.setAttribute("aria-label", groupName);
-    if (groupName === "All tools") {
+    if (groupName === "All " + itemNoun) {
       config.groups.forEach(group => {
         const heading = appDocument.createElement("div");
         heading.className = "rh-tools-menu-heading";
@@ -229,7 +236,7 @@ appWindow.__rhInitToolsCommandBar = function (config) {
     if (!matched.length) {
       const empty = appDocument.createElement("p");
       empty.className = "rh-tools-search-empty";
-      empty.textContent = "No matching tools";
+      empty.textContent = "No matching " + itemNoun;
       results.appendChild(empty);
     }
     matched.forEach((tool, index) => {
@@ -317,7 +324,8 @@ appWindow.__rhInitToolsCommandBar = function (config) {
   appWindow.addEventListener("resize", placeMenu, { signal });
   appWindow.addEventListener("scroll", placeMenu, { signal, capture: true });
   appWindow.addEventListener("popstate", () => {
-    const name = new URL(appWindow.location.href).searchParams.get("rh_tool");
+    if (!queryParam) return;
+    const name = new URL(appWindow.location.href).searchParams.get(queryParam);
     if (name && byName.has(name) && name !== current.name) navigate(name, false);
   }, { signal });
   updateUrl(current.name, true);
@@ -330,8 +338,8 @@ appWindow.__rhInitToolsCommandBar = function (config) {
     observer.disconnect();
     menu.remove();
     overlay.remove();
-    if (appWindow.__rhToolsCommandBar &&
-        appWindow.__rhToolsCommandBar.destroy === destroy) appWindow.__rhToolsCommandBar = null;
+    if (appWindow[controllerSlot] &&
+        appWindow[controllerSlot].destroy === destroy) appWindow[controllerSlot] = null;
   }
-  appWindow.__rhToolsCommandBar = { destroy };
+  appWindow[controllerSlot] = { destroy };
 };
