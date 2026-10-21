@@ -1,0 +1,49 @@
+/* Three compact tool groups with one button row per group. */
+.st-key-rh-tools-picker {
+    border-color: var(--rh-border) !important;
+    border-radius: 12px !important;
+    background: var(--rh-card) !important;
+}
+
+.st-key-rh-tools-group-rank-proof,
+.st-key-rh-tools-group-find-points,
+.st-key-rh-tools-group-geometry {
+    padding: .15rem .55rem;
+}
+
+.st-key-rh-tools-group-rank-proof,
+.st-key-rh-tools-group-find-points {
+    border-right: 1px solid var(--rh-border);
+}
+
+.st-key-rh-tools-picker [data-testid="stMarkdownContainer"] > p {
+    margin: 0;
+}
+
+.st-key-rh-tools-picker [data-testid="stMarkdownContainer"] > p > strong {
+    color: var(--rh-text-secondary);
+    font-size: .7rem;
+    font-weight: 750;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.st-key-rh-tools-picker button {
+    min-height: 2.1rem;
+    min-width: max-content;
+    padding: .25rem .35rem;
+    justify-content: center;
+    white-space: nowrap;
+    font-size: .77rem !important;
+    border-radius: 7px !important;
+}
+
+.st-key-rh-tools-picker button p {
+    font-size: .77rem !important;
+    white-space: nowrap;
+}
+
+.st-key-rh-tools-picker button [data-testid="stIconMaterial"] {
+    font-size: 1rem;
+}

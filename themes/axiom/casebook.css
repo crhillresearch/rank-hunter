@@ -1,0 +1,51 @@
+/* Casebook layout and dossier navigation. */
+.st-key-rh-casebook-curve-info,
+.st-key-rh-casebook-next-step {
+    border-color: var(--rh-border) !important;
+    border-radius: 13px !important;
+    background: var(--rh-card) !important;
+    box-shadow: 0 5px 15px color-mix(in srgb, var(--rh-text) 3%, transparent);
+}
+.st-key-rh-casebook-queue {
+    margin-bottom: .35rem;
+}
+.st-key-rh-casebook-queue > [data-testid="stVerticalBlockBorderWrapper"] {
+    padding: .7rem 1rem !important;
+    border-color: var(--rh-border) !important;
+    border-radius: 11px !important;
+    background: var(--rh-card) !important;
+}
+.st-key-rh-casebook-queue [data-testid="stMarkdownContainer"] h4 {
+    margin: 0 0 .45rem;
+    padding: 0;
+}
+.st-key-rh-casebook-queue [data-testid="stHorizontalBlock"] {
+    align-items: end;
+}
+.st-key-rh-casebook-curve-info [data-testid="stMetricLabel"] {
+    font-size: .7rem;
+    line-height: 1.3;
+}
+.st-key-rh-casebook-curve-info [data-testid="stMetricValue"] {
+    font-size: clamp(1.2rem, 1.7vw, 1.75rem);
+}
+.st-key-rh-casebook-dossier-nav {
+    margin-top: 1rem;
+}
+.st-key-rh-casebook-dossier-nav [data-testid="stButton"] > button {
+    min-height: 2.6rem;
+    border-radius: 9px;
+    font-weight: 650;
+}
+@media (max-width: 760px) {
+    .st-key-rh-casebook-dossier-nav [data-testid="stHorizontalBlock"] {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: .4rem !important;
+    }
+    .st-key-rh-casebook-dossier-nav [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: none !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+}

@@ -1,0 +1,57 @@
+/* Axiom semantic card surfaces.
+ *
+ * Core marks every bordered Rank Hunter region with a stable
+ * ``-region-card`` key suffix.  Style that semantic hook directly, the same
+ * way Dashboard cards own their surface, instead of depending on Streamlit's
+ * private/generated DOM class names.
+ */
+
+[class*="-region-card"] {
+    background: var(--rh-card) !important;
+    background-image: none !important;
+    border-color: var(--rh-border) !important;
+    border-radius: var(--rh-radius) !important;
+    box-shadow: 0 7px 22px rgba(31, 45, 75, .045) !important;
+}
+
+/* Native Streamlit layout wrappers inside the semantic card should not paint
+ * a second page-colored surface over the theme-owned card background. */
+[class*="-region-card"] > div,
+[class*="-region-card"] > div > div {
+    background-color: transparent !important;
+    background-image: none !important;
+    border-radius: inherit !important;
+}
+
+/* White cards need a little more separation around form controls.  Use the
+ * theme-owned stronger neutral border rather than hard-coded control colors so
+ * Axiom can tune these centrally without changing page code. */
+[data-baseweb="input"],
+[data-baseweb="textarea"],
+[data-baseweb="select"] > div,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stDateInput"] input,
+[data-testid="stTimeInput"] input {
+    background: var(--rh-card) !important;
+    border: 1px solid var(--rh-border-strong) !important;
+    box-shadow: 0 1px 2px rgba(31, 45, 75, .035) !important;
+}
+
+[data-baseweb="input"]:hover,
+[data-baseweb="textarea"]:hover,
+[data-baseweb="select"] > div:hover {
+    border-color: color-mix(in srgb, var(--rh-border-strong) 82%, var(--rh-text-secondary)) !important;
+}
+
+[data-baseweb="input"]:focus-within,
+[data-baseweb="textarea"]:focus-within,
+[data-baseweb="select"] > div:focus-within,
+[data-testid="stNumberInput"]:focus-within [data-baseweb="input"],
+[data-testid="stTextInput"]:focus-within [data-baseweb="input"],
+[data-testid="stDateInput"]:focus-within [data-baseweb="input"],
+[data-testid="stTimeInput"]:focus-within [data-baseweb="input"] {
+    border-color: var(--rh-primary) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--rh-primary) 11%, transparent) !important;
+}

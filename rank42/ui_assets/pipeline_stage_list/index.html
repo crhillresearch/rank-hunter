@@ -1,0 +1,231 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --rh-text: #31333f;
+    --rh-muted: rgba(49,51,63,.58);
+    --rh-surface: transparent;
+    --rh-hover: rgba(127,127,127,.08);
+    --rh-border: rgba(127,127,127,.24);
+    --rh-primary: #ff4b4b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  body {
+    color: var(--rh-text);
+    font-family: var(--rh-font, "Source Sans Pro", system-ui, sans-serif);
+  }
+  #list {
+    border: 1px solid var(--rh-border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--rh-surface);
+  }
+  .stage {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1.35fr) minmax(145px, 1fr) 42px 42px;
+    align-items: center;
+    min-height: 50px;
+    border-bottom: 1px solid var(--rh-border);
+    transition: background .12s ease, opacity .12s ease;
+  }
+  .stage:last-child { border-bottom: 0; }
+  .stage:hover { background: var(--rh-hover); }
+  .stage.dragging { opacity: .42; }
+  .stage.drop-before { box-shadow: inset 0 2px 0 var(--rh-primary); }
+  .stage.drop-after { box-shadow: inset 0 -2px 0 var(--rh-primary); }
+
+  .handle, .action {
+    height: 50px;
+    border: 0;
+    padding: 0;
+    color: var(--rh-muted);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .handle { cursor: grab; }
+  .handle:active { cursor: grabbing; }
+  .action { cursor: pointer; }
+  .action:hover { color: var(--rh-text); background: var(--rh-hover); }
+  .action.delete:hover { color: #d64545; }
+  .fa-icon { width: 16px; height: 16px; display: block; fill: currentColor; }
+
+  .module {
+    min-width: 0;
+    padding: 0 10px 0 0;
+    font-size: 14px;
+    font-weight: 650;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .detail {
+    min-width: 0;
+    padding-right: 8px;
+    color: var(--rh-muted);
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  @media (max-width: 520px) {
+    .stage { grid-template-columns: 40px minmax(0,1fr) 38px 38px; }
+    .detail { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="list"></div>
+<script>
+const ICONS = {
+  "grip-lines": {viewBox:"0 0 448 512", path:"M32 288c-17.7 0-32 14.3-32 32s14.3 32 32 32l384 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 288zm0-128c-17.7 0-32 14.3-32 32s14.3 32 32 32l384 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L32 160z"},
+  "trash": {viewBox:"0 0 448 512", path:"M136.7 5.9L128 32 32 32C14.3 32 0 46.3 0 64S14.3 96 32 96l384 0c17.7 0 32-14.3 32-32s-14.3-32-32-32l-96 0-8.7-26.1C306.9-7.2 294.7-16 280.9-16L167.1-16c-13.8 0-26 8.8-30.4 21.9zM416 144L32 144 53.1 467.1C54.7 492.4 75.7 512 101 512L347 512c25.3 0 46.3-19.6 47.9-44.9L416 144z"},
+  "gear": {viewBox:"0 0 512 512", path:"M195.1 9.5C198.1-5.3 211.2-16 226.4-16l59.8 0c15.2 0 28.3 10.7 31.3 25.5L332 79.5c14.1 6 27.3 13.7 39.3 22.8l67.8-22.5c14.4-4.8 30.2 1.2 37.8 14.4l29.9 51.8c7.6 13.2 4.9 29.8-6.5 39.9L447 233.3c.9 7.4 1.3 15 1.3 22.7s-.5 15.3-1.3 22.7l53.4 47.5c11.4 10.1 14 26.8 6.5 39.9l-29.9 51.8c-7.6 13.1-23.4 19.2-37.8 14.4l-67.8-22.5c-12.1 9.1-25.3 16.7-39.3 22.8l-14.4 69.9c-3.1 14.9-16.2 25.5-31.3 25.5l-59.8 0c-15.2 0-28.3-10.7-31.3-25.5l-14.4-69.9c-14.1-6-27.2-13.7-39.3-22.8L73.5 432.3c-14.4 4.8-30.2-1.2-37.8-14.4L5.8 366.1c-7.6-13.2-4.9-29.8 6.5-39.9l53.4-47.5c-.9-7.4-1.3-15-1.3-22.7s.5-15.3 1.3-22.7L12.3 185.8c-11.4-10.1-14-26.8-6.5-39.9L35.7 94.1c7.6-13.2 23.4-19.2 37.8-14.4l67.8 22.5c12.1-9.1 25.3-16.7 39.3-22.8L195.1 9.5zM256.3 336a80 80 0 1 0-.6-160 80 80 0 1 0 .6 160z"}
+};
+
+let rows = [];
+let dragToken = null;
+
+function sendMessageToStreamlitClient(type, data) {
+  const outData = Object.assign({isStreamlitMessage: true, type}, data);
+  window.parent.postMessage(outData, "*");
+}
+function init() {
+  sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});
+}
+function setFrameHeight() {
+  sendMessageToStreamlitClient("streamlit:setFrameHeight", {
+    height: Math.max(1, document.documentElement.scrollHeight)
+  });
+}
+function sendValue(value) {
+  sendMessageToStreamlitClient("streamlit:setComponentValue", {value});
+}
+function icon(name) {
+  const i = ICONS[name];
+  return '<svg class="fa-icon" data-icon="'+name+'" viewBox="'+i.viewBox+'" aria-hidden="true" focusable="false"><path d="'+i.path+'"></path></svg>';
+}
+function emit(action, extra={}) {
+  sendValue(Object.assign({action, nonce: Date.now()}, extra));
+}
+function currentOrder() {
+  return Array.from(document.querySelectorAll(".stage")).map(el => el.dataset.token);
+}
+function clearDropMarks() {
+  document.querySelectorAll(".stage").forEach(el => el.classList.remove("drop-before","drop-after"));
+}
+function applyTheme(theme, palette) {
+  const root = document.documentElement.style;
+  if (theme) {
+    if (theme.textColor) root.setProperty("--rh-text", theme.textColor);
+    if (theme.secondaryBackgroundColor) root.setProperty("--rh-hover", theme.secondaryBackgroundColor);
+    if (theme.primaryColor) root.setProperty("--rh-primary", theme.primaryColor);
+    if (theme.font) root.setProperty("--rh-font", theme.font);
+    const text = theme.textColor || "#31333f";
+    root.setProperty("--rh-muted", "color-mix(in srgb, "+text+" 58%, transparent)");
+    root.setProperty("--rh-border", "color-mix(in srgb, "+text+" 20%, transparent)");
+  }
+  if (palette) {
+    if (palette["rh-text"]) root.setProperty("--rh-text", palette["rh-text"]);
+    if (palette["rh-muted"]) root.setProperty("--rh-muted", palette["rh-muted"]);
+    if (palette["rh-card"]) root.setProperty("--rh-surface", palette["rh-card"]);
+    if (palette["rh-surface-hover"]) root.setProperty("--rh-hover", palette["rh-surface-hover"]);
+    if (palette["rh-border"]) root.setProperty("--rh-border", palette["rh-border"]);
+    if (palette["rh-primary"]) root.setProperty("--rh-primary", palette["rh-primary"]);
+  }
+}
+function render(nextRows) {
+  rows = Array.isArray(nextRows) ? nextRows : [];
+  const list = document.getElementById("list");
+  list.replaceChildren();
+
+  rows.forEach(row => {
+    const el = document.createElement("div");
+    el.className = "stage";
+    el.dataset.token = row.token;
+
+    const handle = document.createElement("div");
+    handle.className = "handle";
+    handle.draggable = true;
+    handle.title = "Drag to reorder";
+    handle.setAttribute("aria-label", "Drag "+row.module);
+    handle.innerHTML = icon("grip-lines");
+    handle.addEventListener("dragstart", e => {
+      dragToken = row.token;
+      el.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", row.token);
+    });
+    handle.addEventListener("dragend", () => {
+      dragToken = null;
+      el.classList.remove("dragging");
+      clearDropMarks();
+    });
+
+    const name = document.createElement("div");
+    name.className = "module";
+    name.textContent = row.module;
+
+    const detail = document.createElement("div");
+    detail.className = "detail";
+    detail.textContent = row.detail || "";
+
+    const config = document.createElement("button");
+    config.type = "button";
+    config.className = "action config";
+    config.title = "Configure "+row.module;
+    config.setAttribute("aria-label", config.title);
+    config.innerHTML = icon("gear");
+    config.addEventListener("click", () => emit("config", {token: row.token}));
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "action delete";
+    del.title = "Remove "+row.module;
+    del.setAttribute("aria-label", del.title);
+    del.innerHTML = icon("trash");
+    del.addEventListener("click", () => emit("delete", {token: row.token}));
+
+    el.addEventListener("dragover", e => {
+      if (!dragToken || dragToken === row.token) return;
+      e.preventDefault();
+      clearDropMarks();
+      const rect = el.getBoundingClientRect();
+      el.classList.add(e.clientY < rect.top + rect.height/2 ? "drop-before" : "drop-after");
+      e.dataTransfer.dropEffect = "move";
+    });
+    el.addEventListener("drop", e => {
+      if (!dragToken || dragToken === row.token) return;
+      e.preventDefault();
+      const dragged = list.querySelector('.stage[data-token="'+CSS.escape(dragToken)+'"]');
+      if (!dragged) return;
+      const rect = el.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height/2) list.insertBefore(dragged, el);
+      else list.insertBefore(dragged, el.nextSibling);
+      clearDropMarks();
+      emit("reorder", {order: currentOrder()});
+    });
+
+    el.append(handle, name, detail, config, del);
+    list.appendChild(el);
+  });
+  requestAnimationFrame(setFrameHeight);
+}
+
+function onDataFromPython(event) {
+  if (event.data.type !== "streamlit:render") return;
+  const args = event.data.args || {};
+  applyTheme(event.data.theme, args.palette || {});
+  render(args.rows);
+}
+
+window.addEventListener("message", onDataFromPython);
+window.addEventListener("load", () => setTimeout(setFrameHeight, 0));
+init();
+</script>
+</body>
+</html>

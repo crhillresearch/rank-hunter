@@ -1,0 +1,4 @@
+# PostgreSQL driver used by Rank Hunter's SQL-first LMFDB catalog checker.
+# Install into the active Sage/Python environment with:
+#   bash scripts/install-catalog-sql.sh
+psycopg[binary]>=3.2,<4

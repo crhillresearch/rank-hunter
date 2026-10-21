@@ -1,0 +1,83 @@
+/* Axiom presentation for the portfolio research workbench. */
+.st-key-rh-analysis-hub-workbench,
+.st-key-rh-analysis-hub-history {
+    border-color: var(--rh-border) !important;
+    border-radius: 13px !important;
+    background: var(--rh-card) !important;
+    box-shadow: 0 5px 15px color-mix(in srgb, var(--rh-text) 3%, transparent);
+}
+.st-key-rh-analysis-hub-workbench { margin-top: .8rem; }
+.st-key-rh-analysis-hub-hero {
+    position: relative;
+    overflow: hidden;
+    padding: 1.2rem 1.4rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 15px;
+    background:
+        radial-gradient(ellipse at 94% 0%, color-mix(in srgb, var(--rh-primary) 10%, transparent), transparent 55%),
+        var(--rh-card);
+}
+.st-key-rh-analysis-hub-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+        linear-gradient(color-mix(in srgb, var(--rh-primary) 5%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in srgb, var(--rh-primary) 5%, transparent) 1px, transparent 1px);
+    background-size: 34px 34px;
+    mask-image: linear-gradient(90deg, transparent 25%, #000 100%);
+}
+.st-key-rh-analysis-hub-hero > * { position: relative; }
+.rh-analysis-hub-intro { margin-bottom: .9rem; }
+.rh-analysis-hub-intro span,
+.rh-analysis-hub-metric span {
+    color: var(--rh-muted);
+    font-size: .64rem;
+    font-weight: 750;
+    letter-spacing: .11em;
+}
+.rh-analysis-hub-intro h2 {
+    margin: .28rem 0 .2rem;
+    color: var(--rh-text);
+    font-size: clamp(1.55rem, 2.6vw, 2.15rem);
+    line-height: 1.15;
+    letter-spacing: -.035em;
+}
+.rh-analysis-hub-intro p {
+    margin: 0;
+    color: var(--rh-text-secondary);
+    font-size: .82rem;
+}
+.rh-analysis-hub-metric {
+    min-height: 4.7rem;
+    padding: .7rem .85rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 9px;
+    background: var(--rh-card);
+}
+.rh-analysis-hub-metric span { display: block; }
+.rh-analysis-hub-metric strong {
+    display: block;
+    margin-top: .22rem;
+    color: var(--rh-text);
+    font-size: 1.38rem;
+    font-weight: 730;
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+}
+.rh-analysis-hub-metric small {
+    display: block;
+    margin-top: .17rem;
+    color: var(--rh-text-secondary);
+    font-size: .65rem;
+    line-height: 1.3;
+}
+.st-key-rh-analysis-hub-workbench [data-testid="stMarkdownContainer"] h3 {
+    margin-top: 0;
+}
+.st-key-rh-analysis-hub-history { margin-top: 1rem; }
+@media (max-width: 760px) {
+    .st-key-rh-analysis-hub-hero { padding: .9rem; }
+    .rh-analysis-hub-metric { min-height: 0; }
+}

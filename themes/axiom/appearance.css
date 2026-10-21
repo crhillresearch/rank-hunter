@@ -1,0 +1,41 @@
+/*
+ * Axiom appearance controls.
+ * Loaded for both appearances; colors remain semantic theme tokens.
+ */
+
+[class*="st-key-rh-appearance-toggle"] {
+    width: 2.75rem !important;
+    margin: -.45rem auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton {
+    margin: 0 !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button {
+    min-width: 2.25rem !important;
+    min-height: 2.25rem !important;
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    border-radius: 999px !important;
+    font-size: 1.2rem !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button > div {
+    justify-content: center !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button[kind="secondary"] {
+    color: var(--rh-muted) !important;
+}
+
+[class*="st-key-rh-appearance-toggle"] .stButton > button[kind="primary"] {
+    background: var(--rh-surface-active) !important;
+    border-color: var(--rh-border) !important;
+    color: var(--rh-primary-deep) !important;
+}

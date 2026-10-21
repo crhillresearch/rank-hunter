@@ -1,0 +1,171 @@
+/* Axiom mobile layout. These rules only apply below tablet width. */
+@media (max-width: 760px) {
+    [data-testid="stMainBlockContainer"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 1rem .85rem 2rem !important;
+    }
+
+    [data-testid="stAppViewContainer"] {
+        overflow-x: clip;
+    }
+
+    /* Streamlit columns are useful on desktop but cramped on a phone. */
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+        gap: .65rem !important;
+    }
+
+    [data-testid="stHorizontalBlock"] > [data-testid="stColumn"] {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    [data-testid="stVerticalBlock"] {
+        min-width: 0;
+    }
+
+    /* Keep wide data usable without forcing the whole page to scroll sideways. */
+    [data-testid="stDataFrame"],
+    [data-testid="stDataEditor"] {
+        max-width: 100%;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    [data-testid="stMarkdownContainer"] table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        min-width: 0;
+        padding-left: .85rem !important;
+        padding-right: .85rem !important;
+    }
+
+    [data-testid="stButton"] > button,
+    [data-testid="stFormSubmitButton"] > button {
+        min-height: 2.75rem;
+    }
+
+    /* 16px prevents iOS Safari from zooming when a field receives focus. */
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stSelectbox"] input,
+    [data-testid="stMultiSelect"] input {
+        font-size: 16px !important;
+    }
+
+    [data-testid="stSidebar"][aria-expanded="true"] {
+        width: min(20rem, 88vw) !important;
+        min-width: min(20rem, 88vw) !important;
+        z-index: 1000000 !important;
+    }
+
+    [data-testid="stExpandSidebarButton"] {
+        top: .55rem !important;
+        left: .55rem !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stSidebarUserContent"] {
+        padding-left: .7rem !important;
+        padding-right: .7rem !important;
+    }
+
+    h1 {
+        font-size: clamp(1.65rem, 7vw, 2.15rem) !important;
+        line-height: 1.15 !important;
+        overflow-wrap: anywhere;
+    }
+
+    h2 { font-size: clamp(1.25rem, 5vw, 1.6rem) !important; }
+    h3 { font-size: 1.08rem !important; }
+
+    .rh-dashboard-metric { min-height: 0; }
+
+    /* Keep all six dashboard shortcuts in one compact, icon-only row. */
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-rh-dashboard-frontier-"]) {
+        display: grid !important;
+        grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+        align-items: stretch !important;
+        gap: .25rem !important;
+    }
+
+    [data-testid="stHorizontalBlock"]:has([class*="st-key-rh-dashboard-frontier-"]) > [data-testid="stColumn"] {
+        flex: none !important;
+        width: auto !important;
+        min-width: 0 !important;
+    }
+
+    [class*="st-key-rh-dashboard-frontier-"] [data-testid="stButton"] > button {
+        position: relative !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 0 !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        min-height: 2.4rem !important;
+        padding: .2rem !important;
+    }
+
+    [class*="st-key-rh-dashboard-frontier-"] [data-testid="stButton"] > button [data-testid="stMarkdownContainer"] {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        overflow: hidden !important;
+    }
+
+    [class*="st-key-rh-dashboard-frontier-"] [data-testid="stButton"] > button p {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+    }
+
+    [class*="st-key-rh-dashboard-frontier-"] [data-testid="stButton"] [data-testid="stIconMaterial"] {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 !important;
+        font-size: 1.1rem !important;
+        line-height: 1 !important;
+    }
+}
+
+@media (max-width: 480px) {
+    [data-testid="stMainBlockContainer"] {
+        padding-right: .65rem !important;
+        padding-left: .65rem !important;
+    }
+
+    [data-testid="stVerticalBlockBorderWrapper"] {
+        padding-left: .7rem !important;
+        padding-right: .7rem !important;
+        border-radius: 12px !important;
+    }
+
+    [data-testid="stHorizontalBlock"] { gap: .5rem !important; }
+
+    [data-testid="stMetricValue"] { font-size: 1.5rem !important; }
+
+    /* Put the Frontier hero metrics two across beneath Best Certified Rank. */
+    .rh-frontier-presentation .rh-frontier-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: .55rem !important;
+    }
+
+    .rh-frontier-presentation .rh-frontier-stats .rh-dashboard-metric {
+        padding: .7rem .6rem !important;
+    }
+}

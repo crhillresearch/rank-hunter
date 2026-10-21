@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --rh-text: #31333f;
+    --rh-muted: rgba(49,51,63,.58);
+    --rh-surface: transparent;
+    --rh-hover: rgba(127,127,127,.08);
+    --rh-border: rgba(127,127,127,.24);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; }
+  body {
+    color: var(--rh-text);
+    font-family: var(--rh-font, "Source Sans Pro", system-ui, sans-serif);
+  }
+  #actions {
+    min-height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  button.action {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--rh-border);
+    border-radius: 8px;
+    padding: 0;
+    background: var(--rh-surface);
+    color: var(--rh-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  button.action:hover {
+    color: var(--rh-text);
+    background: var(--rh-hover);
+  }
+  .fa-icon { width: 15px; height: 15px; display: block; fill: currentColor; }
+</style>
+</head>
+<body>
+<div id="actions"></div>
+<script>
+const ICONS = {
+  "copy": {viewBox:"0 0 448 512", path:"M384 336l-192 0c-17.7 0-32-14.3-32-32l0-240c0-17.7 14.3-32 32-32l140.1 0c8.5 0 16.6 3.4 22.6 9.4l52 52c6 6 9.4 14.1 9.4 22.6L416 304c0 17.7-14.3 32-32 32zM64 160l64 0 0 144c0 35.3 28.7 64 64 64l128 0 0 80c0 17.7-14.3 32-32 32L64 480c-17.7 0-32-14.3-32-32L32 192c0-17.7 14.3-32 32-32z"},
+  "file-circle-plus": {viewBox:"0 0 576 512", path:"M0 64C0 28.7 28.7 0 64 0L224 0l0 128c0 17.7 14.3 32 32 32l128 0 0 120.4c-15.9-5.4-32.9-8.4-50.7-8.4C253.6 272 192 333.6 192 409.3c0 27.2 7.9 52.6 21.5 74L64 483.3c-35.3 0-64-28.7-64-64L0 64zM256 0L384 128 256 128 256 0zM352 512a128 128 0 1 0 0-256 128 128 0 1 0 0 256zm16-184l0 48 48 0c8.8 0 16 7.2 16 16s-7.2 16-16 16l-48 0 0 48c0 8.8-7.2 16-16 16s-16-7.2-16-16l0-48-48 0c-8.8 0-16-7.2-16-16s7.2-16 16-16l48 0 0-48c0-8.8 7.2-16 16-16s16 7.2 16 16z"}
+};
+
+function sendMessageToStreamlitClient(type, data) {
+  window.parent.postMessage(Object.assign({isStreamlitMessage: true, type}, data), "*");
+}
+function init() {
+  sendMessageToStreamlitClient("streamlit:componentReady", {apiVersion: 1});
+}
+function setFrameHeight() {
+  sendMessageToStreamlitClient("streamlit:setFrameHeight", {
+    height: Math.max(1, document.documentElement.scrollHeight)
+  });
+}
+function sendValue(value) {
+  sendMessageToStreamlitClient("streamlit:setComponentValue", {value});
+}
+function emit(action) {
+  sendValue({action, nonce: Date.now()});
+}
+function icon(name) {
+  const i = ICONS[name];
+  return '<svg class="fa-icon" data-icon="'+name+'" viewBox="'+i.viewBox+'" aria-hidden="true" focusable="false"><path d="'+i.path+'"></path></svg>';
+}
+function applyTheme(theme, palette) {
+  const root = document.documentElement.style;
+  if (theme) {
+    if (theme.textColor) root.setProperty("--rh-text", theme.textColor);
+    if (theme.secondaryBackgroundColor) root.setProperty("--rh-hover", theme.secondaryBackgroundColor);
+    if (theme.font) root.setProperty("--rh-font", theme.font);
+    const text = theme.textColor || "#31333f";
+    root.setProperty("--rh-muted", "color-mix(in srgb, "+text+" 58%, transparent)");
+    root.setProperty("--rh-border", "color-mix(in srgb, "+text+" 20%, transparent)");
+  }
+  if (palette) {
+    if (palette["rh-text"]) root.setProperty("--rh-text", palette["rh-text"]);
+    if (palette["rh-muted"]) root.setProperty("--rh-muted", palette["rh-muted"]);
+    if (palette["rh-card"]) root.setProperty("--rh-surface", palette["rh-card"]);
+    if (palette["rh-surface-hover"]) root.setProperty("--rh-hover", palette["rh-surface-hover"]);
+    if (palette["rh-border"]) root.setProperty("--rh-border", palette["rh-border"]);
+  }
+}
+function button(action, iconName, title) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "action";
+  b.title = title;
+  b.setAttribute("aria-label", title);
+  b.innerHTML = icon(iconName);
+  b.addEventListener("click", () => emit(action));
+  return b;
+}
+function render(args) {
+  const root = document.getElementById("actions");
+  root.replaceChildren();
+  if (args.show_duplicate) {
+    root.appendChild(button("duplicate", "copy", "Duplicate as new pipeline"));
+  }
+  if (args.show_new) {
+    root.appendChild(button("new", "file-circle-plus", "New pipeline"));
+  }
+  requestAnimationFrame(setFrameHeight);
+}
+function onDataFromPython(event) {
+  if (event.data.type !== "streamlit:render") return;
+  const args = event.data.args || {};
+  applyTheme(event.data.theme, args.palette || {});
+  render(args);
+}
+window.addEventListener("message", onDataFromPython);
+window.addEventListener("load", () => setTimeout(setFrameHeight, 0));
+init();
+</script>
+</body>
+</html>

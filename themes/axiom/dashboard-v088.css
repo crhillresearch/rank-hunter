@@ -1,0 +1,81 @@
+/* Rank Hunter v0.8.8 dashboard refinements.  Presentation remains theme-owned. */
+
+/* Research Frontier: make the database state read as a health/status pill rather
+ * than a secondary heading. */
+.rh-frontier-heading span:last-child {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.35rem;
+    padding: .18rem .48rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--rh-success) 12%, var(--rh-card));
+    color: var(--rh-success);
+    font-size: .60rem;
+    font-weight: 780;
+    letter-spacing: .025em;
+    white-space: nowrap;
+}
+
+/* Right-rail attention placeholder.  Core owns the semantic region; Axiom owns
+ * its surface and deliberately quiet empty-state presentation. */
+[class*="st-key-rh-dashboard-attention"] {
+    background: var(--rh-dashboard-section-bg, var(--rh-card)) !important;
+    background-image: none !important;
+    border-radius: var(--rh-radius) !important;
+}
+
+.rh-dashboard-attention-placeholder {
+    margin-top: .12rem;
+    padding: .72rem .76rem;
+    border: 1px dashed var(--rh-border-strong);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--rh-card) 82%, var(--rh-bg));
+    color: var(--rh-muted);
+    font-size: .68rem;
+    font-weight: 620;
+    line-height: 1.35;
+}
+
+/* Match the chart→torsion transition to the existing Frontier→charts section
+ * spacing. Both torsion cards move together as one visual row. */
+:is(
+    [class*="st-key-rh-dashboard-torsion-rank"],
+    [class*="st-key-rh-dashboard-torsion-records"]
+) {
+    margin-top: .42rem !important;
+}
+
+/* Neutralize the legacy v1.0.25 Torsion × Rank min-height that belonged to its
+ * old pairing with Record Complexity. */
+[class*="st-key-rh-dashboard-torsion-rank"] > [data-testid="stVerticalBlockBorderWrapper"] {
+    min-height: 0 !important;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-torsion-rank"],
+    [class*="st-key-rh-dashboard-torsion-records"]
+) .rh-dashboard-research-heading {
+    margin-bottom: .32rem;
+}
+
+:is(
+    [class*="st-key-rh-dashboard-torsion-rank"],
+    [class*="st-key-rh-dashboard-torsion-records"]
+) .rh-dashboard-table-wrap {
+    margin-top: 0;
+}
+
+[class*="st-key-rh-dashboard-torsion-rank"] .rh-torsion-rank-table th,
+[class*="st-key-rh-dashboard-torsion-rank"] .rh-torsion-rank-table td,
+[class*="st-key-rh-dashboard-torsion-records"] .rh-torsion-records-table th,
+[class*="st-key-rh-dashboard-torsion-records"] .rh-torsion-records-table td {
+    padding-top: .38rem;
+    padding-bottom: .38rem;
+    white-space: nowrap;
+}
+
+/* Lattices now participates in the same two-column research-card stack beneath
+ * the chart grid. Keep wide numerical columns horizontally scrollable. */
+[class*="st-key-rh-dashboard-lattices"] .rh-dashboard-table-scroll {
+    overflow-x: auto;
+}
