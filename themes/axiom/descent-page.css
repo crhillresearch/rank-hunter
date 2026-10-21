@@ -1,0 +1,137 @@
+/* Descent workbench: proof state first, one primary calculation path. */
+.rh-descent-status {
+    overflow: hidden;
+    margin: .25rem 0 1rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 13px;
+    background:
+        radial-gradient(ellipse at 96% 0%, color-mix(in srgb, var(--rh-primary) 8%, transparent), transparent 55%),
+        var(--rh-card);
+    color: var(--rh-text);
+    box-shadow: 0 5px 16px color-mix(in srgb, var(--rh-text) 3%, transparent);
+}
+.rh-descent-status--complete {
+    background:
+        radial-gradient(ellipse at 96% 0%, color-mix(in srgb, var(--rh-success) 10%, transparent), transparent 55%),
+        var(--rh-card);
+}
+.rh-descent-status--conflict {
+    border-color: color-mix(in srgb, var(--rh-danger) 42%, var(--rh-border));
+}
+.rh-descent-status-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.2rem;
+    padding: 1.1rem 1.3rem .95rem;
+}
+.rh-descent-eyebrow,
+.rh-descent-facts span,
+.rh-descent-next span {
+    color: var(--rh-muted);
+    font-size: .65rem;
+    font-weight: 750;
+    letter-spacing: .09em;
+}
+.rh-descent-status-copy h2 {
+    margin: .25rem 0 .15rem;
+    color: var(--rh-text);
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
+    line-height: 1.18;
+    letter-spacing: -.025em;
+}
+.rh-descent-status-copy p {
+    margin: 0;
+    color: var(--rh-text-secondary);
+    font-size: .82rem;
+    line-height: 1.45;
+}
+.rh-descent-rank {
+    flex: 0 0 auto;
+    color: var(--rh-primary-deep);
+    font-size: clamp(1.65rem, 3vw, 2.5rem);
+    font-weight: 780;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.045em;
+    white-space: nowrap;
+}
+.rh-descent-status--complete .rh-descent-rank { color: var(--rh-success); }
+.rh-descent-status--conflict .rh-descent-rank {
+    color: var(--rh-danger);
+    font-size: 1.1rem;
+    letter-spacing: 0;
+}
+.rh-descent-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-top: 1px solid var(--rh-border);
+    border-bottom: 1px solid var(--rh-border);
+}
+.rh-descent-facts > div {
+    min-width: 0;
+    padding: .65rem 1.3rem;
+}
+.rh-descent-facts > div + div { border-left: 1px solid var(--rh-border); }
+.rh-descent-facts span,
+.rh-descent-facts strong { display: block; }
+.rh-descent-facts strong {
+    margin-top: .18rem;
+    color: var(--rh-text);
+    font-size: 1.05rem;
+    font-weight: 720;
+    font-variant-numeric: tabular-nums;
+}
+.rh-descent-next {
+    display: flex;
+    align-items: baseline;
+    gap: .8rem;
+    padding: .65rem 1.3rem;
+}
+.rh-descent-next span { flex: 0 0 auto; color: var(--rh-primary-deep); }
+.rh-descent-next p {
+    margin: 0;
+    color: var(--rh-text-secondary);
+    font-size: .81rem;
+    line-height: 1.4;
+}
+.st-key-rh-descent-primary {
+    border-color: var(--rh-border) !important;
+    border-radius: 13px !important;
+    background: var(--rh-card) !important;
+    box-shadow: 0 5px 16px color-mix(in srgb, var(--rh-text) 3%, transparent);
+}
+.st-key-rh-descent-recent-job {
+    border-color: var(--rh-border) !important;
+    border-radius: 10px !important;
+    background: var(--rh-card) !important;
+}
+.st-key-rh-descent-recent-job [data-testid="stMarkdownContainer"] p {
+    margin: 0;
+    color: var(--rh-text-secondary);
+    font-size: .85rem;
+}
+.st-key-rh-descent-recent-job [data-testid="stMarkdownContainer"] strong {
+    color: var(--rh-text);
+}
+.st-key-rh-descent-primary [data-testid="stForm"] {
+    border: 0 !important;
+    padding: 0 !important;
+}
+.st-key-rh-descent-primary [data-testid="stFormSubmitButton"] button {
+    min-height: 2.65rem;
+    font-weight: 700;
+}
+@media (max-width: 700px) {
+    .rh-descent-status-main {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: .6rem;
+        padding: .9rem 1rem;
+    }
+    .rh-descent-facts > div { padding: .6rem .65rem; }
+    .rh-descent-facts span { font-size: .55rem; letter-spacing: .035em; }
+    .rh-descent-facts strong { font-size: .9rem; }
+    .rh-descent-next { display: block; padding: .6rem 1rem; }
+    .rh-descent-next p { margin-top: .2rem; }
+}

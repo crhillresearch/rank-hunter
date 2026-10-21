@@ -8,6 +8,7 @@ import sys
 import streamlit as st
 
 from rank42.plugins import (
+    CORE_REPLACED_PLUGIN_IDS,
     Plugin,
     archive_plugin,
     corpora_for_variant,
@@ -705,7 +706,7 @@ def _family_sort_key(plugin):
 
 
 def _superseded_plugin_ids(records):
-    hidden = set()
+    hidden = set(CORE_REPLACED_PLUGIN_IDS)
     for plugin in records:
         if isinstance(plugin, Plugin):
             hidden.update(str(value) for value in (plugin.manifest.get("supersedes_plugin_ids") or ()))

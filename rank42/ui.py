@@ -128,6 +128,7 @@ _LEGACY_ROUTE_ALIASES = {
     "Quartic Searches": "Quartics",
     "Quartic Search": "Quartics",
     "Genus 2": "Models",
+    "extension:twist_isogeny_lab:twist_isogeny_lab": "Tools",
 }
 
 
@@ -191,6 +192,8 @@ def _normalize_route(page, state):
         state["tools_selection"] = "Lattices"
     elif requested == "Geometry Search":
         state["tools_selection"] = "Family Geometry"
+    elif requested == "extension:twist_isogeny_lab:twist_isogeny_lab":
+        state["tools_selection"] = "Isogenies"
 
     if canonical != requested:
         state["rh_page"] = canonical
@@ -705,6 +708,11 @@ def main():
         ensure_dispatcher_running(ctx.db_path, ctx.project_root)
 
         extensions = enabled_extension_pages(db, ctx.project_root)
+        if "rh_page" not in st.session_state:
+            linked_tool = st.query_params.get("rh_tool")
+            if linked_tool in tools_page.TOOL_NAMES:
+                st.session_state["rh_page"] = "Tools"
+                st.session_state["tools_selection"] = linked_tool
         page = _normalize_route(
             st.session_state.get("rh_page", "Dashboard"),
             st.session_state,

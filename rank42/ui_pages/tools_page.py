@@ -1,12 +1,18 @@
 """One working surface for the existing specialist Analysis tools."""
 from __future__ import annotations
 
+import html
+import json
+from pathlib import Path
+
 import streamlit as st
 
 from rank42.ui_pages.common import PAGE_ICONS, embedded_page_title, title
 from . import (
-    descent_page, geometry_search_page, independence_page, lattices_page, pencils_page,
+    arithmetic_neighborhood, descent_page, geometry_search_page, independence_page,
+    lattices_page, pencils_page,
     point_hunt_page, points_page, quartics_page, saturation_page,
+    section_base_change_page,
 )
 
 
@@ -39,6 +45,14 @@ _TOOLS = {
         quartics_page.page, PAGE_ICONS["Quartics"],
         "Search quartic models and coverings for new rational points.",
     ),
+    "Twists": (
+        arithmetic_neighborhood.twists_page, ":material/autorenew:",
+        "Explore exact bounded quadratic twists and select models for follow-up.",
+    ),
+    "Sections": (
+        section_base_change_page.sections_page, ":material/function:",
+        "Find and verify rational sections of formula families over Q(t).",
+    ),
     "Lattices": (
         lattices_page.page, PAGE_ICONS["Lattices"],
         "Study generator heights, basis quality, and lattice holes.",
@@ -51,13 +65,26 @@ _TOOLS = {
         _family_geometry, ":material/account_tree:",
         "Run geometry-first family or torsion searches with exact follow-up.",
     ),
+    "Isogenies": (
+        arithmetic_neighborhood.isogenies_page, ":material/hub:",
+        "Compute rational isogeny classes and inspect exact related models.",
+    ),
+    "Base Change": (
+        section_base_change_page.base_change_page, ":material/transform:",
+        "Pull a family through a rational parameter map and search its sections.",
+    ),
 }
 
 _GROUPS = (
-    ("Rank proof", ("Descent", "Independence", "Saturation")),
-    ("Find points", ("Points", "Point Hunt", "Quartics")),
-    ("Geometry", ("Lattices", "Pencils", "Family Geometry")),
+    ("Proof", ("Descent", "Independence", "Saturation")),
+    ("Discovery", ("Points", "Point Hunt", "Quartics", "Twists", "Sections")),
+    ("Geometry", ("Lattices", "Pencils", "Family Geometry", "Isogenies", "Base Change")),
 )
+
+TOOL_NAMES = frozenset(_TOOLS)
+_COMMAND_BAR_JS = (
+    Path(__file__).resolve().parents[1] / "ui_assets" / "tools_command_bar.js"
+).read_text(encoding="utf-8")
 
 _HANDOFF_ALIASES = {
     "MW Geometry": "Lattices",
@@ -67,28 +94,44 @@ _HANDOFF_ALIASES = {
 
 
 def _tool_picker():
-    selected = str(st.session_state.get("tools_selection") or "Descent")
+    selected = str(
+        st.session_state.get("tools_selection")
+        or st.query_params.get("rh_tool")
+        or "Descent"
+    )
     if selected not in _TOOLS:
         selected = "Descent"
-        st.session_state["tools_selection"] = selected
-    with st.container(key="rh-tools-picker", border=True):
-        columns = st.columns([1, 1, 1.15], gap="xsmall")
-        for column, (group_name, names) in zip(columns, _GROUPS):
-            with column:
-                group_key = f"rh-tools-group-{group_name.lower().replace(' ', '-')}"
-                with st.container(key=group_key):
-                    st.markdown(f"**{group_name}**")
-                    with st.container(horizontal=True, wrap=False, gap="xsmall"):
-                        for name in names:
-                            _, icon, description = _TOOLS[name]
-                            if st.button(
-                                name, icon=icon, help=description,
-                                key=f"tools-select-{name.lower()}",
-                                type="primary" if selected == name else "secondary",
-                                width="content",
-                            ):
-                                st.session_state["tools_selection"] = name
-                                st.rerun()
+    st.session_state["tools_selection"] = selected
+    grouped = [
+        {
+            "label": group_name,
+            "tools": [
+                {
+                    "name": name,
+                    "icon": _TOOLS[name][1].removeprefix(":material/").removesuffix(":"),
+                    "description": _TOOLS[name][2],
+                }
+                for name in names
+            ],
+        }
+        for group_name, names in _GROUPS
+    ]
+    config = json.dumps({"selected": selected, "groups": grouped}).replace("<", "\\u003c")
+    st.html(
+        '<div id="rh-tools-commandbar" class="rh-tools-commandbar-host" '
+        f'aria-label="Research tools; current tool {html.escape(selected)}"></div>',
+    )
+    with st.container(key="rh-tools-command-runtime"):
+        st.components.v1.html(
+            f"<script>{_COMMAND_BAR_JS}\nwindow.parent.__rhInitToolsCommandBar({config});</script>",
+            height=0,
+        )
+    with st.container(key="rh-tools-command-bridge"):
+        for name in _TOOLS:
+            slug = name.lower().replace(" ", "-")
+            if st.button(name, key=f"tools-select-{slug}"):
+                st.session_state["tools_selection"] = name
+                st.rerun()
     return selected
 
 

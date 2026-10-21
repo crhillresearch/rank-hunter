@@ -1,0 +1,29 @@
+/* Core Twists and Isogenies tools, using Axiom theme tokens. */
+.rh-neighborhood-hero{border:1px solid var(--rh-border-strong);border-left:4px solid var(--rh-primary);
+background:var(--rh-card);border-radius:14px;padding:.9rem 1rem;
+margin:.35rem 0 1rem 0}
+.rh-neighborhood-eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.09em;
+color:var(--rh-text-secondary);margin-bottom:.18rem}
+.rh-neighborhood-hero-title{font-size:1.12rem;font-weight:800;color:var(--rh-text);
+margin-bottom:.18rem}
+.rh-neighborhood-hero-copy{color:var(--rh-text-secondary);line-height:1.45}
+.rh-neighborhood-stage{display:flex;align-items:center;gap:.72rem;border:1px solid var(--rh-border);
+background:var(--rh-card-2);border-radius:12px;padding:.62rem .78rem;
+margin:1.05rem 0 .55rem 0}
+.rh-neighborhood-stage-index{display:flex;align-items:center;justify-content:center;flex:0 0 1.8rem;
+width:1.8rem;height:1.8rem;border-radius:999px;background:var(--rh-primary);
+color:var(--rh-text-on-accent);font-weight:800}
+.rh-neighborhood-stage-title{font-weight:800;color:var(--rh-text);line-height:1.2}
+.rh-neighborhood-stage-detail{font-size:.82rem;color:var(--rh-text-secondary);line-height:1.3;
+margin-top:.08rem}
+.rh-neighborhood-boundary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+gap:.55rem;margin:.45rem 0 .65rem 0}
+.rh-neighborhood-boundary-grid>div{border:1px solid var(--rh-border);background:var(--rh-card-2);
+border-radius:10px;padding:.55rem .62rem;color:var(--rh-text-secondary);
+font-size:.82rem;line-height:1.35}
+.rh-neighborhood-boundary-label{display:block;font-size:.68rem;font-weight:800;letter-spacing:.07em;
+color:var(--rh-text);margin-bottom:.22rem}
+.rh-neighborhood-graph-shell{border:1px solid var(--rh-border);background:var(--rh-card);
+border-radius:16px;padding:8px;overflow:hidden}
+.rh-neighborhood-graph-shell svg{display:block;width:100%;height:auto}
+@media (max-width: 800px){.rh-neighborhood-boundary-grid{grid-template-columns:1fr}}

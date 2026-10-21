@@ -1541,6 +1541,9 @@ def _discovered_plugin_record(manifest: Path):
     return _cached_plugin_record(*signature)
 
 
+CORE_REPLACED_PLUGIN_IDS = frozenset({"twist_isogeny_lab"})
+
+
 def discover_plugins(project_root, *, include_superseded=False):
     found = []
     seen_ids = set()
@@ -1566,7 +1569,7 @@ def discover_plugins(project_root, *, include_superseded=False):
             found.append(rec)
     if include_superseded:
         return found
-    hidden = set()
+    hidden = set(CORE_REPLACED_PLUGIN_IDS)
     for rec in found:
         if isinstance(rec, Plugin):
             hidden.update(str(x) for x in (rec.manifest.get("supersedes_plugin_ids") or []))
