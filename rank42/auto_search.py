@@ -469,6 +469,8 @@ def _infer_campaign_created_curve(db, campaign_id, curve_id, candidate_id):
 
 
 def _run_candidate(args, db, campaign_id, plugin, variant, family, candidate, fingerprints):
+    campaign = get_campaign(db, campaign_id)
+    campaign_started_at = campaign["started_at"] if campaign is not None else None
     parameter = str(_candidate_value(candidate, "parameter"))
     score = float(_candidate_value(candidate, "score", 0.0) or 0.0)
     rank_order = int(_candidate_value(candidate, "rank_order", 0) or 0)
@@ -502,16 +504,32 @@ def _run_candidate(args, db, campaign_id, plugin, variant, family, candidate, fi
         return "singular", None
 
     created_by_campaign = bool(raw_prior_meta.get("created_by_campaign", False) or created_now)
-    if not created_by_campaign:
-        created_by_campaign = _infer_campaign_created_curve(
-            db, campaign_id, curve_id, candidate_id
-        )
+    # A candidate link and creation time alone do not prove ownership: another
+    # search can materialize the same fiber while this campaign is running.
     if candidate_id is not None:
         db.execute(
             "UPDATE candidates SET curve_id=?, updated_at=? WHERE id=?",
             (curve_id, now(), int(candidate_id)),
         )
         db.commit()
+    # Persist ownership before long arithmetic begins so a stopped campaign
+    # can enforce its retention floor on the in-flight materialized curve.
+    upsert_trial(
+        db,
+        campaign_id=campaign_id,
+        candidate_id=candidate_id,
+        curve_id=curve_id,
+        parameter=parameter,
+        score=score,
+        status="running",
+        tier="materialized",
+        rigorous_lower=int(proven_lower(get_curve(db, curve_id))),
+        metadata={
+            **raw_prior_meta,
+            "created_by_campaign": created_by_campaign,
+            "retention_floor": int(args.retention_floor),
+        },
+    )
 
     if args.geometry_first and rank_order > int(args.geometry_keep):
         upsert_trial(
@@ -532,8 +550,9 @@ def _run_candidate(args, db, campaign_id, plugin, variant, family, candidate, fi
                 "reason": "below geometry shortlist after medium Nagao rescore",
             },
         )
-        if created_by_campaign:
-            _discard_unpromoted_auto_curve(db, curve_id)
+        if created_by_campaign and _discard_unpromoted_auto_curve(
+            db, curve_id, created_not_before=campaign_started_at,
+        ):
             curve_id = None
         print(
             f"[candidate done] screened out after Nagao shortlist t={parameter} "
@@ -624,8 +643,9 @@ def _run_candidate(args, db, campaign_id, plugin, variant, family, candidate, fi
                 rigorous_lower=int(proven_lower(get_curve(db, curve_id))),
                 metadata=mismatch_meta,
             )
-            if created_by_campaign:
-                _discard_unpromoted_auto_curve(db, curve_id)
+            if created_by_campaign and _discard_unpromoted_auto_curve(
+                db, curve_id, created_not_before=campaign_started_at,
+            ):
                 curve_id = None
             print(
                 f"[candidate done] torsion mismatch t={parameter} "
@@ -713,8 +733,12 @@ def _run_candidate(args, db, campaign_id, plugin, variant, family, candidate, fi
             growth=max(0, int(start["rigorous_lower"]) - baseline_lower),
             exact_rank=start["exact_rank"],
         ):
-            _discard_unpromoted_auto_curve(db, curve_id)
-            curve_id = None
+            if _discard_unpromoted_auto_curve(
+                db, curve_id,
+                created_not_before=campaign_started_at,
+                retention_floor=args.retention_floor,
+            ):
+                curve_id = None
         print(
             f"[candidate done] exact rank {start['exact_rank']} "
             f"curve=#{curve_id or 'campaign-only'}",
@@ -1204,8 +1228,12 @@ def _run_candidate(args, db, campaign_id, plugin, variant, family, candidate, fi
         exact_rank=final["exact_rank"],
     )
     if discard_fresh:
-        _discard_unpromoted_auto_curve(db, curve_id)
-        curve_id = None
+        if _discard_unpromoted_auto_curve(
+            db, curve_id,
+            created_not_before=campaign_started_at,
+            retention_floor=args.retention_floor,
+        ):
+            curve_id = None
 
     print(
         f"[candidate done] status={status} curve=#{curve_id or 'campaign-only'} "

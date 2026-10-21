@@ -59,7 +59,7 @@ _TOOLS = {
     ),
     "Pencils": (
         pencils_page.page, PAGE_ICONS["Pencils"],
-        "Compare elliptic pencils and their best specializations.",
+        "Build exact elliptic pencils from saved curves or sections and study their specializations.",
     ),
     "Family Geometry": (
         _family_geometry, ":material/account_tree:",

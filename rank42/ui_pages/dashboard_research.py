@@ -104,6 +104,7 @@ def _arithmetic_record_rows(db):
         db,
         [int(state["curve_id"]) for state in states],
     )
+    states = [state for state in states if int(state["curve_id"]) in arithmetic]
     by_rank = {}
     for state in states:
         by_rank.setdefault(int(state["exact_rank"]), []).append(state)
@@ -195,6 +196,7 @@ def _exceptional_arithmetic_rows(db, *, high_rank_floor, best_exact):
         db,
         [int(state["curve_id"]) for state in states],
     )
+    states = [state for state in states if int(state["curve_id"]) in arithmetic]
     point_counts = {
         int(row["curve_id"]): int(row["independent_points"] or 0)
         for row in db.execute(

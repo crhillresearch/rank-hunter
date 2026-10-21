@@ -1155,6 +1155,39 @@ def discard_transient_zero_evidence_curve(db, curve_id, *, created_not_before=No
     return True
 
 
+def discard_unpromoted_search_curve(
+    db, curve_id, *, created_not_before=None, retention_floor=None
+):
+    """Drop a search-owned curve below its floor, preserving proven discoveries."""
+    curve_id = int(curve_id)
+    row = get_curve(db, curve_id)
+    if row is None:
+        return False
+    if created_not_before is not None and (
+        str(row["created_at"] or "") < str(created_not_before)
+    ):
+        return False
+    from rank42.curve_research_state import get_curve_research_state
+    state = get_curve_research_state(db, curve_id)
+    lower = int(state.get("rigorous_lower") or 0)
+    floor = max(1, int(retention_floor or 0))
+    if lower >= floor:
+        return False
+    db.execute("UPDATE events SET curve_id=NULL WHERE curve_id=?", (curve_id,))
+    has_reverse = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='reverse_engineering_reports'"
+    ).fetchone()
+    if has_reverse is not None:
+        db.execute(
+            "UPDATE reverse_engineering_reports SET curve_id=NULL WHERE curve_id=?",
+            (curve_id,),
+        )
+    db.execute("UPDATE quartic_searches SET curve_id=NULL WHERE curve_id=?", (curve_id,))
+    db.execute("DELETE FROM curves WHERE id=?", (curve_id,))
+    db.commit()
+    return True
+
+
 def purge_zero_evidence_curves(db):
     """Purge terminal curves with explicit zero rank evidence.
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -52,6 +53,10 @@ def parse_args():
     )
     ap.add_argument('--block-size',type=int,default=1<<18)
     ap.add_argument('--top',type=int,default=1000)
+    ap.add_argument('--compact-share',type=float,default=0.0,
+                    help='Reserve a fraction of final candidates for a compact parameter box')
+    ap.add_argument('--compact-a-abs',type=int,default=100)
+    ap.add_argument('--compact-b-max',type=int,default=40)
     ap.add_argument('--cache-dir',default='.rank42-cache')
     ap.add_argument('--no-cache',action='store_true')
     ap.add_argument('--export-jsonl')
@@ -79,7 +84,9 @@ def _stages(args):
 
 def main():
     args=parse_args()
-    if args.b_min<=0 or args.a_min>args.a_max or args.b_min>args.b_max or args.top<=0:
+    if (args.b_min<=0 or args.a_min>args.a_max or args.b_min>args.b_max
+            or args.top<=0 or not 0.0<=args.compact_share<=1.0
+            or args.compact_a_abs<=0 or args.compact_b_max<=0):
         raise SystemExit('invalid candidate range')
     project=Path(args.project_root).resolve()
     plugin=get_plugin(project,args.plugin)
@@ -100,6 +107,9 @@ def main():
         'a_min':args.a_min,'a_max':args.a_max,'b_min':args.b_min,'b_max':args.b_max,
         'stage_bounds':bounds,'stage_keeps':keeps,'engine':args.engine,'top':args.top,
         'score_method':args.score_method,
+        'compact_share':args.compact_share,
+        'compact_a_abs':args.compact_a_abs if args.compact_share else None,
+        'compact_b_max':args.compact_b_max if args.compact_share else None,
         'sample_count':args.sample_count if args.engine == 'sampled' else None,
         'sample_seed':args.sample_seed if args.engine == 'sampled' else None,
         'corpus_policy':args.corpus_policy,
@@ -134,13 +144,60 @@ def main():
         rows,tested=stage0_sampled(shim,tables,keeps[0],family)
     else:
         rows,tested=stage0_scalar(shim,tables,keeps[0],family)
+    compact_rows=[]
+    compact_available=(
+        args.compact_share>0
+        and max(args.a_min,-args.compact_a_abs)<=min(args.a_max,args.compact_a_abs)
+        and args.b_min<=min(args.b_max,args.compact_b_max)
+    )
+    if compact_available:
+        compact_args=dict(vars(shim))
+        compact_args['a_min']=max(args.a_min,-args.compact_a_abs)
+        compact_args['a_max']=min(args.a_max,args.compact_a_abs)
+        compact_args['b_max']=min(args.b_max,args.compact_b_max)
+        compact_shim=SimpleNamespace(**compact_args)
+        compact_keeps=[max(1,round(keep*args.compact_share)) for keep in keeps]
+        if args.engine=='sieve':
+            compact_rows,compact_tested=stage0_sieve(compact_shim,tables,compact_keeps[0],family)
+        elif args.engine=='sampled':
+            compact_rows,compact_tested=stage0_sampled(compact_shim,tables,compact_keeps[0],family)
+        else:
+            compact_rows,compact_tested=stage0_scalar(compact_shim,tables,compact_keeps[0],family)
+        print(f'[compact] tested {compact_tested:,}; retained {len(compact_rows)} '
+              f'from a={compact_args["a_min"]}..{compact_args["a_max"]}, '
+              f'b={compact_args["b_min"]}..{compact_args["b_max"]}',flush=True)
     for rec in rows: rec['prime_bound']=bounds[0]
+    for rec in compact_rows: rec['prime_bound']=bounds[0]
     print(f'[stage 1/{len(bounds)}] retained {len(rows)} from {tested:,}', flush=True)
     for idx,bound in enumerate(bounds[1:],1):
         tables=get_tables(family,variant.family_spec,bound,tables,shim)
         before=len(rows); rows=rescore_stage(rows,tables,keeps[idx],bound)
         print(f'[stage {idx+1}/{len(bounds)}] rescored {before}; retained {len(rows)}', flush=True)
-    rows=sorted(rows,key=lambda r:(r['score'],r['a'],r['b']),reverse=True)[:args.top]
+        if compact_rows:
+            compact_before=len(compact_rows)
+            compact_rows=rescore_stage(compact_rows,tables,compact_keeps[idx],bound)
+            print(f'[compact stage {idx+1}/{len(bounds)}] rescored '
+                  f'{compact_before}; retained {len(compact_rows)}',flush=True)
+    rows=sorted(rows,key=lambda r:(r['score'],r['a'],r['b']),reverse=True)
+    if compact_rows:
+        compact_rows=sorted(compact_rows,key=lambda r:(r['score'],r['a'],r['b']),reverse=True)
+        quota=max(1,round(args.top*args.compact_share))
+        selected=[]; seen=set()
+        def add_unique(source,limit):
+            for rec in source:
+                if len(selected)>=limit: break
+                key=Fraction(int(rec['a']),int(rec['b']))
+                if key in seen: continue
+                seen.add(key); selected.append(rec)
+        add_unique(compact_rows,quota)
+        compact_selected=len(selected)
+        add_unique(rows,args.top)
+        add_unique(compact_rows,args.top)
+        rows=selected
+        print(f'[compact mix] reserved={compact_selected} total={len(rows)} '
+              f'of requested={args.top}',flush=True)
+    else:
+        rows=rows[:args.top]
     for rec in rows:
         rec['ranking_kind']=args.score_method
         rec['ranking_value']=float(rec['score'])
@@ -187,7 +244,6 @@ def main():
             rec['native_parameter']=parameter
         rec['t']=parameter
         # Preserve exact a/b for the parameter actually emitted, not the pre-reduction scan pair.
-        from fractions import Fraction
         q=Fraction(str(parameter)); rec['a']=q.numerator; rec['b']=q.denominator
         rec['family_spec']=variant.family_spec; rec['plugin_id']=plugin.id; rec['plugin_variant']=variant.id
         rec['search_engine']=args.engine; rec['stage_bounds']=bounds

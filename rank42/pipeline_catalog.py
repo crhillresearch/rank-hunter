@@ -25,7 +25,7 @@ from rank42.constructive_artifact import (
 from rank42.torsion import canonical_torsion_label
 
 
-CATALOG_VERSION = 19
+CATALOG_VERSION = 23
 ELLIPTIC_TARGET_MODES = ("family", "torsion", "general", "curve")
 TARGET_MODES = (*ELLIPTIC_TARGET_MODES, "genus2_jacobian")
 EVIDENCE_LEVELS = ("heuristic", "exact", "conditional", "rigorous", "control")
@@ -1372,7 +1372,7 @@ _STAGE_LIST = (
         "select_survivors",
         "Select Survivors",
         "Control",
-        "Keep only the strongest fibers for later stages. The legacy rank_then_yield_then_score policy ranks by rigorous lower bound, then total exact-point inventory already stored for the curve, then Pipeline score; it is not run-local fresh point yield. This changes scheduling only and never mathematical evidence.",
+        "Keep only the strongest fibers for later stages. The rank_then_rea_route policy protects proven rank leads, then follows a preceding REA Population Sort; missing REA routes go last. The legacy rank_then_yield_then_score policy ranks by rigorous lower bound, then total exact-point inventory already stored for the curve, then Pipeline score; it is not run-local fresh point yield. This changes scheduling only and never mathematical evidence.",
         frozenset(ELLIPTIC_TARGET_MODES),
         frozenset({"exact_curve"}),
         frozenset({"selected_population"}),
@@ -1420,6 +1420,7 @@ _STAGE_LIST = (
         "control",
         "cheap",
         {},
+        repeatable=True,
     ),
 )
 
@@ -1974,6 +1975,45 @@ def validate_pipeline(target_mode, stages):
     for index, rec in enumerate(normalized, 1):
         sid = rec["id"]
         cfg = rec["config"]
+        if sid in {"nagao_screen", "select_survivors"} and cfg.get("compact_share") is not None:
+            try:
+                compact_share = float(cfg["compact_share"])
+                compact_a_abs = int(cfg.get("compact_a_abs") or 100)
+                compact_b_max = int(cfg.get("compact_b_max") or 40)
+            except (TypeError, ValueError):
+                compact_share, compact_a_abs, compact_b_max = -1, 0, 0
+            if not (0 <= compact_share <= 1) or min(compact_a_abs, compact_b_max) <= 0:
+                errors.append(
+                    f"Step {index} · {stage_spec(sid).label}: compact share must be 0–1 and parameter bounds positive"
+                )
+        if sid == "nagao_screen" and cfg.get("candidate_generation") is not None:
+            generation = cfg["candidate_generation"]
+            if not isinstance(generation, dict):
+                errors.append(
+                    f"Step {index} · Nagao Screen: candidate generation must be an object"
+                )
+            else:
+                allowed = {"a_min", "a_max", "b_min", "b_max", "top", "engine", "sample_count", "sample_seed"}
+                if set(generation) - allowed:
+                    errors.append(
+                        f"Step {index} · Nagao Screen: unsupported candidate-generation setting"
+                    )
+                try:
+                    a_min = int(generation.get("a_min", -3000))
+                    a_max = int(generation.get("a_max", 3000))
+                    b_min = int(generation.get("b_min", 1))
+                    b_max = int(generation.get("b_max", 300))
+                    top = int(generation.get("top", 1))
+                except (TypeError, ValueError):
+                    a_min, a_max, b_min, b_max, top = 1, 0, 1, 0, 0
+                if a_min > a_max or b_min < 1 or b_min > b_max or top < 1:
+                    errors.append(
+                        f"Step {index} · Nagao Screen: invalid parameter range or take-forward count"
+                    )
+                if str(generation.get("engine", "sieve")) not in {"sieve", "scalar", "sampled"}:
+                    errors.append(
+                        f"Step {index} · Nagao Screen: unsupported candidate engine"
+                    )
         if sid == "euler_parameter_scan":
             try:
                 bound = int(cfg.get("prime_bound") or 0)
@@ -2848,9 +2888,13 @@ def validate_pipeline(target_mode, stages):
             if keep <= 0:
                 errors.append(f"Step {index} · Select Survivors: keep must be positive")
             if str(cfg.get("ranking") or "") not in {
-                "rank_then_yield_then_score", "rank_then_score", "score"
+                "rank_then_yield_then_score", "rank_then_score", "score", "rank_then_rea_route"
             }:
                 errors.append(f"Step {index} · Select Survivors: unknown ranking policy")
+            if str(cfg.get("ranking") or "") == "rank_then_rea_route" and "rea_sort" not in ids[:index - 1]:
+                errors.append(
+                    f"Step {index} · Select Survivors: add REA Population Sort first"
+                )
         elif sid == "genus2_frobenius_profile":
             try:
                 primes = [int(value) for value in cfg.get("primes") or ()]
@@ -3157,6 +3201,107 @@ EULER_LATTICE_HUNT_TEMPLATE = [
     },
     {"id": "lattice_chart_construction", "config": {"lattice_id": 0, "max_holes": 64, "timeout": 180}},
     {"id": "lattice_chart_search", "config": {"timeout": 600, "certificate_timeout": 180, "exact_candidates": 96}},
+    {"id": "stop_goal"},
+]
+
+# The channel family has exact point-search adapters but no Euler or lattice-
+# chart hooks. Screen a wider parameter box, prove torsion, reject fibers whose
+# rigorous upper is below the record goal, then reserve deep work for survivors.
+C2XC8_RECORD_HUNT_TEMPLATE = [
+    {"id": "nagao_screen", "config": {
+        "prime_bound": 251, "keep": 8000, "compact_share": 0.25,
+        "compact_a_abs": 100, "compact_b_max": 40,
+        "candidate_generation": {
+            "a_min": -400, "a_max": 400, "b_min": 1, "b_max": 120,
+            "top": 200, "engine": "sieve",
+        },
+    }},
+    {"id": "nagao_rescore", "config": {"prime_bound": 1979, "keep": 200}},
+    {"id": "exact_torsion", "config": {"timeout": 60}},
+    {"id": "pari_upper_gate", "config": {"timeout": 5, "eliminate_below_goal": True}},
+    {"id": "small_point_density", "config": {
+        "heights": [100, 1000], "timeout": 3,
+        "certificate_timeout": 120, "exact_candidates": 32,
+    }},
+    {"id": "select_survivors", "config": {"keep": 64, "ranking": "rank_then_score"}},
+    {"id": "plugin_family_search", "config": {
+        "timeout": 120, "certificate_timeout": 180, "exact_candidates": 96,
+        "options": {
+            "generator": "squareclass", "x_abs_max": 10000, "z_max": 4,
+            "max_candidates": 500000, "max_points": 64,
+            "factor_timeout": 20, "run_timeout": 90,
+        },
+    }},
+    {"id": "integral_seed", "config": {
+        "heights": [10000, 100000], "timeout": 6,
+        "certify_after_search": False,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 180, "max_candidates": 128,
+    }},
+    {"id": "stop_goal"},
+    {"id": "select_survivors", "config": {"keep": 16, "ranking": "rank_then_score"}},
+    {"id": "covering_selmer_branch", "config": {
+        "timeout": 120, "certificate_timeout": 240, "exact_candidates": 128,
+    }},
+    {"id": "plugin_geometry", "config": {
+        "timeout": 240, "certificate_timeout": 240, "exact_candidates": 128,
+        "options": {
+            "generator": "squareclass", "x_abs_max": 100000, "z_max": 12,
+            "max_candidates": 1500000, "max_points": 128,
+            "factor_timeout": 30, "run_timeout": 180,
+        },
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 240, "max_candidates": 160,
+    }},
+    {"id": "stop_goal"},
+    {"id": "adaptive_ladder", "config": {
+        "bands": [[2, 100], [101, 1000], [1001, 10000], [10001, 100000]],
+        "keeps": [16, 12, 8, 4], "ranking": "rank_then_score",
+        "charts": 10, "heights": [10000, 100000, 1000000],
+        "timeout": 12, "certificate_timeout": 240,
+        "exact_candidates": 160,
+    }},
+    {"id": "select_survivors", "config": {"keep": 4, "ranking": "rank_then_score"}},
+    {"id": "large_height_generator_hunt", "config": {
+        "descent_levels": [2], "descent_timeout": 30,
+        "max_coverings": 12, "covering_timeout": 30,
+        "padic_enabled": False,
+        "mw_growth_rounds": 2, "mw_growth_anchors": 12,
+        "mw_growth_pool": 120,
+        "denominator_bands": [[100001, 1000000]],
+        "denominator_charts": 16,
+        "denominator_heights": [100000, 1000000],
+        "denominator_timeout": 12,
+        "late_saturation_enabled": True, "late_lattice_enabled": True,
+        "certificate_timeout": 300, "exact_candidates": 192,
+        "wall_timeout": 900,
+        "stop_on_growth": False,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 300, "max_candidates": 192,
+    }},
+    {"id": "stop_goal"},
+    {"id": "record_breaker_lane", "config": {
+        "minimum_rank_mode": "goal_minus_one",
+        "descent_levels": [2], "descent_timeout": 45,
+        "max_coverings": 12, "covering_timeout": 45,
+        "padic_enabled": False,
+        "mw_growth_rounds": 2, "mw_growth_anchors": 16,
+        "mw_growth_pool": 160,
+        "mw_growth_heights": [1000000, 10000000],
+        "denominator_bands": [[1000001, 10000000]],
+        "denominator_charts": 16,
+        "denominator_heights": [1000000, 10000000],
+        "denominator_timeout": 15,
+        "late_saturation_enabled": True, "late_lattice_enabled": True,
+        "certificate_timeout": 360, "exact_candidates": 224,
+        "wall_timeout": 1200, "stop_on_growth": False,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 360, "max_candidates": 224,
+    }},
     {"id": "stop_goal"},
 ]
 
@@ -3830,7 +3975,7 @@ PRIME_SIEVE_FUNNEL_TEMPLATE = [
 ]
 
 GEOMETRY_GRINDER_TEMPLATE = [
-    {"id": "nagao_screen", "config": {"prime_bound": 523, "keep": 8000}},
+    {"id": "nagao_screen", "config": {"prime_bound": 523, "keep": 8000, "compact_share": 0.5, "compact_a_abs": 100, "compact_b_max": 40}},
     {"id": "nagao_rescore", "config": {"prime_bound": 1979, "keep": 400}},
     {"id": "exact_torsion"},
     {"id": "family_baseline"},
@@ -3850,7 +3995,103 @@ MINIMAL_TEMPLATE = [
     {"id": "exact_torsion"},
 ]
 
+
+# An overnight torsion campaign: broad family screening, exact torsion proof,
+# then progressively more expensive work on successively smaller populations.
+# Provider geometry and lattice charts are optional hooks; their stages report
+# unsupported/skipped when a selected family does not implement them.
+PROFESSOR_HUNT_TEMPLATE = [
+    {"id": "nagao_screen", "config": {"prime_bound": 523, "keep": 8000}},
+    {"id": "nagao_rescore", "config": {"prime_bound": 1979, "keep": 160}},
+    {"id": "prime_table_cache", "config": {"prime_bound": 127, "include_all_bad": False}},
+    {"id": "torsion_mod_p_sieve", "config": {"torsion_group": "target", "prime_bound": 127, "max_primes": 16, "prune_obstructed": True}},
+    {"id": "exact_torsion", "config": {"timeout": 60}},
+    {"id": "small_point_density", "config": {"heights": [100, 1000], "timeout": 3, "certificate_timeout": 120, "exact_candidates": 32}},
+    {"id": "select_survivors", "config": {"keep": 48, "ranking": "rank_then_score", "compact_share": 0.5, "compact_a_abs": 100, "compact_b_max": 40}},
+    {"id": "specialization_seeds", "config": {"certificate_timeout": 180}},
+    {"id": "family_baseline", "config": {"certificate_timeout": 180, "exact_candidates": 96}},
+    {"id": "integral_seed", "config": {"heights": [1000, 10000], "timeout": 6, "certify_after_search": False}},
+    {"id": "independence", "config": {"certificate_timeout": 180, "max_candidates": 96}},
+    {"id": "select_survivors", "config": {"keep": 16, "ranking": "rank_then_score"}},
+    {"id": "covering_selmer_branch", "config": {"timeout": 120, "certificate_timeout": 180, "exact_candidates": 128}},
+    {"id": "mw_growth_loop", "config": {"heights": [10000, 100000], "anchors": 16, "pool_size": 160, "max_rounds": 4, "timeout": 8, "certificate_timeout": 180, "exact_candidates": 128}},
+    {"id": "independence", "config": {"certificate_timeout": 180, "max_candidates": 128}},
+    {"id": "select_survivors", "config": {"keep": 6, "ranking": "rank_then_score"}},
+    {"id": "adaptive_ladder", "config": {"bands": [[2, 100], [101, 1000], [1001, 10000]], "keeps": [6, 4, 2], "ranking": "rank_then_score", "charts": 8, "heights": [10000, 100000], "timeout": 10, "certificate_timeout": 240, "exact_candidates": 160}},
+    {"id": "full_saturation_index_recovery", "config": {"prime_bounds": [7, 31], "timeout": 45, "certificate_timeout": 240, "exact_candidates": 160}},
+    {"id": "height_lattice_reduction", "config": {"precision_bits": 256, "timeout": 240, "certificate_timeout": 240, "exact_candidates": 160}},
+    {"id": "half_lattice_hole_enumeration", "config": {"lattice_id": 0, "method": "babai", "top": 128, "max_cosets": 2048}},
+    {"id": "lattice_chart_construction", "config": {"lattice_id": 0, "max_holes": 32, "timeout": 120}},
+    {"id": "lattice_chart_search", "config": {"timeout": 300, "certificate_timeout": 240, "exact_candidates": 160}},
+    {"id": "large_height_generator_hunt", "config": {"descent_levels": [2, 4, 8], "descent_timeout": 30, "max_coverings": 16, "covering_timeout": 30, "mw_growth_rounds": 4, "mw_growth_anchors": 16, "mw_growth_pool": 160, "denominator_bands": [[10001, 100000]], "denominator_charts": 12, "denominator_heights": [100000, 1000000], "denominator_timeout": 12, "late_saturation_enabled": True, "late_lattice_enabled": True, "certificate_timeout": 300, "exact_candidates": 192, "stop_on_growth": False}},
+    {"id": "independence", "config": {"certificate_timeout": 300, "max_candidates": 192}},
+    {"id": "height_lattice_reduction", "config": {"precision_bits": 256, "timeout": 240, "certificate_timeout": 300, "exact_candidates": 192}},
+    {"id": "final_upper", "config": {"timeout": 90}},
+    {"id": "stop_goal"},
+]
+
+
+# REA's relation and shell ordering schedules the expensive work. Only exact
+# rational points and a positive-definite interval canonical-height Gram can
+# establish a Mordell–Weil lower bound; the relational Gram cannot do so.
+REA_HUNT_TEMPLATE = [
+    {"id": "nagao_screen", "config": {"prime_bound": 523, "keep": 8000}},
+    {"id": "nagao_rescore", "config": {"prime_bound": 1979, "keep": 160}},
+    {"id": "exact_torsion", "config": {"timeout": 60}},
+    {"id": "specialization_seeds", "config": {"certificate_timeout": 180}},
+    {"id": "family_baseline", "config": {"certificate_timeout": 180, "exact_candidates": 96}},
+    {"id": "small_point_density", "config": {
+        "heights": [100, 1000], "timeout": 3,
+        "certificate_timeout": 180, "exact_candidates": 48,
+    }},
+    {"id": "rea_sort", "config": {
+        "rea_root": "/home/chris/rea", "use_known_points": True,
+    }},
+    {"id": "select_survivors", "config": {"keep": 32, "ranking": "rank_then_rea_route"}},
+    {"id": "integral_seed", "config": {
+        "heights": [10000, 100000], "timeout": 6,
+        "certify_after_search": False,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 180, "max_candidates": 128,
+    }},
+    {"id": "select_survivors", "config": {"keep": 8, "ranking": "rank_then_score"}},
+    {"id": "covering_selmer_branch", "config": {
+        "timeout": 120, "certificate_timeout": 240, "exact_candidates": 128,
+    }},
+    {"id": "mw_growth_loop", "config": {
+        "heights": [10000, 100000], "anchors": 16, "pool_size": 160,
+        "max_rounds": 4, "deep_keep": 8, "timeout": 8,
+        "certificate_timeout": 240, "exact_candidates": 128,
+    }},
+    {"id": "adaptive_ladder", "config": {
+        "bands": [[2, 100], [101, 1000], [1001, 10000]],
+        "keeps": [8, 4, 2], "ranking": "rank_then_score",
+        "charts": 8, "heights": [10000, 100000], "timeout": 10,
+        "certificate_timeout": 240, "exact_candidates": 160,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 240, "max_candidates": 160,
+    }},
+    {"id": "rea_independence_certificate", "config": {
+        "rea_root": "/home/chris/rea", "maximum_points": 32,
+    }},
+    {"id": "rea_height_gram_rank_certificate", "config": {
+        "dmt_root": "/home/chris/dmt-rank-jumps", "maximum_points": 32,
+        "depths": [4, 5, 6, 7, 8, 9],
+    }},
+    {"id": "selmer_bound", "config": {
+        "timeout": 180, "first_limit": 20, "second_limit": 10,
+        "retry_policy": "manual", "retry_timeout": 360,
+    }},
+    {"id": "final_upper", "config": {"timeout": 90}},
+    {"id": "stop_goal"},
+]
+
 _PRESET_DEFS = (
+    ("c2xc8_record_hunt", "C2×C8 Record Hunt", "Channel Family search for a certified rank ≥4: wide parameter screening, exact torsion and upper-bound gates, bounded channel point searches, then coverings and selective high-height work."),
+    ("rea_hunt", "REA Hunt", "Generate candidates, route them by REA relation and shell structure, find exact rational points, then attempt REA height-Gram rank certification and a rigorous upper bound. The relational certificate is diagnostic only."),
+    ("professor_hunt", "Professor Hunt", "Overnight exact-torsion hunt: reserve half the shortlist for compact parameters, check early exact point yield, then deepen the strongest curves through coverings, Mordell–Weil growth, denominator charts, lattice rebuilding, and rigorous rank evidence. Lattice work starts only after independent points exist."),
     ("historical_seed_funnel", "Historical Seed Funnel", "Family-first funnel: recertify preserved exact specialization bundles before heuristic rescoring, then spend bounded deep-search budget only near the rank goal."),
     ("euler_lattice_hunt", "Euler Lattice Hunt", "Family-adapter Euler-factor scan and shortlist rescoring, followed by certified seed/lattice construction and two bounded lattice-chart search passes."),
     ("frontiermath_record_breaker", "FrontierMath Record Breaker", "Target-driven record hunt: maximize exact independent points, stop immediately at the rigorous lower-bound goal, and skip exact-rank upper-bound work."),
@@ -3870,6 +4111,9 @@ _PRESET_DEFS = (
 )
 
 PRESET_TEMPLATE_BY_ID = {
+    "c2xc8_record_hunt": C2XC8_RECORD_HUNT_TEMPLATE,
+    "rea_hunt": REA_HUNT_TEMPLATE,
+    "professor_hunt": PROFESSOR_HUNT_TEMPLATE,
     "genus2_research": [
         "genus2_model_audit",
         "genus2_elliptic_quotient_rank",
@@ -3933,7 +4177,7 @@ def pipeline_catalog_fingerprint():
 
 
 
-def pipeline_preset_options(target_mode):
+def pipeline_preset_options(target_mode, *, plugin_id=None):
     mode = str(target_mode)
     if mode == "genus2_jacobian":
         options = [
@@ -3946,6 +4190,12 @@ def pipeline_preset_options(target_mode):
         return options
     out = []
     for preset_id, label, description in _PRESET_DEFS:
+        if preset_id == "c2xc8_record_hunt" and not (
+            mode == "family" and plugin_id == "c2xc8_channel_search"
+        ):
+            continue
+        if preset_id == "professor_hunt" and mode != "torsion":
+            continue
         if preset_id in {"specialization_trickster", "historical_seed_funnel", "euler_lattice_hunt"} and mode != "family":
             continue
         out.append({
@@ -4058,7 +4308,7 @@ def template_stages(name, target_mode):
         spec = stage_spec(rec["id"])
         if mode not in spec.targets:
             continue
-        if mode != "torsion" and rec["id"] == "exact_torsion":
+        if mode != "torsion" and rec["id"] == "exact_torsion" and name != "c2xc8_record_hunt":
             continue
         if mode == "general" and rec["id"] in {
             "family_baseline", "plugin_geometry", "corpus_filter"

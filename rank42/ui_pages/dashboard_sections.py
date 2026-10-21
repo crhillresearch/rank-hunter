@@ -82,7 +82,9 @@ def _torsion_research_data(db):
 
     for state in states:
         curve_id = int(state["curve_id"])
-        arithmetic_state = arithmetic[curve_id]
+        arithmetic_state = arithmetic.get(curve_id)
+        if arithmetic_state is None:
+            continue
         curve = dict(arithmetic_state.get("curve") or state.get("curve") or {})
         error = str(curve.get("torsion_error") or "").strip()
         if error:
@@ -575,7 +577,9 @@ def _unresolved_data(db):
             continue
         gap = None if upper is None else upper - lower
         curve_id = int(state["curve_id"])
-        arithmetic_state = arithmetic[curve_id]
+        arithmetic_state = arithmetic.get(curve_id)
+        if arithmetic_state is None:
+            continue
         data.append(
             {
                 "curve_id": curve_id,

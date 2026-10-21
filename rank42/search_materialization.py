@@ -10,7 +10,12 @@ import json
 
 from sage.all import QQ, EllipticCurve
 
-from rank42.db import get_curve_by_key, update_curve, upsert_curve
+from rank42.db import (
+    discard_unpromoted_search_curve,
+    get_curve_by_key,
+    update_curve,
+    upsert_curve,
+)
 
 
 def materialize_family_curve(
@@ -59,23 +64,6 @@ def materialize_family_curve(
         **fingerprints,
     )
     return int(curve_id), source, source, existing is None
-
-
-def discard_unpromoted_search_curve(db, curve_id):
-    """Remove one fresh unpromoted curve while preserving durable history rows."""
-    curve_id = int(curve_id)
-    db.execute("UPDATE events SET curve_id=NULL WHERE curve_id=?", (curve_id,))
-    has_reverse = db.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='reverse_engineering_reports'"
-    ).fetchone()
-    if has_reverse is not None:
-        db.execute(
-            "UPDATE reverse_engineering_reports SET curve_id=NULL WHERE curve_id=?",
-            (curve_id,),
-        )
-    db.execute("UPDATE quartic_searches SET curve_id=NULL WHERE curve_id=?", (curve_id,))
-    db.execute("DELETE FROM curves WHERE id=?", (curve_id,))
-    db.commit()
 
 
 __all__ = [

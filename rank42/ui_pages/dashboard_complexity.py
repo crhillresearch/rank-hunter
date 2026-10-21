@@ -204,7 +204,10 @@ def _record_complexity_rows(db):
     for state in states:
         row = dict(state["curve"])
         row["exact_rank"] = int(state["exact_rank"])
-        row["_arithmetic"] = arithmetic[int(state["curve_id"])]
+        arithmetic_state = arithmetic.get(int(state["curve_id"]))
+        if arithmetic_state is None:
+            continue
+        row["_arithmetic"] = arithmetic_state
         by_rank.setdefault(int(state["exact_rank"]), []).append(row)
 
     records = []

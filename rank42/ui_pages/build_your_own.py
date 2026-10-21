@@ -707,6 +707,17 @@ def _bump_stage_revision():
 def _reset_pipeline(mode, template):
     st.session_state["byo_stage_mode"] = mode
     st.session_state["byo_stages"] = template_stages(template, mode)
+    if mode == "family" and template == "c2xc8_record_hunt":
+        st.session_state["byo-goal-family"] = 4
+        st.session_state["byo-retention-family"] = 3
+        current_name = str(st.session_state.get("byo_pipeline_name_input") or "")
+        if not current_name or current_name == "My Family Pipeline":
+            st.session_state["byo_pipeline_name_input"] = "C2×C8 Record Hunt"
+    if mode == "torsion" and template == "professor_hunt":
+        retention_key = f"byo-retention-{mode}"
+        st.session_state[retention_key] = max(
+            1, int(st.session_state.get(retention_key) or 0)
+        )
     st.session_state["byo_loaded_pipeline_id"] = None
     _bump_stage_revision()
 
@@ -831,6 +842,7 @@ def _format_budget_seconds(seconds):
 RANKING_OPTIONS = {
     "rank_then_yield_then_score": "Rigorous rank → exact-point yield → current prime score",
     "rank_then_score": "Rigorous rank → current prime score",
+    "rank_then_rea_route": "Rigorous rank → REA relation route",
     "score": "Current prime score only",
 }
 
@@ -884,11 +896,11 @@ def _render_geometry_search_budget(stage_id, cfg):
     )
 
 
-def _ranking_selector(cfg, *, key):
+def _ranking_selector(cfg, *, key, allow_rea=False):
     current = str(cfg.get("ranking") or "rank_then_yield_then_score")
-    if current not in RANKING_OPTIONS:
+    options = [value for value in RANKING_OPTIONS if allow_rea or value != "rank_then_rea_route"]
+    if current not in options:
         current = "rank_then_yield_then_score"
-    options = list(RANKING_OPTIONS)
     return st.selectbox(
         "Survivor ranking",
         options,
@@ -897,7 +909,7 @@ def _ranking_selector(cfg, *, key):
         key=key,
         help=(
             "This is scheduling only. It does not create rank evidence. "
-            "The score is the latest Multi-Scale Frobenius score when present, otherwise the candidate Nagao score. "
+            "REA route uses the preceding REA Population Sort; other scores use the latest stage score when present, otherwise the candidate score. "
             "Rigorous lower bounds outrank heuristic tie-breakers unless score-only is selected."
         ),
     )
@@ -987,6 +999,28 @@ def _config_editor(rec, index):
             "Survivors", min_value=1, value=int(cfg.get("keep") or 250),
             step=10, key=f"{key}-keep",
         ))
+        if stage_id == "nagao_screen" and isinstance(cfg.get("candidate_generation"), dict):
+            generation = cfg["candidate_generation"]
+            st.caption("Family parameter range for this preset")
+            g1, g2, g3, g4, g5 = st.columns(5)
+            generation["a_min"] = int(g1.number_input(
+                "a min", value=int(generation.get("a_min", -400)), key=f"{key}-a-min",
+            ))
+            generation["a_max"] = int(g2.number_input(
+                "a max", value=int(generation.get("a_max", 400)), key=f"{key}-a-max",
+            ))
+            generation["b_min"] = int(g3.number_input(
+                "b min", min_value=1, value=int(generation.get("b_min", 1)),
+                key=f"{key}-b-min",
+            ))
+            generation["b_max"] = int(g4.number_input(
+                "b max", min_value=1, value=int(generation.get("b_max", 120)),
+                key=f"{key}-b-max",
+            ))
+            generation["top"] = int(g5.number_input(
+                "Take forward", min_value=1, value=int(generation.get("top", 200)),
+                key=f"{key}-top",
+            ))
     elif stage_id == "euler_parameter_scan":
         c1, c2 = st.columns(2)
         cfg["prime_bound"] = int(c1.number_input(
@@ -2970,7 +3004,7 @@ def _config_editor(rec, index):
             key=f"{key}-keep",
         ))
         with c2:
-            cfg["ranking"] = _ranking_selector(cfg, key=f"{key}-ranking")
+            cfg["ranking"] = _ranking_selector(cfg, key=f"{key}-ranking", allow_rea=True)
         st.caption(
             "Fibers not selected here become funnel-pruned: their evidence is preserved, "
             "but later pipeline stages do not spend more compute on them."
@@ -3375,7 +3409,7 @@ def _render_module_row(mode, stages, spec, count, favorites):
         _bump_stage_revision()
         st.rerun()
 
-def _render_stage_palette(mode, stages):
+def _render_stage_palette(mode, stages, selected_plugin=None):
     _module_action_style()
     section_title(
         "Modules",
@@ -3384,12 +3418,18 @@ def _render_stage_palette(mode, stages):
 
     with st.container(border=True, key="byo-modules-preset"):
         preset_col, load_col = st.columns([2.25, 1.1], vertical_alignment="bottom")
-        preset_options = pipeline_preset_options(mode)
+        preset_options = pipeline_preset_options(
+            mode,
+            plugin_id=(selected_plugin.id if selected_plugin is not None else None),
+        )
         preset_labels = [rec["label"] for rec in preset_options]
         template = preset_col.selectbox(
             "Preset",
             preset_labels,
-            key=f"byo-template-select-{mode}",
+            key=(
+                f"byo-template-select-{mode}-"
+                f"{selected_plugin.id if selected_plugin is not None else 'all'}"
+            ),
             label_visibility="collapsed",
         )
         selected_preset = next(
@@ -3686,6 +3726,7 @@ def _launch_pipeline_builder_search(
         "ratpoints_backend": str(
             frozen_run_config.get("ratpoints_backend") or ""
         ),
+        "retention_cleanup_required": True,
     }
     metadata.update(launch_context_snapshot(frozen_run_config))
     metadata.update(lineage["provenance"])
@@ -4093,7 +4134,7 @@ def _render_builder(
         )
     with modules_col:
         with st.container(border=True, key="byo-modules-inset"):
-            _render_stage_palette(mode, stages)
+            _render_stage_palette(mode, stages, selected_plugin)
 
     with st.container(border=True, key="byo-pipeline-settings"):
         _render_settings(
@@ -4959,6 +5000,8 @@ def page(db, ctx):
                 "plugin_id": selected_plugin.id,
                 "variant_id": selected_variant.id,
             }
+            if selected_plugin.id == "c2xc8_channel_search":
+                target["torsion_group"] = "C2 × C8"
 
             compatible_pools = _compatible_family_pools(
                 db, selected_plugin, selected_variant

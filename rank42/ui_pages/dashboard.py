@@ -28,7 +28,7 @@ from rank42.dashboard_snapshot import (
 )
 from rank42.db import connect_existing
 from rank42.feature_hooks import render_feature_hook
-from rank42.torsion import torsion_invariants_from_label
+from rank42.torsion import MAZUR_TORSION_CHOICES, torsion_invariants_from_label
 from rank42.ui_components import region
 from .common import PAGE_ICONS, launch, setting, title
 from .dashboard_charts import render_research_charts
@@ -509,20 +509,20 @@ def _torsion_findings_html(db):
     )
 
 
-def _world_record_html(leader, fetched):
+def _world_record_html(leader, fetched, *, show_title=True, empty_message=None):
+    title_html = '<div class="rh-world-record-title">LEADERBOARD</div>' if show_title else ''
     if leader is None:
         return (
-            '<div class="rh-world-record-card"><div class="rh-world-record-title">LEADERBOARD</div>'
+            '<div class="rh-world-record-card">' + title_html +
             '<div class="rh-world-record-empty">'
-            '<strong>—</strong><span>Sync ICARM to load its top-ranked curve</span></div>'
+            f'<strong>—</strong><span>{html.escape(empty_message or "Sync ICARM to load its top-ranked curve")}</span></div>'
             '</div>'
         )
     rank = int(leader["rank_lower_bound"] or 0)
     source_id = html.escape(str(leader["source_id"]))
     torsion = (external_torsion_label(leader) or "unknown").capitalize()
     return (
-        '<div class="rh-world-record-card">'
-        '<div class="rh-world-record-title">LEADERBOARD</div>'
+        '<div class="rh-world-record-card">' + title_html +
         '<div class="rh-world-record-main">'
         f'<strong>≥{rank}</strong>'
         '<span><span class="rh-world-record-meta-top">'
@@ -546,37 +546,30 @@ def _format_local_sync_time(value):
         return str(value or "—")
 
 
-def _world_record_panel(db, ctx):
+def _sync_icarm_catalog(db, ctx):
+    py = setting(db, "science_python", ctx.detected_science_python())
+    cmd = [py, "-m", "rank42.catalog", "--db", ctx.db_path, "sync", "--source", "icarm"]
+    jid = launch(ctx, db, kind="catalog_sync", label="Sync ICARM catalog", command=cmd)
+    st.toast(f"Started ICARM catalog sync job #{jid}.")
+
+
+def _frontier_leaderboard(db, torsion_group=None):
+    """Return the selected ICARM leader and destination for the hero."""
     status = catalog_status(db, "icarm")
     fetched = _format_local_sync_time(status["fetched_at"] if status is not None else None)
-    leaders = list_external_curves(db, source="icarm", rank_at_least=0, limit=1)
+    torsion_key = (torsion_key_from_factors(torsion_invariants_from_label(torsion_group))
+                   if torsion_group else None)
+    leaders = list_external_curves(
+        db, source="icarm", rank_at_least=0, torsion=torsion_key, limit=1,
+    )
     leader = leaders[0] if leaders else None
-
-    with region("dashboard-world-record", border=True):
-        st.markdown(_world_record_html(leader, fetched), unsafe_allow_html=True)
-        if st.button(
-            "",
-            key="rh-dashboard-world-record-sync",
-            icon=":material/sync:",
-            help="Sync ICARM catalog",
-            type="tertiary",
-            width="content",
-        ):
-            py = setting(db, "science_python", ctx.detected_science_python())
-            cmd = [py, "-m", "rank42.catalog", "--db", ctx.db_path, "sync", "--source", "icarm"]
-            jid = launch(ctx, db, kind="catalog_sync", label="Sync ICARM catalog", command=cmd)
-            st.toast(f"Started ICARM catalog sync job #{jid}.")
-        url = str(leader["source_url"] or "").strip() if leader is not None else ""
-        st.link_button(
-            "",
-            url or "#",
-            key="rh-dashboard-world-record-open",
-            icon=":material/open_in_new:",
-            help="Open this ICARM curve" if url else "No ICARM curve is available yet",
-            type="tertiary",
-            width="content",
-            disabled=not bool(url),
-        )
+    empty_message = ("No ICARM curve recorded for this torsion group"
+                     if torsion_group else None)
+    return _world_record_html(
+        leader, fetched, show_title=False, empty_message=empty_message,
+    ), (
+        str(leader["source_url"] or "").strip() if leader is not None else ""
+    )
 
 
 def _dashboard_page_nav():
@@ -627,58 +620,118 @@ def _dashboard_page_nav():
                 )
 
 
-def _local_frontier_panel(rows, research, db, ctx, genus2_model_count=0):
+def _hero_torsion_label(group):
+    if group in ("Any", "Trivial"):
+        return group
+    return " × ".join(f"Z/{factor}Z" for factor in torsion_invariants_from_label(group))
+
+
+def _local_frontier_panel(rows, research, db, ctx, genus2_model_count=0,
+                          torsion_group=None):
 
     with region("dashboard-local-frontier", border=False):
-        if not rows:
-            st.info("No specialization has a rigorous rank certificate yet.")
-            st.html(_frontier_certification_html(research["certification"]))
-        else:
-            by_rank = {}
-            for row in rows:
-                exact = row["exact_rank"]
-                lower = int(row["rigorous_lower"] or 0)
-                if exact is not None:
-                    rank_value = int(exact)
-                    kind = "exact"
-                elif lower > 0:
-                    rank_value = lower
-                    kind = "lower"
-                else:
-                    continue
+        options = ("Any", *MAZUR_TORSION_CHOICES)
+        by_rank = {}
+        for row in rows:
+            exact = row["exact_rank"]
+            lower = int(row["rigorous_lower"] or 0)
+            if exact is not None:
+                rank_value = int(exact)
+                kind = "exact"
+            elif lower > 0:
+                rank_value = lower
+                kind = "lower"
+            else:
+                continue
 
-                bucket = by_rank.setdefault(
-                    rank_value,
-                    {"exact": 0, "lower": 0, "strongest_exact": None, "strongest_lower": None},
-                )
-                bucket[kind] += 1
-                strongest_key = f"strongest_{kind}"
-                incumbent = bucket[strongest_key]
-                score = (
-                    int(row["independent_points"] or 0),
-                    str(row["updated_at"] or ""),
-                    int(row["id"]),
-                )
-                if incumbent is None or score > incumbent[0]:
-                    bucket[strongest_key] = (score, row)
+            bucket = by_rank.setdefault(
+                rank_value,
+                {"exact": 0, "lower": 0, "strongest_exact": None, "strongest_lower": None},
+            )
+            bucket[kind] += 1
+            strongest_key = f"strongest_{kind}"
+            incumbent = bucket[strongest_key]
+            score = (
+                int(row["independent_points"] or 0),
+                str(row["updated_at"] or ""),
+                int(row["id"]),
+            )
+            if incumbent is None or score > incumbent[0]:
+                bucket[strongest_key] = (score, row)
 
-            best_rank = max(by_rank)
-            best_exact = max((rank for rank, bucket in by_rank.items() if bucket["exact"]), default=None)
-            best_exact_label = str(best_exact) if best_exact is not None else "—"
-            best_kind = "exact" if by_rank[best_rank]["exact"] else "lower"
-            best_row = by_rank[best_rank][f"strongest_{best_kind}"][1]
-            prefix = "=" if best_kind == "exact" else "&ge;"
+        best_rank = max(by_rank, default=None)
+        zero_rank_curve_id = research.get("zero_rank_curve_id")
+        if best_rank is None and zero_rank_curve_id is not None:
+            best_rank = 0
+        best_exact = research["rank"]["best_exact"]
+        best_exact_label = str(best_exact) if best_exact is not None else "—"
+        best_kind = "exact" if best_rank == 0 or (
+            best_rank is not None and by_rank[best_rank]["exact"]
+        ) else "lower"
+        best_row = ({"id": zero_rank_curve_id} if best_rank == 0
+                    else by_rank[best_rank][f"strongest_{best_kind}"][1]
+                    if best_rank is not None else None)
+        prefix = "=" if best_kind == "exact" else "&ge;"
+        empty_curve_label = (
+            "No certified curve yet" if research["rank"]["curve_count"]
+            else "No stored curves in this group"
+        )
+        leaderboard_html, leaderboard_url = _frontier_leaderboard(db, torsion_group)
+        left, right = st.columns([0.82, 1.18], gap="medium", vertical_alignment="top")
+        with left:
+            with st.container(key="rh-dashboard-hero-torsion-row"):
+                chosen = st.menu_button(
+                    _hero_torsion_label(torsion_group) if torsion_group else "Any",
+                    options,
+                    key="rh-dashboard-hero-torsion-menu",
+                    help="Show hero results for one exact rational torsion group",
+                    type="tertiary",
+                    width="content",
+                    format_func=_hero_torsion_label,
+                )
+                if chosen is not None:
+                    st.session_state["rh-dashboard-hero-torsion"] = (
+                        None if chosen == "Any" else chosen
+                    )
+                    st.rerun()
             st.html(
-                '<section class="rh-frontier-shell rh-frontier-presentation" aria-label="Research Frontier">'
-                '<div class="rh-frontier-feature">'
-                '<div class="rh-frontier-best"><span class="rh-frontier-eyebrow">BEST CERTIFIED RANK</span>'
-                f'<div class="rh-frontier-best-value"><span>{prefix}</span><strong>{best_rank}</strong></div>'
-                + _frontier_curve_art_html(db, int(best_row["id"]))
-                + f'<div class="rh-frontier-best-exact"><span>BEST EXACT RANK</span><strong>{best_exact_label}</strong></div></div>'
-                '<div class="rh-frontier-stat-column">'
+                '<section class="rh-frontier-shell rh-frontier-presentation rh-frontier-best" aria-label="Research Frontier">'
+                '<div class="rh-frontier-best-top">'
+                '<div class="rh-frontier-best-score"><span class="rh-frontier-eyebrow">BEST CERTIFIED RANK</span>'
+                f'<div class="rh-frontier-best-value"><span>{prefix if best_row else ""}</span><strong>{best_rank if best_rank is not None else "—"}</strong></div>'
+                + '</div>'
+                + '<div class="rh-frontier-curve-slot">'
+                + (_frontier_curve_art_html(db, int(best_row["id"])) if best_row
+                   else f'<span class="rh-frontier-empty-curve">{empty_curve_label}</span>')
+                + '</div>'
+                + '</div>'
+                + f'<div class="rh-frontier-best-exact"><span>BEST EXACT RANK</span><strong>{best_exact_label}</strong></div>'
+                + '</section>'
+            )
+            with st.container(key="rh-dashboard-hero-leaderboard"):
+                record_col, sync_col, open_col = st.columns(
+                    [5, 0.55, 0.55], gap="small", vertical_alignment="center",
+                )
+                with record_col:
+                    st.html('<div class="rh-frontier-leaderboard">' + leaderboard_html + '</div>')
+                with sync_col:
+                    if st.button(
+                        "", key="rh-dashboard-hero-leader-sync", icon=":material/sync:",
+                        help="Sync ICARM catalog", type="tertiary", width="content",
+                    ):
+                        _sync_icarm_catalog(db, ctx)
+                with open_col:
+                    st.link_button(
+                        "", leaderboard_url or "#", key="rh-dashboard-hero-leader-open",
+                        icon=":material/open_in_new:",
+                        help="Open this ICARM curve" if leaderboard_url else "No ICARM curve is available yet",
+                        type="tertiary", width="content", disabled=not bool(leaderboard_url),
+                    )
+        with right:
+            st.html(
+                '<section class="rh-frontier-shell rh-frontier-presentation rh-frontier-stat-column" aria-label="Research statistics">'
                 f'<div class="rh-frontier-stats">{_frontier_stats_html(research, genus2_model_count)}</div>'
                 + _frontier_certification_html(research["certification"])
-                + '</div></div>'
                 + '</section>'
             )
 
@@ -1214,7 +1267,10 @@ def _frontier_stats_html(research, genus2_model_count=0):
 def _render_dashboard(db, ctx):
     """Render the complete Dashboard as one continuous research workspace."""
     diagnostics_result = st.session_state.get("diagnostics_result_cache")
-    research = dashboard_research_snapshot(db)
+    torsion_group = st.session_state.get("rh-dashboard-hero-torsion")
+    if torsion_group not in MAZUR_TORSION_CHOICES:
+        torsion_group = None
+    research = dashboard_research_snapshot(db, hero_torsion=torsion_group)
     genus2 = _genus2_census(db)
     operations = dashboard_operations_snapshot(
         db,
@@ -1232,11 +1288,12 @@ def _render_dashboard(db, ctx):
     )
 
     _local_frontier_panel(
-        research["frontier"],
-        research,
+        (research["hero"] if torsion_group else research)["frontier"],
+        research["hero"] if torsion_group else research,
         db,
         ctx,
-        genus2["count"],
+        research["hero"]["genus2_model_count"] if torsion_group else genus2["count"],
+        torsion_group=torsion_group,
     )
     _genus_census_panel(db, research, genus2)
     _torsion_findings_panel(db)
@@ -1244,7 +1301,6 @@ def _render_dashboard(db, ctx):
     with left:
         render_research_charts(db)
     with right:
-        _world_record_panel(db, ctx)
         _attention_panel(ctx.db_path, attention)
         _operations_state_panel(operations)
         render_plugins_panel(db, ctx, health=operations["plugins"])

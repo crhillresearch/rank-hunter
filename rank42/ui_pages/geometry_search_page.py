@@ -234,6 +234,7 @@ def _launch(db, ctx, campaign, label=None):
         command=cmd,
         metadata={
             "search_campaign_id": int(campaign["id"]),
+            "retention_cleanup_required": True,
             "search_campaign_kind": "geometry",
             "search_mode": str(campaign["search_mode"]),
             "plugin_id": str(campaign["plugin_id"]),

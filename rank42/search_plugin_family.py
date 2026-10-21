@@ -77,7 +77,21 @@ def run_plugin_family_search(
             "reason": "family_search_capability_missing",
             "rank_growth": 0,
         }
-    if source_pool_id is None or source_candidate_id is None:
+    if source_candidate_id is None:
+        return {
+            "scheduler_tier": "plugin-family-search",
+            "status": "error",
+            "reason": "stored_pool_candidate_identity_missing",
+            "rank_growth": 0,
+        }
+    if source_pool_id is None:
+        source_row = db.execute(
+            "SELECT pool_id FROM candidates WHERE id=?",
+            (int(source_candidate_id),),
+        ).fetchone()
+        if source_row is not None:
+            source_pool_id = int(source_row["pool_id"])
+    if source_pool_id is None:
         return {
             "scheduler_tier": "plugin-family-search",
             "status": "error",

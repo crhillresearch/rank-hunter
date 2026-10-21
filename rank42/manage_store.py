@@ -821,6 +821,7 @@ _RUNTIME_JOB_METADATA_KEYS = {
     "resumed_as_job_id",
     "pause_requested",
     "paused_at",
+    "retention_finalized",
     "schedule_id",
 }
 

@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from rank42.db import connect_existing
+from rank42.pipeline_retention import finalize_search_job_retention
 from rank42.ui_store import (
     finalize_batch_cursor,
     finalize_pool_search,
@@ -96,6 +97,7 @@ def main():
         finalize_batch_cursor(db, args.job_id)
         finalize_pool_search(db, args.job_id)
         finalize_queue_for_job(db, args.job_id, final_status)
+        finalize_search_job_retention(db, args.job_id)
     except BaseException:
         # If the UI intentionally stopped the process group it already changed
         # status to 'stopping'.  Avoid overwriting that with an invented failure.
@@ -109,6 +111,7 @@ def main():
             finalize_batch_cursor(db, args.job_id)
             finalize_pool_search(db, args.job_id)
             finalize_queue_for_job(db, args.job_id, final_status)
+            finalize_search_job_retention(db, args.job_id)
         finally:
             raise
     finally:

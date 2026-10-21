@@ -325,7 +325,11 @@ def _exceptional_curve_rows(db, *, pool_id=None):
     data = []
     for curve_id in sorted(eligible_ids):
         state = states[curve_id]
-        arithmetic_state = arithmetic[curve_id]
+        arithmetic_state = arithmetic.get(curve_id)
+        if arithmetic_state is None:
+            # A concurrent retention cleanup can remove the curve between the
+            # research-state and arithmetic-state reads.
+            continue
         complexity = _log_discriminant(arithmetic_state["discriminant"])
         if complexity is None:
             continue
@@ -377,7 +381,9 @@ def _conductor_frontier_rows(db):
     rows = []
     for curve_id in eligible:
         state = states[curve_id]
-        arithmetic_state = arithmetic[curve_id]
+        arithmetic_state = arithmetic.get(curve_id)
+        if arithmetic_state is None:
+            continue
         if "conductor" in set(arithmetic_state.get("conflicts") or []):
             continue
         conductor = arithmetic_state.get("conductor")
@@ -411,7 +417,10 @@ def _torsion_rank_frontier_rows(db):
     groups = {}
     for curve_id in eligible:
         state = states[curve_id]
-        torsion = (arithmetic[curve_id].get("torsion") or {}).get("label")
+        arithmetic_state = arithmetic.get(curve_id)
+        if arithmetic_state is None:
+            continue
+        torsion = (arithmetic_state.get("torsion") or {}).get("label")
         if not torsion:
             continue
         label = "Trivial" if str(torsion).strip().lower() == "trivial" else str(torsion)

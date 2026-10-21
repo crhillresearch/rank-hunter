@@ -1373,6 +1373,7 @@ def prepare_pipeline_launch(
             str(merged_run_config["ratpoints_backend"]),
         )
     metadata.update(launch_context_snapshot(merged_run_config))
+    metadata["retention_cleanup_required"] = True
 
     metadata = normalize_launch_metadata(
         metadata,

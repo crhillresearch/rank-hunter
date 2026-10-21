@@ -2,6 +2,54 @@
 
 All notable changes to Rank Hunter are documented here.
 
+## [0.10.1] — Unreleased
+
+### Added
+
+- Added **Professor Hunt**, an overnight torsion-search preset that starts with
+  a broad candidate pool and spends deeper point, covering, and lattice work
+  on the strongest fibers. Lattice searches wait until independent points exist.
+- Added **REA Hunt**, which takes generated candidates through relational
+  screening, exact point searches, and height-Gram rank certification. The
+  relational certificate remains a research signal, not a rank proof.
+- Added **Euler Lattice Hunt** for family adapters that provide Euler-factor
+  parameter scans and lattice-chart searches. Those adapter hooks are required;
+  the preset does not invent them for every family.
+- Added **C2×C8 Record Hunt** for the separately installed C2 × C8 Channel
+  Search family plugin. It widens the parameter scan, checks exact torsion,
+  uses rigorous upper bounds to rule out rank 4, and saves deeper searches for
+  surviving fibers.
+- Added **FrontierMath Record Breaker**, a target-driven Pipeline preset that
+  stops when it reaches a certified rank lower-bound goal.
+
+### Changed
+
+- Tightened the Dashboard again: the genus comparison is now the compact
+  **Rank Landscape** below the hero, and the extra record blocks are gone from
+  Torsion Groups. The ICARM leader now sits in the hero; its old sidebar card
+  has been removed.
+- Made the Dashboard hero torsion-selectable. Best certified and exact
+  ranks, the curve drawing, research counts, rank evidence, and the ICARM leader
+  now follow the selected group. **Any** keeps the full local view.
+- Pencils can now be constructed from a retained curve and sent into a search
+  from the Pencils registry.
+- Made Pipeline retention floors apply when a search job finishes or stops.
+  Run history and pre-existing curves stay in place; curves created by that
+  run below its floor can be removed from the curve inventory.
+- Kept the C2 × C8 channel search separate from the existing Mazur torsion
+  provider. Its point hits go through the usual exact verification and rank
+  certification before they affect a curve's proven rank.
+
+### Fixed
+
+- Stopped the Pipeline's quartic rank-growth loop from starting on a curve
+  whose rigorous lower and upper bounds already prove its exact rank. New
+  quartic coordinates on such a curve cannot increase its rank.
+- Fixed Pipeline Family Search's generated-pool handoff so its adapter can
+  search candidates created by the same Pipeline run.
+- Fixed the Dashboard conductor chart failing when arithmetic records for a
+  curve were missing.
+
 ## [0.10.0] — Unreleased
 
 ### Added
@@ -14,8 +62,10 @@ All notable changes to Rank Hunter are documented here.
   **Rank Lab** for certifying points, proving rank, or searching a group of
   promising curves.
 - Added **Tools** with a compact command bar for the existing proof and
-  discovery workbenches. New core Twists and Isogenies tools bring the former
-  Twist & Isogeny Lab research views into the main app.
+  discovery workbenches, plus keyboard search. Points, Point Hunt, Quartics,
+  Lattices, and Pencils now sit alongside the proof tools. New core Twists and
+  Isogenies tools bring the former Twist & Isogeny Lab research views into the
+  main app.
 - Added **Sections** to search for exact rational-function points on a family,
   and **Base Change** to pull a family through a rational parameter map and
   search the result. Both save reproducible experiment records; a new section
@@ -25,17 +75,21 @@ All notable changes to Rank Hunter are documented here.
 - Added Pipeline modules for classical Mestre–Nagao scoring, REA sorting and
   height-Gram rank certificates, genus-two Jacobian work, and lattice-based
   searches. Heuristic scores remain separate from rank proofs.
+- Added a Z/10Z search path to the Mazur torsion families.
 
 ### Changed
 
-- Reworked the Dashboard around Research Frontier, torsion coverage, a compact
-  Genus Census, and a larger Research Landscape. Operations moved to the
-  sidebar. The hero now shows the best exact rank beneath the best certified
-  rank, and Axiom's grid background fades behind the main figures.
+- Reworked the Dashboard around Research Frontier, torsion groups, Genus
+  Census, and Research Landscape. Operations moved to the sidebar. The hero
+  puts rank evidence beneath its curve stats, and Axiom's grid fades behind
+  the main figures.
 - Redesigned Curves' **Hall of Fame** as a high-score page with the best three
   distinct ranks, torsion-group records, and a large curve illustration.
 - Grouped Pipelines under Search and made its name and presets follow the
   selected target type, including separate genus-two modules.
+- Added a compact Dashboard page menu and kept the final Analysis navigation
+  focused on Casebook, Rank Lab, and Tools. The specialist workbenches remain
+  available through Tools without crowding the sidebar.
 - Simplified the Descent workbench and the Models inventory so researchers can
   start from a curve or model and see the next useful action.
 - Put active Job controls above the raw log. The log has copy and full-screen
@@ -50,6 +104,8 @@ All notable changes to Rank Hunter are documented here.
 - Fixed the Exceptional Curve Radar selection so changing its dropdown updates
   the chart.
 - Fixed the Pencils overview crash and Geometry import and navigation errors.
+- Fixed the Twists-to-Pipelines handoff so its quadratic-twist stage and
+  settings reach the launched Pipeline.
 
 ## [0.9.2] — 2026-10-08
 

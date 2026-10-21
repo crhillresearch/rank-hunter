@@ -8,6 +8,7 @@ exact independence/certificate paths used elsewhere in core.
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 import json
 import math
 import subprocess
@@ -357,6 +358,25 @@ def _family_candidates(
 
     bounds, keeps, score_method = _screening_vectors(stages)
     defaults = _family_candidate_defaults(plugin, variant)
+    screen = next(
+        (rec["config"] for rec in _candidate_stage_records(stages)
+         if rec["id"] == "nagao_screen"),
+        {},
+    )
+    screen_generation = screen.get("candidate_generation") or {}
+    if not isinstance(screen_generation, dict):
+        raise ValueError("Nagao Screen candidate_generation must be an object")
+    generation_keys = {
+        "a_min", "a_max", "b_min", "b_max", "top", "engine",
+        "sample_count", "sample_seed",
+    }
+    unknown_generation_keys = set(screen_generation) - generation_keys
+    if unknown_generation_keys:
+        raise ValueError(
+            "unsupported Nagao Screen candidate-generation settings: "
+            + ", ".join(sorted(unknown_generation_keys))
+        )
+    defaults.update(screen_generation)
     generation_overrides = dict(target.get("candidate_generation") or {})
     defaults.update(generation_overrides)
     score_method = str(generation_overrides.get("score_method") or score_method)
@@ -446,6 +466,12 @@ def _family_candidates(
             "--top",
             str(top),
         ]
+        if float(screen.get("compact_share") or 0) > 0:
+            command += [
+                "--compact-share", str(float(screen["compact_share"])),
+                "--compact-a-abs", str(int(screen.get("compact_a_abs") or 100)),
+                "--compact-b-max", str(int(screen.get("compact_b_max") or 40)),
+            ]
         chart_id = str(defaults.get("chart_id") or "").strip()
         if chart_id:
             command += ["--chart", chart_id]
@@ -3113,7 +3139,7 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
                 "timeout": timeout,
                 "error": str(exc),
                 "torsion_known": False,
-            }, None, False
+            }, ("inconclusive" if target.get("torsion_group") is not None else None), False
         except TorsionFailure as exc:
             return {
                 "status": "inconclusive",
@@ -3121,7 +3147,7 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
                 "timeout": timeout,
                 "error": str(exc),
                 "torsion_known": False,
-            }, None, False
+            }, ("inconclusive" if target.get("torsion_group") is not None else None), False
 
         # Torsion-target Family runs and single-curve Target runs use the same
         # hard proof boundary. A declared target group is authoritative only
@@ -4099,6 +4125,20 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
         return _safe(result), None, False
 
     if stage_id == "mw_growth_loop":
+        rank_state = _snapshot(db, curve_id)
+        if (
+            not rank_state["rank_inconsistent"]
+            and rank_state["rigorous_upper"] is not None
+            and int(rank_state["rigorous_upper"]) == int(rank_state["rigorous_lower"])
+        ):
+            return {
+                "status": "skipped",
+                "reason": "exact_rank_already_established",
+                "rigorous_lower": rank_state["rigorous_lower"],
+                "rigorous_upper": rank_state["rigorous_upper"],
+                "exact_rank": rank_state["exact_rank"],
+                "rank_growth": 0,
+            }, None, False
         local_cfg = _prior_stage_config(
             run, stage_index, "local_solubility_sieve"
         )
@@ -4375,6 +4415,20 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
             db, curve_id, context["E"], witness_basis=True
         )
         lower = int(entry_state["rigorous_lower"])
+        upper = entry_state.get("rigorous_upper")
+        if (
+            not entry_state["rank_inconsistent"]
+            and upper is not None
+            and int(upper) < int(run_config.get("target_rank") or 1)
+        ):
+            return {
+                "status": "skipped",
+                "reason": "rigorous_upper_below_record_goal",
+                "rigorous_lower": lower,
+                "rigorous_upper": upper,
+                "minimum_rank": minimum_rank,
+                "minimum_rank_mode": threshold_mode,
+            }, None, False
         if lower < minimum_rank:
             return {
                 "status": "skipped",
@@ -4763,7 +4817,16 @@ def _rank_population_rows(db, rows, ranking):
         score = _pipeline_score(row)
         lower = int(row["rigorous_lower"] or 0)
         exact_point_inventory = _exact_point_inventory(db, row)
-        if ranking == "score":
+        if ranking == "rank_then_rea_route":
+            rea_rank = None
+            for entry in _stage_results(row).values():
+                if not isinstance(entry, dict) or entry.get("stage_id") != "rea_sort":
+                    continue
+                result = entry.get("result")
+                if isinstance(result, dict) and result.get("population_rank") is not None:
+                    rea_rank = int(result["population_rank"])
+            key = (-lower, rea_rank is None, rea_rank or 10**18, int(row["id"]))
+        elif ranking == "score":
             key = (-score, -lower, -exact_point_inventory, int(row["id"]))
         elif ranking == "rank_then_score":
             key = (-lower, -score, -exact_point_inventory, int(row["id"]))
@@ -5000,10 +5063,14 @@ def _materialize_population_context(db, *, run, item, cache):
         )
     snap = _snapshot(db, curve_id)
     if row is not None:
+        provenance = json.loads(row["score_provenance_json"] or "{}")
+        if created:
+            provenance["created_by_pipeline_run"] = int(run["id"])
         update_pipeline_candidate(
             db,
             int(row["id"]),
             curve_id=int(curve_id),
+            score_provenance_json=provenance,
             status="running",
             rigorous_lower=snap["rigorous_lower"],
             rigorous_upper=snap["rigorous_upper"],
@@ -5017,7 +5084,7 @@ def _materialize_population_context(db, *, run, item, cache):
     return context
 
 
-def _apply_builder_retention(db, *, curve_id, created, run_config):
+def _apply_builder_retention(db, *, curve_id, created, run_config, run_id):
     """Apply Builder inventory retention to one run-created curve.
 
     Pipeline candidate/run history is durable even if the fresh curve is not
@@ -5030,8 +5097,14 @@ def _apply_builder_retention(db, *, curve_id, created, run_config):
     if floor > 0:
         if int(snap["rigorous_lower"] or 0) >= floor:
             return False
-        _discard_unpromoted_auto_curve(db, int(curve_id))
-        return True
+        started = db.execute(
+            "SELECT started_at FROM search_pipeline_runs WHERE id=?", (int(run_id),)
+        ).fetchone()
+        return bool(_discard_unpromoted_auto_curve(
+            db, int(curve_id),
+            created_not_before=started["started_at"] if started else None,
+            retention_floor=floor,
+        ))
 
     if int(snap["rigorous_lower"] or 0) > 0:
         return False
@@ -5060,6 +5133,7 @@ def _cleanup_population_contexts(db, *, run, run_config, cache):
             curve_id=curve_id,
             created=bool(group["created"]),
             run_config=run_config,
+            run_id=run["id"],
         )
         if not discarded:
             continue
@@ -5515,7 +5589,26 @@ def _select_survivors_population(
     keep = max(1, int(config.get("keep") or 10))
     ranking = str(config.get("ranking") or "rank_then_yield_then_score")
     ranked = _rank_population_rows(db, rows, ranking)
-    selected_ids = {int(row["id"]) for row, _yield in ranked[:keep]}
+    compact_share = float(config.get("compact_share") or 0)
+    compact_quota = min(keep, max(1, round(keep * compact_share))) if compact_share > 0 else 0
+    compact_a_abs = max(1, int(config.get("compact_a_abs") or 100))
+    compact_b_max = max(1, int(config.get("compact_b_max") or 40))
+    selected_ids = set()
+    if compact_quota:
+        for row, _yield in ranked:
+            try:
+                parameter = Fraction(str(row["parameter"]))
+            except (ValueError, ZeroDivisionError):
+                continue
+            if abs(parameter.numerator) <= compact_a_abs and parameter.denominator <= compact_b_max:
+                selected_ids.add(int(row["id"]))
+                if len(selected_ids) >= compact_quota:
+                    break
+    compact_selected = len(selected_ids)
+    for row, _yield in ranked:
+        if len(selected_ids) >= keep:
+            break
+        selected_ids.add(int(row["id"]))
     rank_by_id = {
         int(row["id"]): position
         for position, (row, _yield) in enumerate(ranked, 1)
@@ -5534,6 +5627,8 @@ def _select_survivors_population(
             "selection_rank": rank_by_id[int(row["id"])],
             "keep": keep,
             "ranking": ranking,
+            "compact_quota": compact_quota,
+            "compact_selected": compact_selected,
             "rigorous_lower": int(row["rigorous_lower"] or 0),
             "exact_point_inventory": int(inventory_by_id[int(row["id"])]),
             "score": _pipeline_score(row),
@@ -6540,6 +6635,13 @@ def _process_candidate(
     existing = get_pipeline_candidate(
         db, run["id"], provider_key, parameter
     )
+    if existing is not None:
+        score_provenance = {
+            **json.loads(existing["score_provenance_json"] or "{}"),
+            **score_provenance,
+        }
+    if created:
+        score_provenance["created_by_pipeline_run"] = int(run["id"])
     if existing is not None and str(existing["status"]) in {
         "completed", "filtered", "constraint_filtered", "torsion_mismatch",
         "goal_filtered", "funnel_pruned"
@@ -6737,6 +6839,7 @@ def _process_candidate(
         curve_id=int(curve_id),
         created=bool(created),
         run_config=run_config,
+        run_id=run["id"],
     ):
         db.execute(
             """UPDATE search_pipeline_candidates
@@ -7060,6 +7163,12 @@ def main():
     print(
         "proof boundary = heuristic stages schedule work only; rigorous rank "
         "promotion requires Rank Hunter exact evidence",
+        flush=True,
+    )
+    print(
+        f"retention floor = rigorous rank >= {max(0, int(run_config.get('retention_floor') or 0))}"
+        if run_config.get("retention_floor")
+        else "retention floor = default promotion policy",
         flush=True,
     )
 

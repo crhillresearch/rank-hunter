@@ -1943,6 +1943,17 @@ def _render_curve_actions(db, ctx, row):
             st.session_state["icarm_curve_id"] = int(row["id"])
             st.session_state["rh_page"] = "ICARM Submit"
             st.rerun()
+        if st.button(
+            "Make a pencil from this curve",
+            width="stretch",
+            disabled=not bool(row["a_invariants_json"]),
+            key=f"curve-make-pencil-{row['id']}",
+        ):
+            st.session_state["curves_selected_id"] = int(row["id"])
+            st.session_state["pencils-create-curve-id"] = int(row["id"])
+            st.session_state["tools_selection"] = "Pencils"
+            st.session_state["rh_page"] = "Tools"
+            st.rerun()
 
     render_feature_hook(
         db,

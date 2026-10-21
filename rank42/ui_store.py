@@ -1341,6 +1341,21 @@ def reconcile_jobs(db):
             if fresh is not None:
                 finalize_queue_for_job(db, row["id"], fresh["status"])
 
+    # Stop/force-stop can kill the outer job runner before its finalizer runs.
+    # Reconcile retention after the PID is gone so no scientific child can
+    # recreate a below-floor curve during cleanup.
+    from rank42.pipeline_retention import finalize_search_job_retention
+
+    terminal = db.execute(
+        """SELECT id,pid FROM ui_jobs
+           WHERE status IN ('succeeded','failed','interrupted','stopped','killed','cancelled')
+             AND metadata_json LIKE '%retention_cleanup_required%'
+             AND metadata_json NOT LIKE '%retention_finalized%'"""
+    ).fetchall()
+    for row in terminal:
+        if not row["pid"] or not process_alive(row["pid"]):
+            finalize_search_job_retention(db, int(row["id"]))
+
 
 
 def finalize_batch_cursor(db, job_id):

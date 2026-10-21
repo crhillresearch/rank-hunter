@@ -166,7 +166,112 @@ def _campaign_snapshot(db):
     }
 
 
-def dashboard_research_snapshot(db):
+def _torsion_hero_snapshot(db, states, torsion_group):
+    """Reduce one exact-torsion slice for the Dashboard hero."""
+    scoped = [state for state in states
+              if state["curve"].get("torsion_label") == torsion_group]
+    valid_ids = {int(state["curve_id"]) for state in scoped
+                 if not state["rank_inconsistent"]}
+    point_count = int(db.execute(
+        """SELECT COUNT(*) FROM points p JOIN curves c ON c.id=p.curve_id
+           WHERE c.torsion_label=?""", (torsion_group,)
+    ).fetchone()[0])
+    independent_point_count = sum(
+        min(int(row["witness_count"]), int(row["certified_count"]))
+        for row in db.execute("""
+            SELECT p.curve_id, COUNT(*) AS witness_count, cert.certified_count
+            FROM points p JOIN (
+                SELECT curve_id, MAX(rigorous_lower) AS certified_count
+                FROM rank_evidence
+                WHERE rigorous=1 AND status='completed'
+                  AND evidence_type='certified_subgroup'
+                  AND COALESCE(assumptions_json,'[]')='[]'
+                GROUP BY curve_id
+            ) cert ON cert.curve_id=p.curve_id
+            JOIN curves c ON c.id=p.curve_id
+            WHERE p.exact_verified=1 AND p.rigorous_independent=1
+              AND c.torsion_label=?
+            GROUP BY p.curve_id
+        """, (torsion_group,))
+        if int(row["curve_id"]) in valid_ids
+    )
+    unresolved = [state for state in scoped
+                  if not state["rank_inconsistent"] and state["exact_rank"] is None
+                  and int(state["specialization_rigorous_lower"] or 0) > 0]
+    frontier = dashboard_frontier_rows(db, states=scoped)
+    zero_rank_state = max(
+        (state for state in scoped if not state["rank_inconsistent"]
+         and state["exact_rank"] == 0),
+        key=lambda state: (str(state["curve"].get("updated_at") or ""),
+                           int(state["curve_id"])),
+        default=None,
+    )
+    best_rank = max((int(row["rigorous_lower"]) for row in frontier), default=None)
+    best_ids = [int(row["id"]) for row in frontier
+                if int(row["rigorous_lower"]) == best_rank]
+    if best_rank is None and zero_rank_state is not None:
+        best_rank = 0
+        best_ids = [int(state["curve_id"]) for state in scoped
+                    if not state["rank_inconsistent"] and state["exact_rank"] == 0]
+    arithmetic = curve_arithmetic_state_map(db, best_ids)
+    known_conductors = [value for value in arithmetic.values()
+                        if value["conductor"] is not None and value["conductor"] > 0
+                        and "conductor" not in value["conflicts"]]
+    smallest = min(known_conductors,
+                   key=lambda value: (value["conductor"], value["curve_id"]),
+                   default=None)
+    pencil_available = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pencils'"
+    ).fetchone() is not None
+    pencils = {"registered": 0, "explored": 0, "available": pencil_available}
+    if pencil_available:
+        pencil_row = db.execute("""
+            SELECT COUNT(DISTINCT p.id), COUNT(DISTINCT CASE WHEN p.status='explored' THEN p.id END)
+            FROM pencils p JOIN pencil_curves pc ON pc.pencil_id=p.id
+            JOIN curves c ON c.id=pc.curve_id WHERE c.torsion_label=?
+        """, (torsion_group,)).fetchone()
+        pencils.update(registered=int(pencil_row[0]), explored=int(pencil_row[1]))
+    models_available = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='genus2_models'"
+    ).fetchone() is not None
+    model_count = 0
+    if models_available:
+        model_count = int(db.execute("""
+            SELECT COUNT(*) FROM genus2_models m
+            JOIN curves c ON c.id=m.source_curve_id WHERE c.torsion_label=?
+        """, (torsion_group,)).fetchone()[0])
+    return {
+        "torsion_group": torsion_group,
+        "rank": dashboard_rank_summary(db, states=scoped),
+        "certification": dashboard_rank_certification(db, states=scoped),
+        "frontier": frontier,
+        "zero_rank_curve_id": (int(zero_rank_state["curve_id"])
+                               if zero_rank_state else None),
+        "point_count": point_count,
+        "independent_point_count": independent_point_count,
+        "pencils": pencils,
+        "genus2_model_count": model_count,
+        "best_rank_conductor": {
+            "rank": best_rank,
+            "curve_id": smallest["curve_id"] if smallest else None,
+            "log_n": smallest["log_conductor"] if smallest else None,
+            "known_count": len(known_conductors),
+            "curve_count": len(best_ids),
+        },
+        "rank_resolution": {
+            "unresolved_count": len(unresolved),
+            "bounded_count": sum(state["rigorous_upper"] is not None and
+                                 int(state["rigorous_upper"]) >
+                                 int(state["specialization_rigorous_lower"])
+                                 for state in unresolved),
+            "without_upper_count": sum(state["rigorous_upper"] is None
+                                       for state in unresolved),
+        },
+        "rank_jump": biggest_rank_jump(db, scoped),
+    }
+
+
+def dashboard_research_snapshot(db, *, hero_torsion=None):
     """Return authoritative Dashboard research state with one rank reduction pass."""
     states = list_curve_research_states(db)
     point_count = int(
@@ -234,7 +339,7 @@ def dashboard_research_snapshot(db):
         "known_count": len(known_conductors),
         "curve_count": len(best_ids),
     }
-    return {
+    snapshot = {
         "pencils": pencil_summary(db),
         "rank": dashboard_rank_summary(db, states=states),
         "certification": dashboard_rank_certification(db, states=states),
@@ -251,6 +356,9 @@ def dashboard_research_snapshot(db):
         "independent_point_count": independent_point_count,
         "searched_candidates": searched_candidates,
     }
+    if hero_torsion is not None:
+        snapshot["hero"] = _torsion_hero_snapshot(db, states, hero_torsion)
+    return snapshot
 
 
 def dashboard_overview_snapshot(db):
