@@ -39,7 +39,11 @@ def q_isomorphism_signature(E):
     under integral minimal-model coordinate changes. This signature narrows
     candidate rows but is never used by itself to prove identity.
     """
-    Em = _minimal_curve(E)
+    return _signature_from_minimal_curve(_minimal_curve(E))
+
+
+def _signature_from_minimal_curve(Em):
+    """Build the lookup signature when the caller already has a minimal model."""
     payload = {
         "c4": str(QQ(Em.c4())),
         "c6": str(QQ(Em.c6())),
@@ -73,16 +77,17 @@ def _exact_q_isomorphic(E, other):
         return False
 
 
-def find_q_isomorphic_curve(db, E):
+def find_q_isomorphic_curve(db, E, *, minimal_curve=None):
     """Find an existing stored curve exactly Q-isomorphic to E.
 
     Canonical rows are checked first by deterministic signature key. Legacy
     family/general rows are then scanned with the exact signature as prefilter.
     Every reuse is confirmed by Sage's exact is_isomorphic() over QQ.
     """
-    Em = _minimal_curve(E)
-    identity = q_isomorphism_signature(Em)
+    Em = minimal_curve if minimal_curve is not None else _minimal_curve(E)
+    identity = _signature_from_minimal_curve(Em)
     signature = identity["signature_sha256"]
+    target_j = Em.j_invariant()
     canonical = get_curve_by_key(db, CANONICAL_FAMILY, f"qiso:{signature}")
     if canonical is not None:
         stored = _stored_curve_from_row(canonical)
@@ -105,6 +110,11 @@ def find_q_isomorphic_curve(db, E):
         if stored is None:
             continue
         try:
+            # Q-isomorphic curves have the same exact j-invariant. Comparing
+            # it first avoids factoring thousands of unrelated discriminants
+            # merely to form their global minimal models.
+            if stored.j_invariant() != target_j:
+                continue
             stored_identity = q_isomorphism_signature(stored)
         except Exception:
             continue
@@ -129,7 +139,7 @@ def find_q_isomorphic_curve(db, E):
 def get_or_create_canonical_curve(db, E, *, status="pipeline_derived"):
     """Return one scientific curve row for the exact Q-isomorphism class."""
     Em = _minimal_curve(E)
-    existing, identity = find_q_isomorphic_curve(db, Em)
+    existing, identity = find_q_isomorphic_curve(db, Em, minimal_curve=Em)
     if existing is not None:
         return {
             "curve_id": int(existing["id"]),

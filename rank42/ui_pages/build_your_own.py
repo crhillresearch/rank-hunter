@@ -4556,6 +4556,68 @@ def _switch_builder_view(view):
     ) + 1
 
 
+def _apply_pending_twist_handoff(db):
+    """Turn a Twists selection into an editable curve-mode pipeline draft."""
+    pending_hash = st.session_state.pop("byo_pending_twist_handoff", None)
+    if not pending_hash:
+        return False
+    handoff = get_research_handoff(st.session_state)
+    if not handoff or handoff["selection_hash"] != pending_hash:
+        return False
+    selection = handoff.get("selection") or {}
+    source = selection.get("source_curve") or {}
+    try:
+        source_id = int(source.get("curve_id"))
+    except (TypeError, ValueError):
+        st.session_state["byo_twist_handoff_error"] = "The twist handoff has no source curve."
+        return False
+    if source_id <= 0 or db.execute(
+        "SELECT 1 FROM curves WHERE id = ?", (source_id,)
+    ).fetchone() is None:
+        st.session_state["byo_twist_handoff_error"] = "The source curve is no longer in the database."
+        return False
+
+    values = []
+    for item in selection.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            value = int(item.get("d"))
+        except (TypeError, ValueError):
+            continue
+        if value and value not in values:
+            values.append(value)
+    if not values:
+        st.session_state["byo_twist_handoff_error"] = "No twist squareclasses were selected."
+        return False
+
+    twist_values = [value for value in values if value != 1]
+    if not twist_values:
+        st.session_state["byo_twist_handoff_error"] = (
+            "Only d=1 was selected. Choose another squareclass on Twists to create a sweep."
+        )
+        return False
+    _clear_loaded_pipeline("curve")
+    st.session_state["byo_builder_state_version"] = 2
+    st.session_state["byo-target-mode"] = "Target Curve"
+    st.session_state["byo_target_mode_revision"] = int(
+        st.session_state.get("byo_target_mode_revision") or 0
+    ) + 1
+    st.session_state["byo-curve"] = source_id
+    st.session_state["byo_stages"] = [{"id": "quadratic_twist_sweep", "config": {
+        "d_values": twist_values,
+        "max_children": len(twist_values),
+        "include_parent": 1 in values,
+    }}]
+    st.session_state["byo_pipeline_name_input"] = f"Twist selection · curve #{source_id}"
+    st.session_state["byo-definition-config-shape"] = "launch_defaults"
+    st.session_state["byo-functional-features"] = []
+    st.session_state.pop("byo_draft_recovered_notice", None)
+    st.session_state.pop("byo_twist_handoff_error", None)
+    st.session_state["byo_twist_handoff_applied"] = pending_hash
+    return True
+
+
 def _load_pipeline_for_edit(row):
     payload = pipeline_payload(row)
     mode = str(payload["target_mode"])
@@ -4665,6 +4727,7 @@ def page(db, ctx):
         _discard_pipeline_draft(db)
         st.session_state["byo_draft_recovery_checked"] = True
     _restore_pipeline_draft(db)
+    twist_handoff_applied = _apply_pending_twist_handoff(db)
     title(
         "Pipelines",
         "Create, save, run, and inspect reproducible search strategies built from Rank Hunter's candidate, arithmetic, geometry, point-search, and proof modules.",
@@ -4753,16 +4816,37 @@ def page(db, ctx):
             if selection:
                 with st.expander("Selection metadata", expanded=False):
                     st.json(selection)
-            st.caption(
-                "Context only: the originating Workspace has not changed Builder modules, "
-                "candidate sources, or rank goals. Rank Hunter does not yet have a generic "
-                "arbitrary-curve/parameter population contract; choose an ordinary Pipeline "
-                "target/source below."
-            )
+            if st.session_state.get("byo_twist_handoff_error"):
+                st.error(st.session_state["byo_twist_handoff_error"])
+            elif (
+                kind == "quadratic_twist_selection"
+                and st.session_state.get("byo_twist_handoff_applied")
+                == research_handoff["selection_hash"]
+            ):
+                source_id = selection.get("source_curve", {}).get("curve_id")
+                twist_count = sum(
+                    int(item.get("d") != 1)
+                    for item in selection.get("items") or []
+                    if isinstance(item, dict)
+                )
+                st.success(
+                    f"Editor loaded: source curve #{source_id} and {twist_count} "
+                    "selected twist squareclass(es) in Quadratic Twist Sweep. "
+                    "Review the modules below, then save or search."
+                )
+            else:
+                st.caption(
+                    "Context only: the originating Workspace has not changed Builder modules, "
+                    "candidate sources, or rank goals. Rank Hunter does not yet have a generic "
+                    "arbitrary-curve/parameter population contract; choose an ordinary Pipeline "
+                    "target/source below."
+                )
 
     campaign = current_campaign(db)
 
     campaign_context = _campaign_context_token(campaign)
+    if twist_handoff_applied:
+        st.session_state["byo_campaign_family_context"] = campaign_context
     campaign_context_pending = (
         campaign_context is not None
         and st.session_state.get("byo_campaign_family_context") != campaign_context
@@ -5013,6 +5097,14 @@ def page(db, ctx):
                 )
             except (TypeError, ValueError):
                 selected_state = None
+            if selected_state not in row_by_id and selected_state is not None:
+                source_row = db.execute(
+                    "SELECT * FROM curves WHERE id = ?", (selected_state,)
+                ).fetchone()
+                if source_row is not None:
+                    source_row = dict(source_row)
+                    source_row["rigorous_lower"] = None
+                    row_by_id[selected_state] = source_row
             if selected_state not in row_by_id:
                 selected_state = None
                 st.session_state["byo-curve"] = None

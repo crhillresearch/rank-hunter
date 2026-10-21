@@ -142,13 +142,13 @@ def route_curve_to_target(state, curve_id, *, handoff=None):
 
 
 def route_selection_to_pipelines(state, handoff):
-    """Route a research selection to Pipelines as inspectable context only.
-
-    Arbitrary parameter lists are deliberately not stuffed into private Builder
-    target controls.  The Pipeline page owns how (or whether) a future core
-    population contract consumes this selection.
-    """
+    """Route a research selection to Pipelines for its editor to consume."""
     payload = set_research_handoff(state, handoff)
+    state.pop("byo_twist_handoff_error", None)
+    if payload["kind"] == "quadratic_twist_selection":
+        state["byo_pending_twist_handoff"] = payload["selection_hash"]
+    else:
+        state.pop("byo_pending_twist_handoff", None)
     state["builder_main_view"] = "Editor"
     state["builder_view_revision"] = int(
         state.get("builder_view_revision") or 0

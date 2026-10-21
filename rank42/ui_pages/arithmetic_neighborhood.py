@@ -97,6 +97,11 @@ def _research_handoff(source_record, *, kind, items, retained_records=(), extra=
 
 def _render_pipeline_handoff(payload, *, key, title="Selection handoff"):
     normalized = normalize_research_handoff(payload)
+    twist_selection = normalized["kind"] == "quadratic_twist_selection"
+    selected_twists = [
+        item for item in normalized["selection"].get("items") or []
+        if isinstance(item, dict) and int(item.get("d") or 0) not in (0, 1)
+    ] if twist_selection else []
     with st.container(border=True):
         st.markdown(f"**{title}**")
         st.caption(
@@ -106,12 +111,22 @@ def _render_pipeline_handoff(payload, *, key, title="Selection handoff"):
             f"{'' if len(normalized['curve_ids']) == 1 else 'es'} · "
             f"hash: `{normalized['selection_hash'][:16]}`"
         )
+        if twist_selection:
+            selected_values = [
+                str(item["d"])
+                for item in normalized["selection"].get("items") or []
+                if isinstance(item, dict) and "d" in item
+            ]
+            st.caption("Selected d values: " + ", ".join(selected_values))
         with st.expander("Inspect normalized handoff", expanded=False):
             st.json(normalized)
+        if twist_selection and not selected_twists:
+            st.info("d=1 is the source curve. Select at least one other d value to create a twist Pipeline.")
         if st.button(
             "Open in Pipelines",
             type="primary",
             use_container_width=True,
+            disabled=twist_selection and not selected_twists,
             key=f"{key}-pipelines",
         ):
             route_selection_to_pipelines(st.session_state, payload)
@@ -689,10 +704,13 @@ def _render_twist_view(source_record, records, by_id, science_python):
         height=min(620, 70 + 35 * min(len(display_rows), 15)),
     )
 
+    default_handoff_d = chosen_d if int(chosen_d) != 1 else next(
+        (d for d in d_values if int(d) != 1), chosen_d
+    )
     selected_ds = st.multiselect(
         "Select twist squareclasses for research handoff",
         d_values,
-        default=[chosen_d],
+        default=[default_handoff_d],
         format_func=lambda d: "d=1 · source squareclass" if int(d) == 1 else f"d={d}",
         key="rh-neighborhood-handoff-twists",
     )

@@ -85,8 +85,8 @@ def _minimal_curve(E):
         return E
 
 
-def _curve_fingerprint(E):
-    Em = _minimal_curve(E)
+def _curve_fingerprint(E, *, already_minimal=False):
+    Em = E if already_minimal else _minimal_curve(E)
     payload = json.dumps([str(x) for x in Em.a_invariants()], separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
 
@@ -96,7 +96,7 @@ def _store_direct_child(db, *, parent_curve_id, kind, token, E, score=None):
         db, E, status="pipeline_derived"
     )
     Em = canonical["minimal_curve"]
-    fp = _curve_fingerprint(Em)
+    fp = _curve_fingerprint(Em, already_minimal=True)
     # This label is intentionally derivation-local. Scientific curve identity
     # lives in canonical["curve_id"]; many path labels may point to that row.
     label = f"{kind}:{int(parent_curve_id)}:{token}:{fp[:16]}"
@@ -139,6 +139,7 @@ def quadratic_twist_children(db, *, context, config):
     children = []
     failures = []
     for d in selected:
+        print(f"[twist sweep] d={d}: constructing exact twist", flush=True)
         try:
             child = E.quadratic_twist(ZZ(d))
         except Exception as exc:
@@ -149,6 +150,7 @@ def quadratic_twist_children(db, *, context, config):
                     "error": str(exc)[:240],
                 })
             continue
+        print(f"[twist sweep] d={d}: resolving exact curve identity", flush=True)
         rec = _store_direct_child(
             db,
             parent_curve_id=parent_curve_id,
@@ -156,6 +158,10 @@ def quadratic_twist_children(db, *, context, config):
             token=f"d={d}",
             E=child,
             score=None,
+        )
+        print(
+            f"[twist sweep] d={d}: stored curve #{rec['curve_id']}",
+            flush=True,
         )
         rec["metadata"].update({
             "twist_d": int(d),
