@@ -151,7 +151,7 @@
     background-color: var(--rh-card) !important;
     background-image: radial-gradient(ellipse at 94% 0%, color-mix(in srgb, var(--rh-primary) 7%, transparent), transparent 54%) !important;
 }
-.st-key-rh-dashboard-local-frontier { margin-top: -1.7rem !important; }
+.st-key-rh-dashboard-local-frontier { margin-top: .35rem !important; }
 .st-key-rh-dashboard-local-frontier::before {
     display: block;
     z-index: 0;
@@ -474,5 +474,5 @@
 @media (max-width: 560px) {
     .rh-genus-census-row { grid-template-columns: minmax(95px, .7fr) minmax(0, 2.3fr); gap: .4rem; }
     .rh-genus-census { padding: 12px; }
-    .st-key-rh-dashboard-local-frontier { margin-top: -1.2rem !important; }
+    .st-key-rh-dashboard-local-frontier { margin-top: .35rem !important; }
 }

@@ -13,6 +13,7 @@ from rank42.ui_log_viewer import render_raw_log
 from rank42.ui_findings import hunt_findings
 from rank42.ui_results import pipeline_retention_quartic_summary, summarize_job
 from rank42.ui_store import get_job, list_jobs, read_log, reconcile_jobs
+from rank42.pipeline_state import get_pipeline_run
 from .common import title
 from rank42.ui_components import metric_card, selectbox, toggle, selectable_dataframe, button, region
 
@@ -53,6 +54,39 @@ def _duration(row):
         return max(0,int((b-a).total_seconds()))
     except Exception:
         return None
+
+
+def _raw_log_progress(db, row):
+    """Build the compact elapsed/stage footer state for one job log."""
+    elapsed = _duration(row)
+    stage_text = ""
+    if str(row["kind"]) == "pipeline_search":
+        try:
+            metadata = json.loads(row["metadata_json"] or "{}")
+            run_id = int(metadata.get("pipeline_run_id"))
+            run = get_pipeline_run(db, run_id)
+            if run is not None:
+                try:
+                    stages = json.loads(run["stages_json"] or "[]")
+                except (TypeError, ValueError):
+                    stages = []
+                index = run["current_stage_index"]
+                stage_id = str(run["current_stage_id"] or "")
+                label = stage_id.replace("_", " ").title() if stage_id else "Starting"
+                if stage_id:
+                    try:
+                        from rank42.pipeline_catalog import stage_spec
+                        label = stage_spec(stage_id).label
+                    except (ImportError, ValueError):
+                        pass
+                stage_text = (
+                    f"{int(index)}/{len(stages)} · {label}"
+                    if index is not None and stages
+                    else label
+                )
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    return elapsed, stage_text
 
 
 def _job_log_signature(row):
@@ -232,6 +266,49 @@ def _database_path(db):
     return ""
 
 
+def _best_rank_found(db, row, log):
+    """Return the strongest exact/lower-bound rank established by this job."""
+    def label(exact, lower):
+        try:
+            if exact is not None:
+                return f"= {int(exact)}"
+        except (TypeError, ValueError):
+            pass
+        try:
+            value = int(lower or 0)
+        except (TypeError, ValueError):
+            value = 0
+        return f"≥ {value}" if value > 0 else "—"
+
+    if str(row["kind"]) == "pipeline_search":
+        try:
+            metadata = json.loads(row["metadata_json"] or "{}")
+            run_id = int(metadata.get("pipeline_run_id"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            run_id = None
+        if run_id is not None:
+            run = get_pipeline_run(db, run_id)
+            if run is not None:
+                exact = None
+                curve_id = run["best_curve_id"]
+                if curve_id is not None:
+                    candidate = db.execute(
+                        """SELECT exact_rank FROM search_pipeline_candidates
+                           WHERE run_id=? AND curve_id=? AND exact_rank IS NOT NULL
+                           ORDER BY exact_rank DESC LIMIT 1""",
+                        (run_id, int(curve_id)),
+                    ).fetchone()
+                    if candidate is not None:
+                        exact = candidate["exact_rank"]
+                return label(exact, run["best_lower"])
+
+    summary = summarize_job(row, log)
+    return label(
+        summary.get("exact_rank"),
+        summary.get("best_rigorous_lower") or summary.get("best_lower"),
+    )
+
+
 @st.fragment(run_every="1s")
 def _render_live_raw_log_fragment(db_path, job_id):
     """Refresh one active Raw log with a thread-local SQLite connection."""
@@ -241,7 +318,15 @@ def _render_live_raw_log_fragment(db_path, job_id):
         if fresh is None:
             st.warning(f"Job #{int(job_id)} is no longer available.")
             return
-        render_raw_log(read_log(fresh["log_path"]), job_id=int(job_id))
+        log = read_log(fresh["log_path"])
+        elapsed, stage_text = _raw_log_progress(fresh_db, fresh)
+        render_raw_log(
+            log,
+            job_id=int(job_id),
+            best_rank=_best_rank_found(fresh_db, fresh, log),
+            elapsed_seconds=elapsed,
+            stage_text=stage_text,
+        )
         terminal = str(fresh["status"]) not in ACTIVE
     finally:
         fresh_db.close()
@@ -296,7 +381,15 @@ def _render_job_raw_log(db, row):
         if db_path:
             _render_live_raw_log_fragment(db_path, int(row["id"]))
             return
-    render_raw_log(read_log(row["log_path"]), job_id=int(row["id"]))
+    log = read_log(row["log_path"])
+    elapsed, stage_text = _raw_log_progress(db, row)
+    render_raw_log(
+        log,
+        job_id=int(row["id"]),
+        best_rank=_best_rank_found(db, row, log),
+        elapsed_seconds=elapsed,
+        stage_text=stage_text,
+    )
 
 
 def render_job_raw_log(db, row):

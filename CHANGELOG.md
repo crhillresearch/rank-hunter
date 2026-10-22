@@ -21,6 +21,11 @@ All notable changes to Rank Hunter are documented here.
   surviving fibers.
 - Added **FrontierMath Record Breaker**, a target-driven Pipeline preset that
   stops when it reaches a certified rank lower-bound goal.
+- Added **Family Constructor** under Tools. It can force a rational point on a
+  prescribed-torsion family through a conic base change, carry its known
+  sections forward, and register the result for Pipeline searches. A generic
+  rank lower bound of one requires an exact infinite-order specialization.
+  The search can try nearby rational x-values and wider conic bounds.
 
 ### Changed
 
@@ -39,6 +44,14 @@ All notable changes to Rank Hunter are documented here.
 - Kept the C2 × C8 channel search separate from the existing Mazur torsion
   provider. Its point hits go through the usual exact verification and rank
   certification before they affect a curve's proven rank.
+- Made Sections and Base Change easier to start from a saved family or a custom
+  formula. Verified sections can be passed directly into Base Change.
+- Reworked the Pencils registry so a curve-seeded pencil is easier to inspect
+  and send into a search.
+- Put elapsed time, the current Pipeline stage, and recent chart progress in
+  the Jobs raw-log footer. The status stays visible in full screen.
+- Made the Pipeline preset picker open on Auto for most target types instead
+  of opening on REA Hunt.
 
 ### Fixed
 

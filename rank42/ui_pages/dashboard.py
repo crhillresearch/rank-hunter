@@ -45,6 +45,9 @@ _DASHBOARD_NAV_GROUPS = (
 _COMMAND_BAR_JS = (
     Path(__file__).resolve().parents[1] / "ui_assets" / "tools_command_bar.js"
 ).read_text(encoding="utf-8")
+_DASHBOARD_COMMAND_BAR = st.components.v2.component(
+    "rh_dashboard_command_bar", js=_COMMAND_BAR_JS, isolate_styles=False
+)
 
 
 def _go_to(page):
@@ -603,11 +606,7 @@ def _dashboard_page_nav():
         '<div id="rh-dashboard-commandbar" class="rh-tools-commandbar-host" '
         'aria-label="Rank Hunter pages; current page Dashboard"></div>'
     )
-    with st.container(key="rh-dashboard-command-runtime"):
-        st.components.v1.html(
-            f"<script>{_COMMAND_BAR_JS}\nwindow.parent.__rhInitToolsCommandBar({config});</script>",
-            height=0,
-        )
+    _DASHBOARD_COMMAND_BAR(data=json.loads(config), key="rh-dashboard-command-runtime")
     with st.container(key="rh-dashboard-command-bridge"):
         for _, pages in _DASHBOARD_NAV_GROUPS:
             for page in pages:

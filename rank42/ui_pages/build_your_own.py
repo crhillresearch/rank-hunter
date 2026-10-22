@@ -3423,11 +3423,23 @@ def _render_stage_palette(mode, stages, selected_plugin=None):
             plugin_id=(selected_plugin.id if selected_plugin is not None else None),
         )
         preset_labels = [rec["label"] for rec in preset_options]
+        preferred_preset_id = (
+            "c2xc8_record_hunt"
+            if selected_plugin is not None
+            and str(selected_plugin.id) == "c2xc8_channel_search"
+            else "auto"
+        )
+        preferred_index = next(
+            (index for index, rec in enumerate(preset_options)
+             if rec["id"] == preferred_preset_id),
+            0,
+        )
         template = preset_col.selectbox(
             "Preset",
             preset_labels,
+            index=preferred_index,
             key=(
-                f"byo-template-select-{mode}-"
+                f"byo-template-select-v2-{mode}-"
                 f"{selected_plugin.id if selected_plugin is not None else 'all'}"
             ),
             label_visibility="collapsed",

@@ -10,7 +10,7 @@ import streamlit as st
 from rank42.ui_pages.common import PAGE_ICONS, embedded_page_title, title
 from . import (
     arithmetic_neighborhood, descent_page, geometry_search_page, independence_page,
-    lattices_page, pencils_page,
+    family_constructor_page, lattices_page, pencils_page,
     point_hunt_page, points_page, quartics_page, saturation_page,
     section_base_change_page,
 )
@@ -65,6 +65,10 @@ _TOOLS = {
         _family_geometry, ":material/account_tree:",
         "Run geometry-first family or torsion searches with exact follow-up.",
     ),
+    "Family Constructor": (
+        family_constructor_page.page, ":material/add_box:",
+        "Construct a new torsion-aware family from an exact rational section and conic base change.",
+    ),
     "Isogenies": (
         arithmetic_neighborhood.isogenies_page, ":material/hub:",
         "Compute rational isogeny classes and inspect exact related models.",
@@ -78,13 +82,16 @@ _TOOLS = {
 _GROUPS = (
     ("Proof", ("Descent", "Independence", "Saturation")),
     ("Discovery", ("Points", "Point Hunt", "Quartics", "Twists", "Sections")),
-    ("Geometry", ("Lattices", "Pencils", "Family Geometry", "Isogenies", "Base Change")),
+    ("Geometry", ("Lattices", "Pencils", "Family Geometry", "Family Constructor", "Isogenies", "Base Change")),
 )
 
 TOOL_NAMES = frozenset(_TOOLS)
 _COMMAND_BAR_JS = (
     Path(__file__).resolve().parents[1] / "ui_assets" / "tools_command_bar.js"
 ).read_text(encoding="utf-8")
+_TOOLS_COMMAND_BAR = st.components.v2.component(
+    "rh_tools_command_bar", js=_COMMAND_BAR_JS, isolate_styles=False
+)
 
 _HANDOFF_ALIASES = {
     "MW Geometry": "Lattices",
@@ -121,11 +128,7 @@ def _tool_picker():
         '<div id="rh-tools-commandbar" class="rh-tools-commandbar-host" '
         f'aria-label="Research tools; current tool {html.escape(selected)}"></div>',
     )
-    with st.container(key="rh-tools-command-runtime"):
-        st.components.v1.html(
-            f"<script>{_COMMAND_BAR_JS}\nwindow.parent.__rhInitToolsCommandBar({config});</script>",
-            height=0,
-        )
+    _TOOLS_COMMAND_BAR(data=json.loads(config), key="rh-tools-command-runtime")
     with st.container(key="rh-tools-command-bridge"):
         for name in _TOOLS:
             slug = name.lower().replace(" ", "-")

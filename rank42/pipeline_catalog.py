@@ -25,7 +25,7 @@ from rank42.constructive_artifact import (
 from rank42.torsion import canonical_torsion_label
 
 
-CATALOG_VERSION = 23
+CATALOG_VERSION = 25
 ELLIPTIC_TARGET_MODES = ("family", "torsion", "general", "curve")
 TARGET_MODES = (*ELLIPTIC_TARGET_MODES, "genus2_jacobian")
 EVIDENCE_LEVELS = ("heuristic", "exact", "conditional", "rigorous", "control")
@@ -130,7 +130,7 @@ _STAGE_LIST = (
         "Quadratic Twist Sweep",
         "Transforms",
         "Fan one exact curve out into squarefree quadratic twists E^(d). The transform is exact; no rank is inherited from the parent.",
-        frozenset({"family", "general", "curve"}),
+        frozenset({"family", "torsion", "general", "curve"}),
         frozenset({"exact_curve"}),
         frozenset({"exact_curve", "derived_population"}),
         "exact",
@@ -143,7 +143,7 @@ _STAGE_LIST = (
         "Targeted Twist Search",
         "Transforms",
         "Generate exact quadratic twists, optionally filter by exact root-number sign, rank survivors with Rank Hunter's audited Nagao-style log-cardinality heuristic, and keep only the strongest children under explicit stage/per-twist hard budgets.",
-        frozenset({"family", "general", "curve"}),
+        frozenset({"family", "torsion", "general", "curve"}),
         frozenset({"exact_curve"}),
         frozenset({"exact_curve", "derived_population", "prime_score"}),
         "heuristic",
@@ -169,14 +169,14 @@ _STAGE_LIST = (
         "Rank-Jump / Base-Change",
         "Transforms",
         "Invoke an exact family-plugin transform hook that constructs published or researcher-supplied rank-jump/base-change children. Core records lineage but never invents the family map.",
-        frozenset({"family"}),
+        frozenset({"family", "torsion"}),
         frozenset({"exact_curve"}),
         frozenset({"exact_curve", "derived_population"}),
         "exact",
         "expensive",
         {"max_children": 32, "timeout": 30, "include_parent": False},
         repeatable=True,
-        conditional="Requires the active family adapter to define derive_pipeline_transform(context) for transform_kind=rank_jump_base_change. The hook runs in a core-owned subprocess with the configured hard timeout.",
+        conditional="Requires the active family adapter to define derive_pipeline_transform(context) for transform_kind=rank_jump_base_change. In torsion-target runs, follow with Exact Torsion so only derived curves matching the selected group continue. The hook runs in a core-owned subprocess with the configured hard timeout.",
     ),
     PipelineStageSpec(
         "parameter_pullback",
@@ -202,7 +202,7 @@ _STAGE_LIST = (
         frozenset({"family", "general", "curve"}),
         frozenset({"exact_curve"}),
         frozenset({"exact_curve", "derived_population", "point_source", "rigorous_lower_possible"}),
-        "rigorous",
+        "exact",
         "expensive",
         {
             "degrees": [2, 3, 5, 7, 11, 13],
@@ -833,6 +833,7 @@ _STAGE_LIST = (
         "exact",
         "medium",
         {"timeout": 30},
+        repeatable=True,
     ),
     PipelineStageSpec(
         "specialization_seeds",
@@ -1800,7 +1801,7 @@ def validate_pipeline(target_mode, stages):
     else:
         caps = {"source", "exact_curve"} if mode == "curve" else {"source"}
     candidate_stage_seen = False
-    exact_torsion_index = None
+    exact_torsion_indices = []
 
     for index, rec in enumerate(normalized, 1):
         spec = stage_spec(rec["id"])
@@ -1820,7 +1821,7 @@ def validate_pipeline(target_mode, stages):
         if spec.id in {"nagao_screen", "euler_parameter_scan"}:
             candidate_stage_seen = True
         if spec.id == "exact_torsion":
-            exact_torsion_index = index
+            exact_torsion_indices.append(index)
 
         if spec.id in EXPLICIT_RETRY_STAGE_IDS:
             policy = str(rec["config"].get("retry_policy") or "manual")
@@ -1858,23 +1859,34 @@ def validate_pipeline(target_mode, stages):
         )
 
     if mode == "torsion":
-        if exact_torsion_index is None:
+        if not exact_torsion_indices:
             errors.append("Torsion Group pipelines require Exact Torsion")
         else:
+            first_exact = exact_torsion_indices[0]
+            advanced_categories = {
+                "Transforms", "Strategies", "Points", "Geometry", "Evidence", "Control",
+            }
             for index, rec in enumerate(normalized, 1):
-                if index <= exact_torsion_index:
-                    continue
-                # No special rule after torsion verification.
-                break
-            # Exact torsion should happen before any point/rank work.
-            for index, rec in enumerate(normalized, 1):
-                if index >= exact_torsion_index:
+                if index >= first_exact:
                     break
-                if stage_spec(rec["id"]).category in {"Transforms", "Strategies", "Points", "Geometry", "Evidence", "Control"}:
+                if stage_spec(rec["id"]).category in advanced_categories:
                     errors.append(
                         "Exact Torsion must run before transform, strategy, point, geometry, evidence, or control stages in torsion mode"
                     )
                     break
+            # A transform creates new curves and clears parent-local evidence.
+            # Require an immediate exact torsion check on those children before
+            # selection, point search, or any other downstream work can use them.
+            for index, rec in enumerate(normalized, 1):
+                if rec["id"] not in FANOUT_RESET_STAGE_IDS:
+                    continue
+                if index <= first_exact:
+                    continue
+                next_rec = normalized[index] if index < len(normalized) else None
+                if next_rec is None or next_rec["id"] != "exact_torsion":
+                    errors.append(
+                        f"Step {index} · {stage_spec(rec['id']).label}: add Exact Torsion immediately after this transform to recheck derived curves against the selected group"
+                    )
 
     candidate_ids = [
         rec["id"] for rec in normalized
@@ -4031,6 +4043,135 @@ PROFESSOR_HUNT_TEMPLATE = [
 ]
 
 
+# A torsion-targeted record hunt. Prime statistics rank the initial population,
+# then exact torsion and exact point evidence decide which curves receive the
+# overnight geometry and high-denominator search budget. No novelty database
+# is required; the target rank is supplied by the selected Pipeline run.
+TORSION_RECORD_HUNT_TEMPLATE = [
+    {"id": "nagao_screen", "config": {
+        "prime_bound": 523, "keep": 12000,
+    }},
+    {"id": "nagao_rescore", "config": {
+        "prime_bound": 1979, "keep": 1200,
+    }},
+    {"id": "prime_table_cache", "config": {
+        "prime_bound": 5000, "include_all_bad": False,
+        "eager_bad_primes": False,
+    }},
+    {"id": "mestre_nagao_ensemble", "config": {"prime_bound": 5000}},
+    {"id": "frobenius_persistence", "config": {
+        "bounds": [523, 1979, 5000],
+    }},
+    {"id": "torsion_mod_p_sieve", "config": {
+        "torsion_group": "target", "prime_bound": 127,
+        "max_primes": 16, "prune_obstructed": True,
+    }},
+    {"id": "exact_torsion", "config": {"timeout": 60}},
+    {"id": "select_survivors", "config": {
+        "keep": 400, "ranking": "score",
+    }},
+    {"id": "specialization_seeds", "config": {
+        "certificate_timeout": 180,
+    }},
+    {"id": "family_baseline", "config": {
+        "certificate_timeout": 180, "exact_candidates": 128,
+    }},
+    {"id": "small_point_density", "config": {
+        "heights": [100, 1000, 10000], "timeout": 4,
+        "certificate_timeout": 180, "exact_candidates": 64,
+    }},
+    {"id": "select_survivors", "config": {
+        "keep": 64, "ranking": "rank_then_yield_then_score",
+    }},
+    {"id": "integral_seed", "config": {
+        "heights": [10000, 100000], "timeout": 8,
+        "certify_after_search": False,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 240, "max_candidates": 128,
+    }},
+    {"id": "stop_goal"},
+    {"id": "select_survivors", "config": {
+        "keep": 16, "ranking": "rank_then_yield_then_score",
+    }},
+    {"id": "rank_jump_base_change", "config": {
+        "max_children": 12, "timeout": 90, "include_parent": True,
+    }},
+    {"id": "exact_torsion", "config": {"timeout": 60}},
+    {"id": "select_survivors", "config": {
+        "keep": 12, "ranking": "rank_then_yield_then_score",
+    }},
+    {"id": "targeted_twist_search", "config": {
+        "d_min": -100, "d_max": 100, "scan_limit": 120,
+        "max_children": 8, "prime_bound": 199, "root_sign": "any",
+        "timeout": 120, "per_twist_timeout": 10,
+        "allow_partial_scores": True, "include_parent": True,
+    }},
+    {"id": "exact_torsion", "config": {"timeout": 60}},
+    {"id": "select_survivors", "config": {
+        "keep": 20, "ranking": "rank_then_yield_then_score",
+    }},
+    {"id": "covering_selmer_branch", "config": {
+        "timeout": 180, "certificate_timeout": 240,
+        "exact_candidates": 160,
+    }},
+    {"id": "mw_growth_loop", "config": {
+        "heights": [10000, 100000, 1000000], "anchors": 24,
+        "pool_size": 240, "max_rounds": 6, "timeout": 10,
+        "certificate_timeout": 240, "exact_candidates": 160,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 300, "max_candidates": 160,
+    }},
+    {"id": "stop_goal"},
+    {"id": "select_survivors", "config": {
+        "keep": 8, "ranking": "rank_then_yield_then_score",
+    }},
+    {"id": "adaptive_ladder", "config": {
+        "bands": [[2, 100], [101, 1000], [1001, 10000], [10001, 100000]],
+        "keeps": [8, 6, 4, 2], "ranking": "rank_then_yield_then_score",
+        "charts": 12, "heights": [100000, 1000000], "timeout": 12,
+        "certificate_timeout": 300, "exact_candidates": 192,
+    }},
+    {"id": "large_height_generator_hunt", "config": {
+        "descent_levels": [2, 4, 8], "descent_timeout": 30,
+        "max_coverings": 16, "covering_timeout": 30,
+        "padic_enabled": False, "mw_growth_rounds": 3,
+        "mw_growth_anchors": 24, "mw_growth_pool": 240,
+        "denominator_bands": [[100001, 1000000]],
+        "denominator_charts": 16,
+        "denominator_heights": [1000000, 10000000],
+        "denominator_timeout": 15, "late_saturation_enabled": True,
+        "late_lattice_enabled": True, "certificate_timeout": 360,
+        "exact_candidates": 224, "wall_timeout": 1200,
+        "stop_on_growth": False,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 360, "max_candidates": 224,
+    }},
+    {"id": "stop_goal"},
+    {"id": "record_breaker_lane", "config": {
+        "minimum_rank_mode": "goal_minus_one",
+        "descent_levels": [2, 4], "descent_timeout": 45,
+        "max_coverings": 16, "covering_timeout": 45,
+        "padic_enabled": False, "mw_growth_rounds": 3,
+        "mw_growth_anchors": 32, "mw_growth_pool": 320,
+        "mw_growth_heights": [1000000, 10000000],
+        "denominator_bands": [[1000001, 10000000]],
+        "denominator_charts": 20,
+        "denominator_heights": [10000000],
+        "denominator_timeout": 20,
+        "late_saturation_enabled": True, "late_lattice_enabled": True,
+        "certificate_timeout": 420, "exact_candidates": 256,
+        "wall_timeout": 1800, "stop_on_growth": False,
+    }},
+    {"id": "independence", "config": {
+        "certificate_timeout": 420, "max_candidates": 256,
+    }},
+    {"id": "stop_goal"},
+]
+
+
 # REA's relation and shell ordering schedules the expensive work. Only exact
 # rational points and a positive-definite interval canonical-height Gram can
 # establish a Mordell–Weil lower bound; the relational Gram cannot do so.
@@ -4092,6 +4233,7 @@ _PRESET_DEFS = (
     ("c2xc8_record_hunt", "C2×C8 Record Hunt", "Channel Family search for a certified rank ≥4: wide parameter screening, exact torsion and upper-bound gates, bounded channel point searches, then coverings and selective high-height work."),
     ("rea_hunt", "REA Hunt", "Generate candidates, route them by REA relation and shell structure, find exact rational points, then attempt REA height-Gram rank certification and a rigorous upper bound. The relational certificate is diagnostic only."),
     ("professor_hunt", "Professor Hunt", "Overnight exact-torsion hunt: reserve half the shortlist for compact parameters, check early exact point yield, then deepen the strongest curves through coverings, Mordell–Weil growth, denominator charts, lattice rebuilding, and rigorous rank evidence. Lattice work starts only after independent points exist."),
+    ("torsion_record_hunt", "Torsion Record Hunt", "Overnight hunt for the selected torsion group: combine prime-signal ordering, exact torsion and point checks, then concentrate coverings, quartic growth, high-denominator searches, and exact independence certification on the strongest survivors."),
     ("historical_seed_funnel", "Historical Seed Funnel", "Family-first funnel: recertify preserved exact specialization bundles before heuristic rescoring, then spend bounded deep-search budget only near the rank goal."),
     ("euler_lattice_hunt", "Euler Lattice Hunt", "Family-adapter Euler-factor scan and shortlist rescoring, followed by certified seed/lattice construction and two bounded lattice-chart search passes."),
     ("frontiermath_record_breaker", "FrontierMath Record Breaker", "Target-driven record hunt: maximize exact independent points, stop immediately at the rigorous lower-bound goal, and skip exact-rank upper-bound work."),
@@ -4114,6 +4256,7 @@ PRESET_TEMPLATE_BY_ID = {
     "c2xc8_record_hunt": C2XC8_RECORD_HUNT_TEMPLATE,
     "rea_hunt": REA_HUNT_TEMPLATE,
     "professor_hunt": PROFESSOR_HUNT_TEMPLATE,
+    "torsion_record_hunt": TORSION_RECORD_HUNT_TEMPLATE,
     "genus2_research": [
         "genus2_model_audit",
         "genus2_elliptic_quotient_rank",
@@ -4195,6 +4338,8 @@ def pipeline_preset_options(target_mode, *, plugin_id=None):
         ):
             continue
         if preset_id == "professor_hunt" and mode != "torsion":
+            continue
+        if preset_id == "torsion_record_hunt" and mode != "torsion":
             continue
         if preset_id in {"specialization_trickster", "historical_seed_funnel", "euler_lattice_hunt"} and mode != "family":
             continue

@@ -157,3 +157,40 @@ class FormulaFamily:
             "sections_verified_on_curve": len(points),
             "discriminant": str(E.discriminant()),
         }
+
+    def validate_generic_rank_claim(self):
+        """Recheck a one-section lower-bound certificate by specialization.
+
+        An exact infinite-order rational point on one smooth specialization
+        proves that the corresponding function-field section is non-torsion.
+        This deliberately certifies only rank lower bound one; higher bounds
+        require separate independence certificates.
+        """
+        certificate = self.data.get("rank_lower_certificate")
+        if not isinstance(certificate, dict):
+            raise ValueError("formula family has no rank_lower_certificate")
+        from sage.all import Infinity, QQ
+        if int(self._generic_rank or 0) < 1:
+            raise ValueError("rank lower-bound certificate requires generic_rank >= 1")
+        sections = self.data.get("sections") or []
+        index = int(certificate.get("section_index", 0))
+        if index < 0 or index >= len(sections):
+            raise ValueError("rank certificate references an unavailable section")
+        parameter_value = QQ(self._eval(certificate.get("specialization"), QQ(0)))
+        E = self.curve(parameter_value)
+        if E is None:
+            raise ValueError("rank certificate specialization is singular")
+        points = self.generic_section_points(parameter_value)
+        if len(points) <= index:
+            raise ValueError("rank certificate section is unavailable")
+        order = points[index].order()
+        if order != Infinity:
+            raise ValueError("rank certificate specialization is not infinite order")
+        return {
+            "verified": True,
+            "lower_bound": 1,
+            "method": "exact infinite-order specialization",
+            "specialization": str(parameter_value),
+            "section_index": index,
+            "point_order": "infinite",
+        }

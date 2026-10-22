@@ -1,7 +1,9 @@
-const appWindow = window.parent;
-const appDocument = appWindow.document;
+export default function (component) {
+  const config = component.data;
+  const appWindow = window;
+  const appDocument = document;
+  function initialize() {
 /* The visible controls use native DOM; hidden Streamlit buttons own navigation. */
-appWindow.__rhInitToolsCommandBar = function (config) {
   const rootId = config.rootId || "rh-tools-commandbar";
   const bridgePrefix = config.bridgePrefix || "tools-select-";
   const controllerSlot = config.controllerSlot || "__rhToolsCommandBar";
@@ -11,7 +13,7 @@ appWindow.__rhInitToolsCommandBar = function (config) {
   const roots = appDocument.querySelectorAll("#" + rootId);
   const root = roots[roots.length - 1];
   if (!root) {
-    appWindow.setTimeout(() => appWindow.__rhInitToolsCommandBar(config), 30);
+    appWindow.setTimeout(initialize, 30);
     return;
   }
   if (appWindow[controllerSlot]) appWindow[controllerSlot].destroy();
@@ -342,4 +344,6 @@ appWindow.__rhInitToolsCommandBar = function (config) {
         appWindow[controllerSlot].destroy === destroy) appWindow[controllerSlot] = null;
   }
   appWindow[controllerSlot] = { destroy };
-};
+  }
+  initialize();
+}

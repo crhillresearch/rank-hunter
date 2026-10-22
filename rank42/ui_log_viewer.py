@@ -1,11 +1,40 @@
 from __future__ import annotations
 
 import html as html_lib
+import re
 
 
-def raw_log_document(log: str, *, channel_name: str = "") -> str:
+def _elapsed_label(seconds):
+    if seconds is None:
+        return "—"
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def _activity_label(log):
+    for line in reversed(str(log or "").splitlines()):
+        match = re.search(r"(\[auto:[^\]]+\].*?chart=\d+/\d+)", line)
+        if match:
+            return match.group(1).strip()[-140:]
+    return ""
+
+
+def raw_log_document(
+    log: str,
+    *,
+    channel_name: str = "",
+    best_rank: str = "—",
+    elapsed_seconds=None,
+    stage_text: str = "",
+) -> str:
     """Return a safe full-log viewer that opens scrolled to the newest output."""
     escaped = html_lib.escape(str(log), quote=False)
+    escaped_rank = html_lib.escape(str(best_rank or "—"), quote=True)
+    elapsed = html_lib.escape(_elapsed_label(elapsed_seconds), quote=True)
+    stage = html_lib.escape(str(stage_text or "Stage unavailable"), quote=True)
+    activity = html_lib.escape(_activity_label(log) or "", quote=True)
     return f"""<!doctype html>
 <html>
 <head>
@@ -20,15 +49,33 @@ def raw_log_document(log: str, *, channel_name: str = "") -> str:
     gap: 12px; padding: 0 10px; color: #f5f7fa; background: #000;
     border-radius: 8px 8px 0 0;
   }}
-  .log-title {{ margin-right: auto; font-size: 13px; font-weight: 750; }}
+  .log-title {{ margin-right: auto; font-size: 13px; font-weight: 500; }}
+  .toolbar-actions {{ display:flex; align-items:center; gap:6px; }}
+  .rank-badge {{ height:30px; display:inline-flex; align-items:center; gap:8px;
+    padding:0 10px; border:1px solid rgba(128,128,128,.42); border-radius:8px;
+    background:ButtonFace; color:ButtonText; white-space:nowrap; }}
+  .rank-label {{ font-size:11px; opacity:.68; }}
+  .rank-value {{ font-size:12px; font-weight:750; }}
+  .statusbar {{ min-height:36px; display:flex; align-items:center; gap:18px;
+    padding:0 12px; color:#d8dde5; background:#000; border-radius:0 0 8px 8px;
+    font-size:11px; line-height:1.25; white-space:nowrap; overflow:hidden; }}
+  .status-item {{ display:inline-flex; align-items:center; gap:6px; min-width:0; }}
+  .status-label {{ color:#9299a5; text-transform:uppercase; letter-spacing:.06em; font-size:9px; }}
+  .status-value {{ overflow:hidden; text-overflow:ellipsis; }}
+  .status-activity {{ margin-left:auto; color:#aab2bf; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+  @media (max-width:620px) {{
+    .statusbar {{ gap:9px; padding:0 8px; }}
+    .status-label {{ letter-spacing:0; }}
+    .status-activity {{ max-width:46%; }}
+  }}
   html:fullscreen {{ background: Canvas; padding: 12px; }}
   html:fullscreen body {{ height: 100%; }}
-  html:fullscreen #viewport {{ height: calc(100vh - 58px); }}
+  html:fullscreen #viewport {{ height: calc(100vh - 102px); }}
   html.rh-raw-log-fullscreen, html.rh-raw-log-fullscreen body {{
     width:100%!important; height:100vh!important; overflow:hidden!important; background:#090b0f!important;
   }}
   html.rh-raw-log-fullscreen body {{ padding:0!important; }}
-  html.rh-raw-log-fullscreen #viewport {{ height:calc(100vh - 42px)!important; max-height:none!important; }}
+  html.rh-raw-log-fullscreen #viewport {{ height:calc(100vh - 78px)!important; max-height:none!important; }}
   button {{
     flex: 0 0 auto; border: 1px solid rgba(128,128,128,.42); border-radius: 8px;
     padding: 6px 11px; background: ButtonFace; color: ButtonText;
@@ -56,8 +103,12 @@ def raw_log_document(log: str, *, channel_name: str = "") -> str:
 </head>
 <body>
   <div class="toolbar">
-    <strong class="log-title">Raw log</strong>
-    <div>
+    <span class="log-title">Rank Hunter · Raw Log</span>
+    <div class="toolbar-actions">
+      <div class="rank-badge" title="Best rigorously established rank found by this job">
+        <span class="rank-label">Best rank found</span>
+        <span class="rank-value">{escaped_rank}</span>
+      </div>
       <button id="fullscreen-log" class="icon-button" type="button" title="Open full screen raw log" aria-label="Open full screen raw log">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6V2H2v8h2zm6 14H4v-6H2v8h8zm10-6v6h-6v2h8v-8zM14 2v2h6v6h2V2z"/></svg>
         <span class="sr-only">Full screen</span>
@@ -70,6 +121,11 @@ def raw_log_document(log: str, *, channel_name: str = "") -> str:
     </div>
   </div>
   <div id="viewport"><pre id="raw-log">{escaped}</pre></div>
+  <div class="statusbar" role="status" aria-label="Job progress">
+    <span class="status-item"><span class="status-label">Elapsed</span><span class="status-value">{elapsed}</span></span>
+    <span class="status-item"><span class="status-label">Stage</span><span class="status-value">{stage}</span></span>
+    <span class="status-item status-activity"><span class="status-value">{activity}</span></span>
+  </div>
 <script>
 (() => {{
   const viewport = document.getElementById("viewport");
@@ -204,9 +260,24 @@ def raw_log_document(log: str, *, channel_name: str = "") -> str:
 </html>"""
 
 
-def render_raw_log(log: str, *, height: int = 570, job_id: int | None = None) -> None:
+def render_raw_log(
+    log: str,
+    *,
+    height: int = 570,
+    job_id: int | None = None,
+    best_rank: str = "—",
+    elapsed_seconds=None,
+    stage_text: str = "",
+) -> None:
     """Render the complete raw log with bottom pinning, wrapping, and one-click copy."""
     import streamlit as st
 
     channel_name = "" if job_id is None else f"rankhunter-job-log-{int(job_id)}"
-    st.iframe(raw_log_document(log, channel_name=channel_name), width="stretch", height=int(height))
+    st.iframe(
+        raw_log_document(
+            log, channel_name=channel_name, best_rank=best_rank,
+            elapsed_seconds=elapsed_seconds, stage_text=stage_text,
+        ),
+        width="stretch",
+        height=int(height) + 36,
+    )

@@ -1,4 +1,5 @@
 import argparse
+from fractions import Fraction
 import heapq
 import json
 import math
@@ -280,6 +281,16 @@ def canonical_candidate_pair(family, a, b):
     """Canonicalize a reduced rational candidate without changing its orbit."""
     a = int(a)
     b = int(b)
+    if family_parameter_symmetry(family) == "canonical":
+        canonicalizer = getattr(family, "canonical_parameter", None)
+        if callable(canonicalizer):
+            value = canonicalizer(Fraction(a, b))
+            if isinstance(value, (tuple, list)) and len(value) == 2:
+                ca, cb = int(value[0]), int(value[1])
+                if cb < 0:
+                    ca, cb = -ca, -cb
+                if cb > 0 and math.gcd(abs(ca), cb) == 1:
+                    return ca, cb
     if family_parameter_symmetry(family) == "sign" and a < 0:
         a = -a
     return a, b
@@ -295,15 +306,20 @@ def stage0_scalar(args, tables, keep, family):
     heap = []
     tested = 0
     sign_symmetry = family_parameter_symmetry(family) == "sign"
+    seen = set()
     for b in range(args.b_min, args.b_max + 1):
         for a in range(args.a_min, args.a_max + 1):
             if math.gcd(a, b) != 1:
                 continue
             if sign_symmetry and sign_duplicate_in_requested_range(args, a):
                 continue
+            ca, cb = canonical_candidate_pair(family, a, b)
+            key = (ca, cb)
+            if key in seen:
+                continue
+            seen.add(key)
             score, used = score_rational(a, b, tables)
             tested += 1
-            ca, cb = canonical_candidate_pair(family, a, b)
             heap_push_best(heap, keep, {
                 "family": family.name(), "a": ca, "b": cb,
                 "score": score, "prime_terms": used,
@@ -443,6 +459,8 @@ def stage0_sieve(args, tables, keep, family):
     heap = []
     tested = 0
     sign_symmetry = family_parameter_symmetry(family) == "sign"
+    canonical_symmetry = family_parameter_symmetry(family) == "canonical"
+    seen = set()
     span = max(1, args.b_max - args.b_min + 1)
     for bi, b in enumerate(range(args.b_min, args.b_max + 1), 1):
         for aa, scores, used in iter_fixed_denominator_sieve(
@@ -460,6 +478,18 @@ def stage0_sieve(args, tables, keep, family):
                 scores = scores[keep_mask]
                 used = used[keep_mask]
                 aa = np.abs(aa)
+            if canonical_symmetry and len(aa):
+                keep_indices = []
+                for index, numerator in enumerate(aa.tolist()):
+                    canonical = canonical_candidate_pair(family, int(numerator), int(b))
+                    if canonical in seen:
+                        continue
+                    seen.add(canonical)
+                    keep_indices.append(index)
+                if len(keep_indices) != len(aa):
+                    aa = aa[keep_indices]
+                    scores = scores[keep_indices]
+                    used = used[keep_indices]
             tested += len(aa)
             if not len(aa):
                 continue
@@ -507,6 +537,8 @@ def main():
     symmetry = family_parameter_symmetry(family)
     if symmetry == "sign":
         print("[symmetry] canonicalizing exact parameter orbit t ~ -t")
+    elif symmetry == "canonical":
+        print("[symmetry] using the family's exact canonical parameter orbit")
     print(f"[engine] {args.engine}")
     print(f"[stages] {list(zip(bounds, keeps))}")
 

@@ -62,4 +62,4 @@ if [[ -n "$NATIVE_THEME" ]]; then
   STREAMLIT_THEME_ARGS+=(--theme.base "$NATIVE_THEME")
 fi
 
-exec "$UI_RUNTIME" -m rank42.streamlit_launcher run "$PROJECT_ROOT/rank_hunter_control_center.py"   --server.headless true   --browser.gatherUsageStats false   "${STREAMLIT_THEME_ARGS[@]}"   --   --db "$DB_PATH"   --project-root "$PROJECT_ROOT"
+exec "$UI_RUNTIME" -m rank42.streamlit_launcher run "$PROJECT_ROOT/rank_hunter_control_center.py"   --server.headless true   --server.address 0.0.0.0   --browser.gatherUsageStats false   "${STREAMLIT_THEME_ARGS[@]}"   --   --db "$DB_PATH"   --project-root "$PROJECT_ROOT"
