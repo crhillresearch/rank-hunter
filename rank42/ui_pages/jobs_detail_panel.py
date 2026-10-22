@@ -334,22 +334,43 @@ def campaign_assignment(db, row):
     current = job_campaign(row)
     options = [0, *campaigns]
     idx = options.index(current) if current in options else 0
-    selected = st.selectbox(
-        "Campaign",
-        options,
-        index=idx,
-        format_func=lambda cid: (
-            "Unassigned"
-            if int(cid) == 0
-            else f"#{cid} · {campaigns[int(cid)]['name']}"
-        ),
-        key=f"jobs-campaign-{int(row['id'])}",
+    st.html(
+        "<style>"
+        'div[class*="st-key-jobs-save-campaign-"] button {'
+        'min-width:2.5rem;width:2.5rem;min-height:2.5rem;'
+        'padding:0;justify-content:center;}'
+        'div[class*="st-key-jobs-save-campaign-"] button p {'
+        'position:absolute;width:1px;height:1px;padding:0;margin:-1px;'
+        'overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}'
+        "</style>"
     )
-    if st.button(
-        "Save campaign assignment",
-        width="stretch",
-        key=f"jobs-save-campaign-{int(row['id'])}",
-    ):
+    with st.container(key=f"rh-jobs-campaign-{int(row['id'])}", border=True):
+        label_col, select_col, save_col = st.columns(
+            [1.75, 7, 0.55], vertical_alignment="center", gap="small"
+        )
+        with label_col:
+            st.markdown("**Save to Campaign**")
+        with select_col:
+            selected = st.selectbox(
+                "Save to Campaign",
+                options,
+                index=idx,
+                label_visibility="collapsed",
+                format_func=lambda cid: (
+                    "Unassigned"
+                    if int(cid) == 0
+                    else f"#{cid} · {campaigns[int(cid)]['name']}"
+                ),
+                key=f"jobs-campaign-{int(row['id'])}",
+            )
+        with save_col:
+            save_clicked = st.button(
+                "Save campaign assignment",
+                icon=":material/save:",
+                help="Save campaign assignment",
+                key=f"jobs-save-campaign-{int(row['id'])}",
+            )
+    if save_clicked:
         attach_job_to_campaign(
             db,
             int(row["id"]),
@@ -532,6 +553,25 @@ def render_job_detail(db, ctx, row):
     summary = summarize_job(row, log)
     st.markdown(f"### Job #{int(row['id'])} · {row['label']}")
 
+    run_id = _pipeline_run_id(row)
+    if run_id is not None:
+        pipeline_run = get_pipeline_run(db, run_id)
+        if pipeline_run is not None:
+            runtime_drift = pipeline_run_runtime_drift(
+                pipeline_run,
+                project_root=ctx.project_root,
+            )
+            if runtime_drift["blocking"]:
+                st.error(
+                    "Pipeline runtime incompatibility: "
+                    + "; ".join(runtime_drift["blocking"])
+                )
+            elif runtime_drift["warnings"]:
+                st.warning(
+                    "Pipeline replay/runtime drift: "
+                    + "; ".join(runtime_drift["warnings"])
+                )
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Status", job_display_status(row).title())
     c2.metric("Kind", str(row["kind"]))
@@ -560,31 +600,15 @@ def render_job_detail(db, ctx, row):
             text=f"Progress: {int(completed or 0)}/{int(planned)}",
         )
 
-    run_id = _pipeline_run_id(row)
-    if run_id is not None:
-        pipeline_run = get_pipeline_run(db, run_id)
-        if pipeline_run is not None:
-            runtime_drift = pipeline_run_runtime_drift(
-                pipeline_run,
-                project_root=ctx.project_root,
-            )
-            if runtime_drift["blocking"]:
-                st.error(
-                    "Pipeline runtime incompatibility: "
-                    + "; ".join(runtime_drift["blocking"])
-                )
-            elif runtime_drift["warnings"]:
-                st.warning(
-                    "Pipeline replay/runtime drift: "
-                    + "; ".join(runtime_drift["warnings"])
-                )
-
+    is_pipeline = str(row["kind"]) == "pipeline_search"
+    if is_pipeline:
+        results_page.render_pipeline_job_stats(db, row)
     results_page.render_job_scientific_result(
         db,
         row,
         summary,
         science_python=ctx.detected_science_python(),
-        show_dynamic_stats=True,
+        show_dynamic_stats=not is_pipeline,
         show_raw_log=False,
     )
     _render_job_controls(
@@ -595,10 +619,7 @@ def render_job_detail(db, ctx, row):
         retired_search=retired_search,
     )
     results_page.render_job_raw_log(db, row)
-
-    with st.container(border=True):
-        st.markdown("#### Campaign")
-        _campaign_assignment(db, row)
+    _campaign_assignment(db, row)
 
 
 def render_active(db, ctx):

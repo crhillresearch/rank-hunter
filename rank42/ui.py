@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import html
+import json
 import sys
 import time
 import tomllib
@@ -297,18 +298,17 @@ def _cached_system_metrics():
     return rows
 
 
-@st.fragment(run_every="3s")
-def _system_metrics_panel():
-    rows = _cached_system_metrics()
+def _system_metrics_markup(rows):
     parts = ['<div class="rh-system-metrics">']
     for row in rows:
+        key = html.escape(str(row.get("key") or ""), quote=True)
         level = html.escape(str(row.get("level") or "muted"))
         label = html.escape(str(row.get("label") or ""))
         value = html.escape(str(row.get("value") or "—"))
         detail = html.escape(str(row.get("detail") or ""))
         pct = row.get("percent")
         width = 0 if pct is None else max(0.0, min(100.0, float(pct)))
-        parts.append(f'<div class="rh-system-row level-{level}">')
+        parts.append(f'<div class="rh-system-row level-{level}" data-metric-key="{key}">')
         parts.append(f'<div class="rh-system-head"><span>{label}</span><strong>{value}</strong></div>')
         if row.get("show_bar"):
             parts.append(f'<div class="rh-system-track"><i style="width:{width:.1f}%"></i></div>')
@@ -316,7 +316,34 @@ def _system_metrics_panel():
             parts.append(f'<div class="rh-system-detail">{detail}</div>')
         parts.append("</div>")
     parts.append("</div>")
-    st.html("".join(parts))
+    return "".join(parts)
+
+
+@st.fragment(run_every="3s")
+def _system_metrics_update_fragment():
+    rows = _cached_system_metrics()
+    payload = json.dumps(rows, ensure_ascii=False).replace("<", "\\u003c")
+    st.iframe(
+        "<!doctype html><html><body style='margin:0;background:transparent'>"
+        "<script>try{const rows=" + payload + ";const doc=window.parent.document;"
+        "for(const row of rows){const node=doc.querySelector("
+        "'.rh-system-row[data-metric-key=\"'+row.key+'\"]');"
+        "if(!node)continue;node.className='rh-system-row level-'+(row.level||'muted');"
+        "const value=node.querySelector('.rh-system-head strong');"
+        "if(value)value.textContent=row.value||'—';"
+        "const detail=node.querySelector('.rh-system-detail');"
+        "if(detail)detail.textContent=row.detail||'';"
+        "const bar=node.querySelector('.rh-system-track i');"
+        "if(bar)bar.style.width=Math.max(0,Math.min(100,Number(row.percent)||0))+'%';"
+        "}}catch(_){}</script></body></html>",
+        width=1,
+        height=1,
+    )
+
+
+def _system_metrics_panel():
+    st.html(_system_metrics_markup(_cached_system_metrics()))
+    _system_metrics_update_fragment()
 
 
 def _sidebar_branding(ctx):
@@ -768,12 +795,19 @@ def main():
         # Global live-work rule: never rebuild the routed page on a polling
         # timer. Streamlit replaces fragment output while it reruns, so polling
         # the whole page produced the repeated white flash on nearly every
-        # screen. Keep the campaign strip and routed page mounted; only the tiny
-        # active-work strip polls. When the job leaves the active states, do one
+        # screen. Keep the campaign strip, Active Work component, and routed
+        # page mounted; only a tiny status update polls. When work ends, do one
         # normal app rerun to refresh scientific/page state and completion
         # notifications.
         active_campaign_pin(db)
         if active_jobs:
+            job_strip(
+                db,
+                ctx.db_path,
+                theme=ctx.theme,
+                appearance=ctx.appearance,
+            )
+
             @st.fragment(run_every="2s")
             def _live_job_strip():
                 live = connect_existing(ctx.db_path)
@@ -784,6 +818,7 @@ def main():
                         notifications=False,
                         theme=ctx.theme,
                         appearance=ctx.appearance,
+                        update_only=True,
                     )
                     if not active:
                         st.rerun()

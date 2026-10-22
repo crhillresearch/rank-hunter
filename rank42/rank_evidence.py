@@ -22,6 +22,7 @@ RIGOROUS_TYPES = {
     "brumer_kramer_2selmer",
     "cassels_tate_refinement",
     "isogeny_descent_2",
+    "isogeny_rank_transfer_3",
 }
 
 

@@ -1576,7 +1576,10 @@ def _active_work_component_event(payload, *, job_id):
     return str(payload.get("action") or "")
 
 
-def _render_active_jobs(db, db_path, *, theme: Theme | None = None, appearance: str = "light"):
+def _render_active_jobs(
+    db, db_path, *, theme: Theme | None = None,
+    appearance: str = "light", update_only: bool = False,
+):
     """Render sticky global work controls for running or explicitly paused jobs."""
     reconcile_jobs(db)
     rows = list_jobs(db, limit=50)
@@ -1586,6 +1589,7 @@ def _render_active_jobs(db, db_path, *, theme: Theme | None = None, appearance: 
     ]
     paused = _paused_job_rows(rows)
     if not active and not paused:
+        st.session_state.pop("_rh_active_work_mounted_job_id", None)
         return active
 
     running = [
@@ -1626,6 +1630,48 @@ def _render_active_jobs(db, db_path, *, theme: Theme | None = None, appearance: 
         f"{' · '.join(status_bits)} · #{int(focus['id'])} "
         f"{focus['label']} · {progress}{more}"
     )
+
+    if is_paused:
+        mode = "resume"
+    elif str(focus["status"]) in {"queued", "running"}:
+        mode = "pause"
+    else:
+        mode = "none"
+
+    active_work_palette = None
+    if theme is not None:
+        tokens = theme.resolved_tokens(appearance)
+        active_work_palette = {
+            "text": tokens.get("rh-text"),
+            "muted": tokens.get("rh-muted"),
+            "primary": tokens.get("rh-primary"),
+            "danger": tokens.get("rh-danger"),
+            "hover": tokens.get("rh-surface-hover"),
+        }
+
+    if update_only:
+        job_id = int(focus["id"])
+        if st.session_state.get("_rh_active_work_mounted_job_id") != job_id:
+            st.rerun()
+        channel = json.dumps(f"rankhunter-active-work-{job_id}")
+        payload = json.dumps({
+            "kind": "active-work-update",
+            "title": "Paused work" if is_paused else "Active work",
+            "detail": detail,
+            "mode": mode,
+            "can_stop": True,
+            "can_force": not is_paused,
+        }, ensure_ascii=False).replace("<", "\\u003c")
+        st.iframe(
+            "<!doctype html><html><body style='margin:0;background:transparent'>"
+            "<script>try{const channel=new BroadcastChannel(" + channel + ");"
+            "channel.postMessage(" + payload + ");"
+            "setTimeout(()=>channel.close(),100);}catch(_){}</script>"
+            "</body></html>",
+            width=1,
+            height=1,
+        )
+        return active
 
     st.html(
         """
@@ -1668,24 +1714,7 @@ def _render_active_jobs(db, db_path, *, theme: Theme | None = None, appearance: 
         """
     )
 
-    if is_paused:
-        mode = "resume"
-    elif str(focus["status"]) in {"queued", "running"}:
-        mode = "pause"
-    else:
-        mode = "none"
-
-    active_work_palette = None
-    if theme is not None:
-        tokens = theme.resolved_tokens(appearance)
-        active_work_palette = {
-            "text": tokens.get("rh-text"),
-            "muted": tokens.get("rh-muted"),
-            "primary": tokens.get("rh-primary"),
-            "danger": tokens.get("rh-danger"),
-            "hover": tokens.get("rh-surface-hover"),
-        }
-
+    st.session_state["_rh_active_work_mounted_job_id"] = int(focus["id"])
     with st.container(key=rh_key("active-work-strip"), border=False):
         payload = _ACTIVE_WORK(
             title="Paused work" if is_paused else "Active work",
@@ -1694,6 +1723,7 @@ def _render_active_jobs(db, db_path, *, theme: Theme | None = None, appearance: 
             can_stop=True,
             can_force=not is_paused,
             palette=active_work_palette,
+            channel_name=f"rankhunter-active-work-{int(focus['id'])}",
             key=f"rank42-active-work-{int(focus['id'])}",
             default=None,
         )
@@ -1847,6 +1877,7 @@ def job_strip(
     notifications=True,
     theme: Theme | None = None,
     appearance: str = "light",
+    update_only: bool = False,
 ):
     """Render compact active work and, on full renders, completion toasts.
 
@@ -1857,12 +1888,13 @@ def job_strip(
     if notifications:
         render_job_notifications(db)
     if theme is None and appearance == "light":
-        return _render_active_jobs(db, db_path)
+        return _render_active_jobs(db, db_path, update_only=update_only)
     return _render_active_jobs(
         db,
         db_path,
         theme=theme,
         appearance=appearance,
+        update_only=update_only,
     )
 
 def recent_jobs(db, *, kinds=None, limit=15):

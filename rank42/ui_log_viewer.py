@@ -1,7 +1,39 @@
 from __future__ import annotations
 
 import html as html_lib
+import json
 import re
+
+
+_ELLIPTIC_CURVE_ASCII = """                                                                *
+                                                              **
+                                                             **
+                                                            **
+                                                           **
+                                                          **
+                                                         **
+            ******                                      **
+        *****    ******                                **
+       **             ***                             **
+      **                ***                           *
+     **                   **                         **
+    **                     **                        *
+    *                       *                       **
+    *                       *                       *
+    *                       *                       **
+    **                     **                        *
+     **                   **                         **
+      **                ***                           *
+       **             ***                             **
+        *****    ******                                **
+            ******                                      **
+                                                         **
+                                                          **
+                                                           **
+                                                            **
+                                                             **
+                                                              **
+                                                               *"""
 
 
 def _elapsed_label(seconds):
@@ -28,6 +60,7 @@ def raw_log_document(
     best_rank: str = "—",
     elapsed_seconds=None,
     stage_text: str = "",
+    newest_discovery: str = "",
 ) -> str:
     """Return a safe full-log viewer that opens scrolled to the newest output."""
     escaped = html_lib.escape(str(log), quote=False)
@@ -35,6 +68,9 @@ def raw_log_document(
     elapsed = html_lib.escape(_elapsed_label(elapsed_seconds), quote=True)
     stage = html_lib.escape(str(stage_text or "Stage unavailable"), quote=True)
     activity = html_lib.escape(_activity_label(log) or "", quote=True)
+    curve_art = html_lib.escape(_ELLIPTIC_CURVE_ASCII, quote=False)
+    discovery = html_lib.escape(str(newest_discovery or ""), quote=False)
+    discovery_hidden = " hidden" if not newest_discovery else ""
     return f"""<!doctype html>
 <html>
 <head>
@@ -92,11 +128,67 @@ def raw_log_document(
     border: 1px solid rgba(128,128,128,.34);
     border-radius: 0 0 8px 8px; background: rgba(128,128,128,.07);
   }}
-  pre {{
+  #curve-watermark {{
+    position: fixed; inset: 42px 0 36px; z-index: 0;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding-right: clamp(12px, 5vw, 88px);
+    overflow: hidden; pointer-events: none; user-select: none;
+    color: CanvasText; opacity: .11;
+  }}
+  #curve-art {{
+    transform-style: preserve-3d;
+    animation: curve-turn 52s linear infinite;
+    text-align: center;
+  }}
+  #curve-art pre {{
+    margin: 0; padding: 0; width: auto;
+    white-space: pre; overflow: visible;
+    font: 700 clamp(7px, 1vw, 12px)/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    color: inherit;
+  }}
+  #curve-art span {{
+    display: block; margin-top: 14px;
+    font: 600 clamp(10px, 1vw, 13px)/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    letter-spacing: .12em;
+  }}
+  @keyframes curve-turn {{
+    from {{ transform: perspective(900px) rotateY(0deg); }}
+    to {{ transform: perspective(900px) rotateY(360deg); }}
+  }}
+  @media (prefers-reduced-motion: reduce) {{
+    #curve-art {{ animation: none; }}
+  }}
+  #raw-log {{
+    position: relative; z-index: 1;
     margin: 0; padding: 12px 14px 18px 14px; width: 100%; min-width: 0;
     white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; tab-size: 4;
     font: 12px/1.42 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     color: CanvasText;
+  }}
+  #newest-discovery {{
+    position: fixed; right: 18px; bottom: 53px; z-index: 3;
+    display: grid; gap: 4px; max-width: min(390px, calc(100vw - 36px));
+    padding: 9px 12px 10px; border: 1px solid rgba(101, 227, 157, .5);
+    border-radius: 8px; background: rgba(8, 17, 20, .95);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, .24), 0 0 18px rgba(58, 201, 128, .1);
+    color: #dbf5e6; pointer-events: none;
+    font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }}
+  #newest-discovery[hidden] {{ display: none; }}
+  .discovery-heading {{
+    color: #80dda9; font-size: 9px; font-weight: 750;
+    letter-spacing: .13em; text-transform: uppercase;
+  }}
+  .discovery-line {{ display: flex; align-items: center; gap: 8px; min-width: 0; }}
+  .discovery-prompt {{ color: #80dda9; font-weight: 800; }}
+  #discovery-value {{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+  #newest-discovery.is-new {{ animation: discovery-arrive .65s ease-out; }}
+  @keyframes discovery-arrive {{
+    from {{ opacity: .45; transform: translateY(8px); }}
+    to {{ opacity: 1; transform: translateY(0); }}
+  }}
+  @media (prefers-reduced-motion: reduce) {{
+    #newest-discovery.is-new {{ animation: none; }}
   }}
   #copy-status {{ margin-left: 8px; opacity: .75; font-size: 12px; }}
 </style>
@@ -107,7 +199,7 @@ def raw_log_document(
     <div class="toolbar-actions">
       <div class="rank-badge" title="Best rigorously established rank found by this job">
         <span class="rank-label">Best rank found</span>
-        <span class="rank-value">{escaped_rank}</span>
+        <span id="rank-value" class="rank-value">{escaped_rank}</span>
       </div>
       <button id="fullscreen-log" class="icon-button" type="button" title="Open full screen raw log" aria-label="Open full screen raw log">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6V2H2v8h2zm6 14H4v-6H2v8h8zm10-6v6h-6v2h8v-8zM14 2v2h6v6h2V2z"/></svg>
@@ -120,11 +212,18 @@ def raw_log_document(
       <span id="copy-status" aria-live="polite"></span>
     </div>
   </div>
-  <div id="viewport"><pre id="raw-log">{escaped}</pre></div>
+  <div id="viewport">
+    <div id="curve-watermark" aria-hidden="true"><div id="curve-art"><pre>{curve_art}</pre><span>y^2 = x^3 - 4x</span></div></div>
+    <pre id="raw-log">{escaped}</pre>
+  </div>
+  <div id="newest-discovery" role="status" aria-live="polite"{discovery_hidden}>
+    <span class="discovery-heading">Newest Discovery</span>
+    <span class="discovery-line"><span class="discovery-prompt" aria-hidden="true">&gt;</span><strong id="discovery-value">{discovery}</strong></span>
+  </div>
   <div class="statusbar" role="status" aria-label="Job progress">
-    <span class="status-item"><span class="status-label">Elapsed</span><span class="status-value">{elapsed}</span></span>
-    <span class="status-item"><span class="status-label">Stage</span><span class="status-value">{stage}</span></span>
-    <span class="status-item status-activity"><span class="status-value">{activity}</span></span>
+    <span class="status-item"><span class="status-label">Elapsed</span><span id="elapsed-value" class="status-value">{elapsed}</span></span>
+    <span class="status-item"><span class="status-label">Stage</span><span id="stage-value" class="status-value">{stage}</span></span>
+    <span class="status-item status-activity"><span id="activity-value" class="status-value">{activity}</span></span>
   </div>
 <script>
 (() => {{
@@ -186,7 +285,36 @@ def raw_log_document(
   if (channelName && "BroadcastChannel" in window) {{
     try {{
       logChannel = new BroadcastChannel(channelName);
-      logChannel.postMessage({{ log: raw.textContent || "" }});
+      logChannel.onmessage = (event) => {{
+        const update = event.data;
+        if (!update || update.kind !== "raw-log-update") return;
+        if (typeof update.log === "string" && update.log !== raw.textContent) {{
+          raw.textContent = update.log;
+          requestAnimationFrame(pinBottom);
+        }}
+        document.getElementById("rank-value").textContent = update.bestRank || "—";
+        document.getElementById("elapsed-value").textContent = update.elapsed || "—";
+        document.getElementById("stage-value").textContent = update.stage || "Stage unavailable";
+        document.getElementById("activity-value").textContent = update.activity || "";
+        if (typeof update.newestDiscovery === "string") {{
+          const badge = document.getElementById("newest-discovery");
+          const value = document.getElementById("discovery-value");
+          badge.hidden = !update.newestDiscovery;
+          if (update.newestDiscovery && value.textContent !== update.newestDiscovery) {{
+            value.textContent = update.newestDiscovery;
+            badge.classList.remove("is-new");
+            void badge.offsetWidth;
+            badge.classList.add("is-new");
+          }}
+        }}
+        if (Array.isArray(update.statValues) && Number.isInteger(update.jobId)) {{
+          update.statValues.forEach((value, index) => {{
+            const selector = '[class*="st-key-rh-job-stat-' + update.jobId + '-' + index + '"] [data-testid="stMetricValue"]';
+            const node = parentDoc.querySelector(selector);
+            if (node && node.textContent !== value) node.textContent = value;
+          }});
+        }}
+      }};
     }} catch (_) {{ logChannel = null; }}
   }}
 
@@ -268,6 +396,7 @@ def render_raw_log(
     best_rank: str = "—",
     elapsed_seconds=None,
     stage_text: str = "",
+    newest_discovery: str = "",
 ) -> None:
     """Render the complete raw log with bottom pinning, wrapping, and one-click copy."""
     import streamlit as st
@@ -277,7 +406,46 @@ def render_raw_log(
         raw_log_document(
             log, channel_name=channel_name, best_rank=best_rank,
             elapsed_seconds=elapsed_seconds, stage_text=stage_text,
+            newest_discovery=newest_discovery,
         ),
         width="stretch",
         height=int(height) + 36,
+    )
+
+
+def broadcast_raw_log_update(
+    log: str,
+    *,
+    job_id: int,
+    best_rank: str = "—",
+    elapsed_seconds=None,
+    stage_text: str = "",
+    newest_discovery: str = "",
+    stat_values=None,
+    include_log: bool = True,
+) -> None:
+    """Update a mounted viewer from a tiny frame without repainting it."""
+    import streamlit as st
+
+    channel_name = f"rankhunter-job-log-{int(job_id)}"
+    payload = json.dumps({
+        "kind": "raw-log-update",
+        "jobId": int(job_id),
+        "bestRank": str(best_rank or "—"),
+        "elapsed": _elapsed_label(elapsed_seconds),
+        "stage": str(stage_text or "Stage unavailable"),
+        "newestDiscovery": str(newest_discovery or ""),
+        "activity": _activity_label(log),
+        "statValues": stat_values,
+        **({"log": str(log)} if include_log else {}),
+    }, ensure_ascii=False).replace("<", "\\u003c")
+    channel = json.dumps(channel_name)
+    st.iframe(
+        "<!doctype html><html><body style='margin:0;background:transparent'>"
+        "<script>try{const channel=new BroadcastChannel(" + channel + ");"
+        "channel.postMessage(" + payload + ");setTimeout(()=>channel.close(),100);"
+        "}catch(_){}</script>"
+        "</body></html>",
+        width=1,
+        height=1,
     )

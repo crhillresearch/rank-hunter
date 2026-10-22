@@ -1739,43 +1739,45 @@ def _config_editor(rec, index):
             "points are diagnostic only in this stage."
         )
     elif stage_id == "isogeny_descent":
-        c1, c2, c3 = st.columns(3)
+        c1, c2 = st.columns(2)
+        degree_options = [2, 3]
+        selected_degree = int(cfg.get("degree") or 2)
         cfg["degree"] = int(c1.selectbox(
             "Isogeny degree",
-            [2],
-            index=0,
+            degree_options,
+            index=degree_options.index(selected_degree) if selected_degree in degree_options else 0,
             key=f"{key}-degree",
-            help="Core v1 supports rational 2-isogeny descent. Degree 3 requires optional Magma and is not approximated.",
+            help="Degree 2: phi/dual-phi descent. Degree 3: PARI rank bound on an exact 3-isogenous model.",
         ))
-        cfg["first_limit"] = int(c2.number_input(
-            "First search limit",
-            min_value=1,
-            value=int(cfg.get("first_limit") or 20),
-            key=f"{key}-first-limit",
-        ))
-        cfg["second_limit"] = int(c3.number_input(
-            "Second search limit",
-            min_value=1,
-            value=int(cfg.get("second_limit") or 8),
-            key=f"{key}-second-limit",
-        ))
-        c4, c5 = st.columns(2)
-        cfg["second_descent"] = bool(c4.toggle(
-            "Run second descent",
-            value=bool(cfg.get("second_descent", True)),
-            key=f"{key}-second-descent",
-            help="Recommended for curves with rational 2-torsion; it can tighten the first isogeny-Selmer upper.",
-        ))
-        cfg["timeout"] = int(c5.number_input(
+        cfg["timeout"] = int(c2.number_input(
             "Hard timeout (s)",
             min_value=1,
             value=int(cfg.get("timeout") or 300),
             key=f"{key}-timeout",
         ))
+        if cfg["degree"] == 2:
+            c3, c4, c5 = st.columns(3)
+            cfg["first_limit"] = int(c3.number_input(
+                "First search limit",
+                min_value=1,
+                value=int(cfg.get("first_limit") or 20),
+                key=f"{key}-first-limit",
+            ))
+            cfg["second_limit"] = int(c4.number_input(
+                "Second search limit",
+                min_value=1,
+                value=int(cfg.get("second_limit") or 8),
+                key=f"{key}-second-limit",
+            ))
+            cfg["second_descent"] = bool(c5.toggle(
+                "Run second descent",
+                value=bool(cfg.get("second_descent", True)),
+                key=f"{key}-second-descent",
+            ))
         st.caption(
-            "Runs mwrank's genuine descent through rational 2-isogenies and "
-            "their duals. Every reported route is matched to an exact Sage "
-            "isogeny map before its rigorous upper can enter rank evidence."
+            "Degree 2 runs mwrank phi/dual-phi descent. Degree 3 verifies exact "
+            "3-isogeny maps and transfers PARI's unconditional rank bound from "
+            "each codomain. Degree 3 does not compute a 3-Selmer group."
         )
     elif stage_id == "local_root_numbers":
         c1, c2 = st.columns(2)

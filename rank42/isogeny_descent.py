@@ -1,4 +1,4 @@
-"""Process-isolated rational 2-isogeny descent."""
+"""Process-isolated isogeny rank bounds with exact route validation."""
 from __future__ import annotations
 
 import json
@@ -29,6 +29,52 @@ def validate_isogeny_descent_result(result, *, E=None):
         return result
     if status != "completed":
         raise ValueError("isogeny-descent worker did not complete")
+    if int(result.get("degree") or 0) == 3:
+        if str(result.get("engine") or "") != "sage_pari_3_isogeny_rank_transfer":
+            raise ValueError("wrong degree-3 isogeny rank-transfer engine")
+        if result.get("bound_method") != "pari_2_descent_on_3_isogenous_codomain":
+            raise ValueError("degree-3 route has no exact codomain bound method")
+        if not bool(result.get("unconditional")) or result.get("assumptions"):
+            raise ValueError("degree-3 rank-transfer result is not unconditional")
+        routes = list(result.get("routes") or [])
+        if not routes or len(routes) != int(result.get("isogeny_count") or 0):
+            raise ValueError("degree-3 isogeny route count is inconsistent")
+        bounds = []
+        for route in routes:
+            if not bool(route.get("map_verified")) or int(route.get("degree") or 0) != 3:
+                raise ValueError("degree-3 route lacks exact map verification")
+            if route.get("upper_bound_engine") != "sage_rank_bound_pari":
+                raise ValueError("degree-3 route has wrong rank-bound engine")
+            bound = int(route["codomain_mordell_weil_rank_upper"])
+            if bound < 0:
+                raise ValueError("negative codomain rank upper")
+            bounds.append(bound)
+        if int(result["mordell_weil_rank_upper"]) != min(bounds):
+            raise ValueError("degree-3 combined upper is inconsistent")
+        if E is not None:
+            from sage.all import QQ, EllipticCurve
+
+            maps = list(E.global_minimal_model().isogenies_prime_degree(3))
+            if len(maps) != len(routes):
+                raise ValueError("degree-3 route count does not match exact Sage maps")
+            unused = set(range(len(maps)))
+            for route in routes:
+                target = EllipticCurve(
+                    QQ, [QQ(str(x)) for x in route["isogenous_model_a_invariants"]]
+                )
+                minimal = EllipticCurve(
+                    QQ, [QQ(str(x)) for x in route["isogenous_minimal_model_a_invariants"]]
+                )
+                matches = [
+                    index for index in sorted(unused)
+                    if maps[index].codomain().is_isomorphic(target)
+                    and maps[index].codomain().global_minimal_model().is_isomorphic(minimal)
+                    and str(maps[index].kernel_polynomial()) == str(route.get("kernel_polynomial"))
+                ]
+                if not matches:
+                    raise ValueError("degree-3 route does not match an exact Sage isogeny")
+                unused.remove(matches[0])
+        return result
     if str(result.get("engine") or "") != "eclib.mwrank_2_isogeny_descent":
         raise ValueError("wrong isogeny-descent engine attestation")
     if int(result.get("degree") or 0) != 2:

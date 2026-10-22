@@ -147,6 +147,30 @@ function action(actionName,iconName,title,className){
   return b;
 }
 let currentArgs={};
+let updateChannel=null;
+let updateChannelName="";
+function connectUpdates(name){
+  if(name===updateChannelName)return;
+  if(updateChannel)updateChannel.close();
+  updateChannel=null;
+  updateChannelName=name||"";
+  if(!updateChannelName||!("BroadcastChannel" in window))return;
+  updateChannel=new BroadcastChannel(updateChannelName);
+  updateChannel.onmessage=(event)=>{
+    const update=event.data;
+    if(!update||update.kind!=="active-work-update")return;
+    const changedControls=update.mode!==currentArgs.mode
+      ||update.can_stop!==currentArgs.can_stop
+      ||update.can_force!==currentArgs.can_force;
+    currentArgs={...currentArgs,...update};
+    if(changedControls){render(currentArgs);return;}
+    const root=document.getElementById("root");
+    const title=root.querySelector(".title");
+    const detail=root.querySelector(".detail");
+    if(title&&title.textContent!==currentArgs.title)title.textContent=currentArgs.title||"Active work";
+    if(detail&&detail.textContent!==currentArgs.detail)detail.textContent=currentArgs.detail||"";
+  };
+}
 function confirmAction(actions,actionName,label){
   actions.replaceChildren();
   const prompt=document.createElement("span");
@@ -199,6 +223,7 @@ function onDataFromPython(event){
   applyTheme(event.data.theme);
   applyPalette((event.data.args||{}).palette);
   render(event.data.args||{});
+  connectUpdates((event.data.args||{}).channel_name);
 }
 window.addEventListener("message",onDataFromPython);
 window.addEventListener("load",()=>setTimeout(setFrameHeight,0));

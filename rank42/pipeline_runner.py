@@ -356,7 +356,6 @@ def _family_candidates(
             for index, row in enumerate(rows, 1)
         ]
 
-    bounds, keeps, score_method = _screening_vectors(stages)
     defaults = _family_candidate_defaults(plugin, variant)
     screen = next(
         (rec["config"] for rec in _candidate_stage_records(stages)
@@ -379,7 +378,6 @@ def _family_candidates(
     defaults.update(screen_generation)
     generation_overrides = dict(target.get("candidate_generation") or {})
     defaults.update(generation_overrides)
-    score_method = str(generation_overrides.get("score_method") or score_method)
     if any(rec["id"] == "euler_parameter_scan" for rec in _candidate_stage_records(stages)):
         return euler_parameter_candidates(
             db,
@@ -392,6 +390,8 @@ def _family_candidates(
             corpus_policy=_corpus_policy(stages),
             project_root=project_root,
         )
+    bounds, keeps, score_method = _screening_vectors(stages)
+    score_method = str(generation_overrides.get("score_method") or score_method)
     pool_name = str(
         target.get("output_pool_name")
         or f"pipeline-run-{int(run_id)}-{plugin.id}-{variant.id}"
@@ -2818,6 +2818,8 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
         try:
             attempt = run_isogeny_descent(E, **options)
             validate_isogeny_descent_result(attempt, E=E)
+            if int(attempt.get("degree") or 0) != degree:
+                raise ValueError("isogeny result degree does not match the requested degree")
         except (
             IsogenyDescentTimeout,
             IsogenyDescentFailure,
@@ -2831,7 +2833,7 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
                 curve_id=curve_id,
                 model=model,
                 data={
-                    "engine": "eclib.mwrank_2_isogeny_descent",
+                    "engine": "eclib.mwrank_2_isogeny_descent" if degree == 2 else "sage_pari_3_isogeny_rank_transfer",
                     "evidence_type": "isogeny_descent_attempt",
                     "status": "timeout" if timed_out else "error",
                     "rigorous": False,
@@ -2869,7 +2871,7 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
                 curve_id=curve_id,
                 model=model,
                 data={
-                    "engine": "eclib.mwrank_2_isogeny_descent",
+                    "engine": "eclib.mwrank_2_isogeny_descent" if degree == 2 else "sage_pari_3_isogeny_rank_transfer",
                     "evidence_type": "isogeny_descent_attempt",
                     "status": "unsupported",
                     "rigorous": False,
@@ -2903,7 +2905,7 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
                 "engine": str(attempt["engine"]),
                 "engine_version": attempt.get("engine_version"),
                 "sage_version": attempt.get("sage_version"),
-                "evidence_type": "isogeny_descent_2",
+                "evidence_type": "isogeny_descent_2" if degree == 2 else "isogeny_rank_transfer_3",
                 "status": "completed",
                 "rigorous": True,
                 "rigorous_lower": None,
@@ -2935,6 +2937,9 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
                 "exact phi/dual-phi Selmer dimensions and the validated "
                 "mwrank upper are rigorous; returned lower/search data are "
                 "diagnostic only"
+                if degree == 2 else
+                "exact rational 3-isogeny maps transfer PARI's unconditional "
+                "codomain rank upper; this is not a 3-Selmer descent"
             ),
         }), None, False
 
@@ -4548,6 +4553,32 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
         return _safe(result), None, False
 
     if stage_id == "final_upper":
+        prior_pari = _latest_prior_stage_result(
+            db,
+            run_id=run["id"],
+            before_stage_index=stage_index,
+            stage_id="pari_upper_gate",
+            candidate_id=context.get("pipeline_candidate_id"),
+            curve_id=curve_id,
+        ) or {}
+        if "bug in small_norm (precision too low)" in str(
+            prior_pari.get("failure_detail") or ""
+        ):
+            snap = _snapshot(db, curve_id)
+            print(
+                f"[auto:upper] pipeline-{run['id']}-final-upper skipped: "
+                "PARI small_norm precision failure already occurred on this curve",
+                flush=True,
+            )
+            return {
+                "status": "inconclusive",
+                "reason": "prior_pari_small_norm_precision_failure",
+                "failure_class": "PARI_ERROR",
+                "failure_detail": prior_pari["failure_detail"],
+                "effective_upper": snap.get("rigorous_upper"),
+                "exact_rank": snap.get("exact_rank"),
+                "budget_class": "final_proof",
+            }, None, False
         result = _try_pari_upper(
             db,
             curve_id,

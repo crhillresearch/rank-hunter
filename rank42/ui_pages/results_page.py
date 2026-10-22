@@ -4,12 +4,13 @@ from rank42.curve_research_state import list_curve_research_states
 from rank42.db import connect_existing
 from rank42.feature_hooks import render_feature_hook
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
 
-from rank42.ui_log_viewer import render_raw_log
+from rank42.ui_log_viewer import broadcast_raw_log_update, render_raw_log
 from rank42.ui_findings import hunt_findings
 from rank42.ui_results import pipeline_retention_quartic_summary, summarize_job
 from rank42.ui_store import get_job, list_jobs, read_log, reconcile_jobs
@@ -56,7 +57,47 @@ def _duration(row):
         return None
 
 
-def _raw_log_progress(db, row):
+def _pipeline_stage(db, row, run, *, log=None):
+    """Resolve the stage from one source for the cards and raw-log footer."""
+    try:
+        stages = json.loads(run["stages_json"] or "[]")
+    except (TypeError, ValueError):
+        stages = []
+    index = run["current_stage_index"]
+    stage_id = str(run["current_stage_id"] or "")
+    if str(row["status"]) in ACTIVE:
+        try:
+            if log is None:
+                with Path(str(row["log_path"])).open("rb") as handle:
+                    handle.seek(0, 2)
+                    handle.seek(max(0, handle.tell() - 65536))
+                    log = handle.read().decode("utf-8", errors="replace")
+            tail = log[-65536:]
+            candidate_start = tail.rfind("[pipeline candidate]")
+            if candidate_start >= 0:
+                tail = tail[candidate_start:]
+            markers = list(re.finditer(
+                r"^\[pipeline\] candidate=.* stage=(\d+) ([a-z0-9_]+)\s*$",
+                tail,
+                re.MULTILINE,
+            ))
+            if markers:
+                index = int(markers[-1].group(1))
+                stage_id = markers[-1].group(2)
+        except OSError:
+            pass
+    label = stage_id.replace("_", " ").title() if stage_id else "Starting"
+    if stage_id:
+        try:
+            from rank42.pipeline_catalog import stage_spec
+            label = stage_spec(stage_id).label
+        except (ImportError, ValueError):
+            pass
+    stage_text = f"{int(index)}/{len(stages)} · {label}" if index is not None and stages else label
+    return label, stage_text
+
+
+def _raw_log_progress(db, row, *, log=None):
     """Build the compact elapsed/stage footer state for one job log."""
     elapsed = _duration(row)
     stage_text = ""
@@ -66,24 +107,7 @@ def _raw_log_progress(db, row):
             run_id = int(metadata.get("pipeline_run_id"))
             run = get_pipeline_run(db, run_id)
             if run is not None:
-                try:
-                    stages = json.loads(run["stages_json"] or "[]")
-                except (TypeError, ValueError):
-                    stages = []
-                index = run["current_stage_index"]
-                stage_id = str(run["current_stage_id"] or "")
-                label = stage_id.replace("_", " ").title() if stage_id else "Starting"
-                if stage_id:
-                    try:
-                        from rank42.pipeline_catalog import stage_spec
-                        label = stage_spec(stage_id).label
-                    except (ImportError, ValueError):
-                        pass
-                stage_text = (
-                    f"{int(index)}/{len(stages)} · {label}"
-                    if index is not None and stages
-                    else label
-                )
+                _, stage_text = _pipeline_stage(db, row, run, log=log)
         except (TypeError, ValueError, json.JSONDecodeError):
             pass
     return elapsed, stage_text
@@ -162,11 +186,50 @@ def _fmt_stat(value, *, lower=False):
     return f'{int(value):,}' if isinstance(value,int) else str(value)
 
 
-def _dynamic_stats(row,s):
+def _pipeline_stat_cards(db, row):
+    """Read the live Pipeline run rather than its finished screening summary."""
+    try:
+        metadata = json.loads(row["metadata_json"] or "{}")
+        run_id = int(metadata["pipeline_run_id"])
+    except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+        return None
+    run = get_pipeline_run(db, run_id)
+    if run is None:
+        return None
+    current = db.execute(
+        """SELECT parameter,current_stage_id FROM search_pipeline_candidates
+           WHERE run_id=? AND status='running' ORDER BY updated_at DESC,id DESC LIMIT 1""",
+        (run_id,),
+    ).fetchone()
+    stage_label, _ = _pipeline_stage(db, row, run)
+    done = int(run["candidates_done"] or 0)
+    total = int(run["candidates_total"] or 0)
+    best = int(run["best_lower"] or 0)
+    elapsed = _duration(row)
+    if elapsed is None:
+        elapsed_text = "—"
+    else:
+        hours, remainder = divmod(int(elapsed), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        elapsed_text = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return [
+        ("Candidates completed", f"{done:,} / {total:,}" if total else f"{done:,}"),
+        ("Current parameter", str(current["parameter"]) if current else "—"),
+        ("Current stage", stage_label),
+        ("Best certified rank", f"≥ {best}" if best else "—"),
+        ("Elapsed time", elapsed_text),
+    ]
+
+
+def _dynamic_stats(row,s,db=None):
     """Job-kind-aware scientific status surface; screens remain labelled as screens."""
     kind=str(row['kind'])
     cards=[]
-    if kind in {'candidate_generate','candidates','nagao_generate'} or s.get('candidates_written') is not None:
+    if kind == 'pipeline_search':
+        cards = _pipeline_stat_cards(db, row) if db is not None else None
+        if cards is None:
+            cards = [('Candidates completed', s.get('candidates_done')), ('Best certified rank', s.get('best_lower'))]
+    elif kind in {'candidate_generate','candidates','nagao_generate'} or s.get('candidates_written') is not None:
         cards=[('Parameters screened',s.get('parameters_screened')),('Candidates ready',s.get('candidates_written')),('Best Nagao',s.get('best_nagao_score')),('Stage survivors',(s.get('stage_survivors') or ['—'])[-1])]
     elif kind == 'independence':
         cards=[
@@ -191,9 +254,15 @@ def _dynamic_stats(row,s):
         cards=[x for x in preferred if x[1] is not None]
     if not cards:
         return
-    cols=st.columns(min(4,len(cards)))
+    cols=st.columns(min(6,len(cards)))
     for i,(label,value) in enumerate(cards):
-        cols[i%len(cols)].metric(label,_fmt_stat(value) if not isinstance(value,str) else value)
+        displayed = _fmt_stat(value) if not isinstance(value,str) else value
+        with cols[i%len(cols)]:
+            if kind == 'pipeline_search':
+                with st.container(key=f"rh-job-stat-{int(row['id'])}-{i}"):
+                    st.metric(label, displayed)
+            else:
+                st.metric(label, displayed)
 def _display_result(row,s):
     if row['status'] in {'stopped','killed','interrupted'}:
         return str(row['status']).upper()
@@ -229,7 +298,7 @@ def _detail(db,row,s,science_python=None):
     st.markdown(f"### Job #{row['id']} · {row['label']}")
     result=_display_result(row,s)
     st.html(f'<div class="rh-result-outcome rh-result-{str(result).lower().replace(" ","-")}"><strong>{result}</strong></div>')
-    _dynamic_stats(row,s)
+    _dynamic_stats(row,s,db)
     c1,c2,c3=st.columns(3)
     c1.metric('Process',row['status'])
     c2.metric('PID',row['pid'] or '—')
@@ -300,7 +369,20 @@ def _best_rank_found(db, row, log):
                     ).fetchone()
                     if candidate is not None:
                         exact = candidate["exact_rank"]
-                return label(exact, run["best_lower"])
+                live_rank = db.execute(
+                    """SELECT MAX(curve.descent_lower) AS lower,
+                              MAX(curve.exact_rank) AS exact_rank
+                       FROM search_pipeline_candidates AS candidate
+                       JOIN curves AS curve ON curve.id=candidate.curve_id
+                       WHERE candidate.run_id=?""",
+                    (run_id,),
+                ).fetchone()
+                lower = max(int(run["best_lower"] or 0), int(live_rank["lower"] or 0))
+                if live_rank["exact_rank"] is not None:
+                    exact = max(int(exact or 0), int(live_rank["exact_rank"]))
+                if exact is not None and int(exact) < lower:
+                    exact = None
+                return label(exact, lower)
 
     summary = summarize_job(row, log)
     return label(
@@ -309,9 +391,41 @@ def _best_rank_found(db, row, log):
     )
 
 
-@st.fragment(run_every="1s")
+def _newest_pipeline_discovery(db, row):
+    """Latest ranked Pipeline candidate, including rank certified mid-stage."""
+    if str(row["kind"]) != "pipeline_search":
+        return ""
+    try:
+        run_id = int(json.loads(row["metadata_json"] or "{}")["pipeline_run_id"])
+    except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+        return ""
+    candidate = db.execute(
+        """SELECT candidate.parameter,candidate.rigorous_lower,candidate.exact_rank,
+                  curve.descent_lower AS curve_lower,curve.exact_rank AS curve_exact_rank
+           FROM search_pipeline_candidates AS candidate
+           LEFT JOIN curves AS curve ON curve.id=candidate.curve_id
+           WHERE candidate.run_id=? AND (
+               candidate.rigorous_lower>0 OR candidate.exact_rank>0
+               OR curve.descent_lower>0 OR curve.exact_rank>0
+           )
+           ORDER BY CASE WHEN curve.updated_at>candidate.updated_at
+                         THEN curve.updated_at ELSE candidate.updated_at END DESC,
+                    candidate.id DESC LIMIT 1""",
+        (run_id,),
+    ).fetchone()
+    if candidate is None:
+        return ""
+    lower = max(int(candidate["rigorous_lower"] or 0), int(candidate["curve_lower"] or 0))
+    exact_values = (candidate["exact_rank"], candidate["curve_exact_rank"])
+    exact = max((int(value) for value in exact_values if value is not None), default=None)
+    rank = f"={int(exact)}" if exact is not None and int(exact) >= lower else f"≥{lower}"
+    parameter = str(candidate["parameter"] or "").strip()
+    return f"t={parameter} · {rank}" if parameter else rank
+
+
+@st.fragment(run_every="2s")
 def _render_live_raw_log_fragment(db_path, job_id):
-    """Refresh one active Raw log with a thread-local SQLite connection."""
+    """Send live data to the mounted Raw log without replacing its iframe."""
     fresh_db = connect_existing(db_path)
     try:
         fresh = get_job(fresh_db, int(job_id))
@@ -319,14 +433,24 @@ def _render_live_raw_log_fragment(db_path, job_id):
             st.warning(f"Job #{int(job_id)} is no longer available.")
             return
         log = read_log(fresh["log_path"])
-        elapsed, stage_text = _raw_log_progress(fresh_db, fresh)
-        render_raw_log(
+        elapsed, stage_text = _raw_log_progress(fresh_db, fresh, log=log)
+        stat_cards = (
+            _pipeline_stat_cards(fresh_db, fresh)
+            if str(fresh["kind"]) == "pipeline_search" else None
+        )
+        log_signature = _job_log_signature(fresh)
+        signature_key = f"_rh_live_log_signature_{int(job_id)}"
+        broadcast_raw_log_update(
             log,
             job_id=int(job_id),
             best_rank=_best_rank_found(fresh_db, fresh, log),
             elapsed_seconds=elapsed,
             stage_text=stage_text,
+            newest_discovery=_newest_pipeline_discovery(fresh_db, fresh),
+            stat_values=[str(value) for _, value in stat_cards] if stat_cards else None,
+            include_log=st.session_state.get(signature_key) != log_signature,
         )
+        st.session_state[signature_key] = log_signature
         terminal = str(fresh["status"]) not in ACTIVE
     finally:
         fresh_db.close()
@@ -334,6 +458,21 @@ def _render_live_raw_log_fragment(db_path, job_id):
     if terminal:
         # Switch the whole detail view to the terminal/static path once.
         st.rerun()
+
+
+def render_pipeline_job_stats(db, row):
+    job_id = int(row["id"])
+    st.html(
+        "<style>"
+        f'div[class*="st-key-rh-job-stat-{job_id}-2"] '
+        '[data-testid="stMetricValue"]{display:block;min-width:0;max-width:100%;'
+        'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+        f'div[class*="st-key-rh-job-stat-{job_id}-2"] '
+        '[data-testid="stMetricValue"] *{display:inline-block;max-width:100%;'
+        'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+        "</style>"
+    )
+    _dynamic_stats(row, {}, db)
 
 
 def _render_pipeline_retention_notice(db, row):
@@ -375,20 +514,31 @@ def _render_pipeline_retention_notice(db, row):
 
 
 def _render_job_raw_log(db, row):
-    """Always render Raw log; active Jobs refresh in an isolated fragment."""
+    """Keep the visible Raw log mounted while active data refreshes."""
     if str(row["status"]) in ACTIVE:
         db_path = _database_path(db)
         if db_path:
+            log = read_log(row["log_path"])
+            elapsed, stage_text = _raw_log_progress(db, row, log=log)
+            render_raw_log(
+                log,
+                job_id=int(row["id"]),
+                best_rank=_best_rank_found(db, row, log),
+                elapsed_seconds=elapsed,
+                stage_text=stage_text,
+                newest_discovery=_newest_pipeline_discovery(db, row),
+            )
             _render_live_raw_log_fragment(db_path, int(row["id"]))
             return
     log = read_log(row["log_path"])
-    elapsed, stage_text = _raw_log_progress(db, row)
+    elapsed, stage_text = _raw_log_progress(db, row, log=log)
     render_raw_log(
         log,
         job_id=int(row["id"]),
         best_rank=_best_rank_found(db, row, log),
         elapsed_seconds=elapsed,
         stage_text=stage_text,
+        newest_discovery=_newest_pipeline_discovery(db, row),
     )
 
 
@@ -408,7 +558,7 @@ def render_job_scientific_result(
 ):
     """Shared scientific interpretation for one durable Job."""
     if show_dynamic_stats:
-        _dynamic_stats(row, summary)
+        _dynamic_stats(row, summary, db)
 
     _render_pipeline_retention_notice(db, row)
     if show_raw_log:

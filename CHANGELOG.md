@@ -50,8 +50,15 @@ All notable changes to Rank Hunter are documented here.
   and send into a search.
 - Put elapsed time, the current Pipeline stage, and recent chart progress in
   the Jobs raw-log footer. The status stays visible in full screen.
+- Added a faint, slowly turning ASCII elliptic curve behind the Jobs raw log.
+- Added a small terminal badge for the newest ranked Pipeline candidate, with
+  its parameter and exact rank or certified lower bound.
 - Made the Pipeline preset picker open on Auto for most target types instead
   of opening on REA Hunt.
+- Expanded Isogeny Descent and Isogeny Hunt to degree 3. The hunt visits both
+  2- and 3-isogeny neighbors. For degree 3, the descent module verifies the
+  isogeny and transfers a PARI rank bound from the neighboring curve; it does
+  not claim a 3-isogeny Selmer calculation.
 
 ### Fixed
 
@@ -62,6 +69,24 @@ All notable changes to Rank Hunter are documented here.
   search candidates created by the same Pipeline run.
 - Fixed the Dashboard conductor chart failing when arithmetic records for a
   curve were missing.
+- Made PARI failures show their actual error in the job log and saved Pipeline
+  result. If PARI reports its `small_norm` precision failure, Final Upper now
+  skips the same calculation on that curve instead of repeating it.
+- Fixed Active Jobs showing finished candidate-screening totals as if they
+  were live Pipeline stats. Pipeline jobs now show completed candidates,
+  the current parameter and stage, and the best certified rank as they move.
+  The stage card and raw-log footer now read the same live stage. Pipeline
+  runtime warnings sit directly below the Job title.
+- Stopped the active raw log from reloading its visible frame on every refresh,
+  which brought back the white flash. The log and footer now update in place.
+- Kept the sidebar system readings and live Pipeline job cards mounted during
+  refresh, so their changing numbers no longer flash white.
+- Kept the sticky Active Work strip mounted during polling, so its status can
+  update without the white flash.
+- Added a live elapsed-time card to Pipeline jobs. Long current-stage names
+  truncate with an ellipsis. The cards share the log's refresh so Active Jobs
+  stays responsive. Pause, Stop, and Force stop sit above the raw log, with a
+  compact campaign picker and save icon below it.
 
 ## [0.10.0] — Unreleased
 

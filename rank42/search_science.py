@@ -34,7 +34,10 @@ def try_pari_upper(db, curve_id, E, timeout, *, phase):
     prior_state = research_rank_state(db, curve_id)
     prior_upper = prior_state.get("rigorous_upper")
 
-    def _attempt_result(state, *, attempt_status, new_upper=None, failure_class=None):
+    def _attempt_result(
+        state, *, attempt_status, new_upper=None, failure_class=None,
+        failure_detail=None, worker_exit_code=None,
+    ):
         effective_upper = state.get("rigorous_upper")
         upper_source = None
         if effective_upper is not None:
@@ -59,6 +62,8 @@ def try_pari_upper(db, curve_id, E, timeout, *, phase):
             "attempt_phase": str(phase),
             "attempt_timeout": timeout,
             "failure_class": failure_class,
+            "failure_detail": failure_detail,
+            "worker_exit_code": worker_exit_code,
         }
 
     try:
@@ -75,17 +80,28 @@ def try_pari_upper(db, curve_id, E, timeout, *, phase):
             failure_class="timeout",
         )
     except DescentFailure as exc:
-        print(f"[auto:upper] {phase} PARI inconclusive ({exc.failure_class})", flush=True)
+        failure_detail = next(
+            (line.strip() for line in reversed((exc.tail or "").splitlines()) if line.strip()),
+            str(exc),
+        )[:400]
+        print(
+            f"[auto:upper] {phase} PARI inconclusive "
+            f"({exc.failure_class}: {failure_detail})",
+            flush=True,
+        )
         log_event(
             db,
             curve_id,
             "warn",
-            f"Auto Hunter PARI upper-bound inconclusive during {phase}: {exc.failure_class}",
+            f"Auto Hunter PARI upper-bound inconclusive during {phase}: "
+            f"{exc.failure_class}: {failure_detail}",
         )
         return _attempt_result(
             research_rank_state(db, curve_id),
             attempt_status="inconclusive",
             failure_class=str(exc.failure_class),
+            failure_detail=failure_detail,
+            worker_exit_code=exc.returncode,
         )
 
     upper = int(result["upper"])

@@ -1,4 +1,4 @@
-"""Isolated eclib/mwrank descent through rational 2-isogenies."""
+"""Isolated 2-isogeny descent or rank bounds across rational 3-isogenies."""
 from __future__ import annotations
 
 import ast
@@ -172,13 +172,63 @@ def _attach_exact_maps(E, routes):
     return maps
 
 
+def _three_isogeny_rank_transfer(E):
+    """Use exact degree-3 maps and PARI's unconditional rank bound on codomains.
+
+    This is a 2-descent bound on a 3-isogenous model, not a 3-Selmer descent.
+    """
+    maps = list(E.isogenies_prime_degree(3))
+    if not maps:
+        return {
+            "status": "unsupported",
+            "reason": "no_rational_3_isogeny",
+            "degree": 3,
+            "minimal_model_a_invariants": [str(x) for x in E.a_invariants()],
+        }
+    started = datetime.now(timezone.utc).isoformat()
+    routes = []
+    for index, phi in enumerate(maps, 1):
+        codomain = phi.codomain()
+        target = codomain.global_minimal_model()
+        upper = int(target.rank_bound(algorithm="pari"))
+        routes.append({
+            "route_index": index,
+            "degree": 3,
+            "map_verified": True,
+            "kernel_polynomial": str(phi.kernel_polynomial()),
+            "isogenous_model_a_invariants": [str(x) for x in codomain.a_invariants()],
+            "isogenous_minimal_model_a_invariants": [str(x) for x in target.a_invariants()],
+            "codomain_mordell_weil_rank_upper": upper,
+            "upper_bound_engine": "sage_rank_bound_pari",
+        })
+    return {
+        "status": "completed",
+        "engine": "sage_pari_3_isogeny_rank_transfer",
+        "engine_version": _version("sage.version", "version"),
+        "sage_version": _version("sage.version", "version"),
+        "degree": 3,
+        "minimal_model_a_invariants": [str(x) for x in E.a_invariants()],
+        "isogeny_count": len(routes),
+        "routes": routes,
+        "mordell_weil_rank_upper": min(
+            route["codomain_mordell_weil_rank_upper"] for route in routes
+        ),
+        "bound_method": "pari_2_descent_on_3_isogenous_codomain",
+        "map_verification": "exact_sage_rational_3_isogenies",
+        "unconditional": True,
+        "assumptions": [],
+        "started_at": started,
+        "finished_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def main():
     payload = json.loads(sys.stdin.read())
     degree = int(payload.get("degree", 2))
-    if degree != 2:
+    if degree not in (2, 3):
         _emit({
             "status": "unsupported",
-            "reason": "core_isogeny_descent_v1_supports_degree_2_only",
+            "reason": "supported_degrees_are_2_and_3",
             "degree": degree,
         })
         return
@@ -193,6 +243,9 @@ def main():
         QQ,
         [QQ(str(x)) for x in payload["a_invariants"]],
     ).global_minimal_model()
+    if degree == 3:
+        _emit(_three_isogeny_rank_transfer(E))
+        return
     sage_maps = list(E.isogenies_prime_degree(2))
     if not sage_maps:
         _emit({

@@ -732,7 +732,7 @@ _STAGE_LIST = (
         "isogeny_descent",
         "Isogeny Descent",
         "Arithmetic",
-        "For curves with a rational 2-isogeny, run eclib/mwrank descent through each rational 2-isogeny and its dual, record the exact phi- and dual-phi Selmer dimensions, verify every route against Sage's exact maps, and promote only the resulting rigorous Mordell-Weil upper. This is descent, not an isogeny walk or a retry on a neighboring curve.",
+        "Degree 2 runs eclib/mwrank descent through rational 2-isogenies and their duals, records exact phi- and dual-phi Selmer dimensions, and verifies Sage maps. Degree 3 verifies rational 3-isogeny maps and transfers PARI's unconditional rank upper from each codomain. Only rigorous Mordell-Weil upper bounds are promoted. This is not an isogeny walk.",
         frozenset(ELLIPTIC_TARGET_MODES),
         frozenset({"exact_curve"}),
         frozenset({"upper_bound_possible", "isogeny_selmer_data"}),
@@ -746,7 +746,7 @@ _STAGE_LIST = (
             "timeout": 300,
         },
         repeatable=True,
-        conditional="Core v1 supports rational 2-isogeny descent only. Curves without a rational 2-isogeny are unsupported. Degree-3 isogeny descent is not claimed because the installed Sage stack delegates that computation to optional Magma. Timeout/error/malformed route evidence is inconclusive; returned lower and point-search diagnostics do not raise rigorous lower state.",
+        conditional="Degree 2 requires a rational 2-isogeny and performs phi/dual-phi descent. Degree 3 requires a rational 3-isogeny and uses PARI 2-descent on the 3-isogenous codomain; it is not a 3-Selmer descent. Timeout/error/malformed route evidence is inconclusive; returned lower and point-search diagnostics do not raise rigorous lower state.",
     ),
     PipelineStageSpec(
         "local_root_numbers",
@@ -2206,9 +2206,9 @@ def validate_pipeline(target_mode, stages):
                 timeout = int(cfg.get("timeout"))
             except Exception:
                 degree, first_limit, second_limit, timeout = 0, 0, 0, 0
-            if degree != 2:
+            if degree not in (2, 3):
                 errors.append(
-                    f"Step {index} · Isogeny Descent: core v1 supports degree 2 only"
+                    f"Step {index} · Isogeny Descent: supported degrees are 2 and 3"
                 )
             if first_limit <= 0 or second_limit <= 0:
                 errors.append(
@@ -3829,8 +3829,8 @@ ISOGENY_HUNT_TEMPLATE = [
     {
         "id": "isogeny_walk",
         "config": {
-            "degrees": [2],
-            "max_children": 3,
+            "degrees": [2, 3],
+            "max_children": 6,
             "include_parent": True,
             "transfer_basis": True,
             "certificate_timeout": 240,
@@ -4243,7 +4243,7 @@ _PRESET_DEFS = (
     ("generator_breaker", "Generator Breaker", "Focus compute on extracting hidden/high-height Mordell-Weil generators."),
     ("selmer_gate", "Selmer Gate", "Compute a rigorous 2-Selmer upper and expose rank headroom before spending more point-search time."),
     ("covering_forest", "Covering Forest", "Run independent 2-descent/covering branches, fan out stored exact coverings, and certify mapped point growth."),
-    ("isogeny_hunt", "2-Isogeny Hunt", "Search the rational 2-isogeny neighborhood, transfer the known basis, and attack rank-equivalent alternate models."),
+    ("isogeny_hunt", "2/3-Isogeny Hunt", "Search rational 2- and 3-isogeny neighbors, transfer the known basis, and attack rank-equivalent alternate models."),
     ("arithmetic_siege", "Arithmetic Siege", "Combine Selmer headroom, covering branches, 2-isogeny neighbors, and deep generator recovery."),
     ("prime_sieve_funnel", "Prime Sieve Funnel", "Cheap-to-medium Frobenius/local filters before point-search spend."),
     ("geometry_grinder", "Geometry Grinder", "Coverings, plugin geometry, and self-feeding MW quartic attacks."),
