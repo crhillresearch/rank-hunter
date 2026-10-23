@@ -26,9 +26,6 @@ All notable changes to Rank Hunter are documented here.
   sections forward, and register the result for Pipeline searches. A generic
   rank lower bound of one requires an exact infinite-order specialization.
   The search can try nearby rational x-values and wider conic bounds.
-- Added automatic fibration discovery to **X1152 Neighbor Hunt**. It searches
-  candidate isotropic classes from known sections, tries exact 2-neighbor
-  constructions, and saves the resulting equations and proof records.
 - Added **Autonomous Rank-Jump** for JSON formula families. It searches for
   quadratic multisections, parametrizes genus-zero covers when it finds a
   rational point, and feeds derived fibers into Pipeline. It also records
@@ -74,11 +71,6 @@ All notable changes to Rank Hunter are documented here.
   2- and 3-isogeny neighbors. For degree 3, the descent module verifies the
   isogeny and transfers a PARI rank bound from the neighboring curve; it does
   not claim a 3-isogeny Selmer calculation.
-- Made **X1152 Neighbor Hunt** easier to use, with clearer construction,
-  discovery, and saved-model views.
-- Let resumed X1152 neighbor searches set a certified rank goal for point
-  growth. The new #3900 neighbor 028 campaign is searching a larger parameter
-  box with a goal of rank 28.
 - Made the **MW Growth Loop** spend its quartic searches more deliberately on
   curves with a certified rank of at least 27. It uses the known point lattice,
   point heights, and past chart searches to choose fresh search anchors. New
