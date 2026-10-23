@@ -814,9 +814,3 @@ code {
 .rh-system-detail {
     color: var(--rh-muted) !important;
 }
-
-/* The dashboard embeds its mark as a black monochrome SVG. Invert it for
-   dark appearance so it remains visible against the dark app canvas. */
-.rh-dashboard-brand-logo img {
-    filter: brightness(0) invert(1);
-}

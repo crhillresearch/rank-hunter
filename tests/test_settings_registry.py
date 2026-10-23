@@ -308,7 +308,7 @@ def test_settings_page_uses_owned_subviews_without_diagnostics_handoff():
         root / "rank42" / "ui_pages" / "settings_page.py"
     ).read_text(encoding="utf-8")
 
-    assert '["Runtimes", "Services", "About"]' in source
+    assert '["General", "Runtimes", "Services", "About"]' in source
     assert 'key="settings-view-tabs"' in source
     assert 'variant="line"' in source
     assert 'st.session_state["settings_view"] = choice' in source

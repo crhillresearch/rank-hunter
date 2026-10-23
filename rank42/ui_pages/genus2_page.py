@@ -380,7 +380,6 @@ def page(db, ctx):
 
     view = tabs(["Inventory", "Create model"], value="Inventory",
                 key="models-section", variant="line")
-    st.html("<div style='height:.85rem'></div>")
     if view == "Create model":
         _render_create(db)
     else:

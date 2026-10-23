@@ -1,0 +1,10 @@
+.st-key-rh-settings-general-appearance,
+.st-key-rh-settings-general-installation {
+    margin-top: .75rem;
+    border-color: var(--rh-border) !important;
+    border-radius: 12px !important;
+    background: var(--rh-card);
+}
+.st-key-rh-settings-general-appearance h3,
+.st-key-rh-settings-general-installation h3 { margin-top: 0; }
+.st-key-rh-settings-general-appearance [data-testid="stSegmentedControl"] { max-width: 18rem; }

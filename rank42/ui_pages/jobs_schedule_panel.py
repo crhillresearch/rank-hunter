@@ -356,6 +356,7 @@ def render_schedule_editor(db, ctx, row):
         else:
             st.session_state["manage_job_id"] = int(jid)
             st.session_state["jobs_section_pending"] = "Queue"
+            st.session_state["jobs_queue_view"] = "Waiting jobs"
             st.success(f"Queued job #{jid}.")
             st.rerun()
     if b.button(

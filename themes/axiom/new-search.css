@@ -1,0 +1,77 @@
+/* New Search uses the established Axiom page menu and workbench surfaces. */
+.st-key-rh-new-search-command-bridge,
+.st-key-rh-new-search-command-runtime {
+    display: none !important;
+}
+#rh-new-search-commandbar {
+    margin: -.15rem 0 -.2rem;
+}
+.st-key-rh-new-search-setup,
+.st-key-rh-new-search-plugin-presets,
+.st-key-rh-search-pool-source,
+.st-key-rh-search-pool-controls,
+.st-key-rh-search-pool-presets {
+    border-color: var(--rh-border) !important;
+    border-radius: 13px !important;
+    background: var(--rh-card) !important;
+    box-shadow: 0 5px 15px color-mix(in srgb, var(--rh-text) 3%, transparent);
+}
+.st-key-rh-new-search-setup h3,
+.st-key-rh-new-search-plugin-presets h3,
+.st-key-rh-search-pool-source h3,
+.st-key-rh-search-pool-controls h3,
+.st-key-rh-search-pool-presets h3 {
+    margin-top: 0;
+}
+.st-key-rh-search-pool-source {
+    margin-bottom: .65rem;
+}
+.rh-search-pool-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
+    gap: 0;
+    margin: 0 0 .75rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 13px;
+    background: var(--rh-card);
+    overflow: hidden;
+}
+.rh-search-pool-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: .2rem;
+    min-width: 0;
+    padding: .72rem .9rem;
+}
+.rh-search-pool-summary-item + .rh-search-pool-summary-item {
+    border-left: 1px solid var(--rh-border-subtle);
+}
+.rh-search-pool-summary-item span {
+    color: var(--rh-text-secondary);
+    font-size: .72rem;
+    line-height: 1.2;
+}
+.rh-search-pool-summary-item strong {
+    color: var(--rh-text);
+    font-size: .98rem;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.st-key-rh-search-pool-controls [data-testid="stExpander"] {
+    border-color: var(--rh-border-subtle);
+    background: var(--ax-surface-soft);
+}
+.st-key-rh-search-pool-presets [data-testid="stButton"] button {
+    min-height: 2.3rem;
+}
+@media (max-width: 760px) {
+    .rh-search-pool-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .rh-search-pool-summary-item:nth-child(3) { border-left: 0; border-top: 1px solid var(--rh-border-subtle); }
+    .rh-search-pool-summary-item:nth-child(4) { border-top: 1px solid var(--rh-border-subtle); }
+}
+.st-key-rh-new-search-plugin-presets [data-testid="stButton"] button,
+.st-key-rh-candidates-presets [data-testid="stButton"] button {
+    min-height: 2.3rem;
+}

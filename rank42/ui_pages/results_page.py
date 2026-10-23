@@ -4,6 +4,7 @@ from rank42.curve_research_state import list_curve_research_states
 from rank42.db import connect_existing
 from rank42.feature_hooks import render_feature_hook
 import json
+import html
 import re
 from datetime import datetime
 from pathlib import Path
@@ -16,7 +17,7 @@ from rank42.ui_results import pipeline_retention_quartic_summary, summarize_job
 from rank42.ui_store import get_job, list_jobs, read_log, reconcile_jobs
 from rank42.pipeline_state import get_pipeline_run
 from .common import title
-from rank42.ui_components import metric_card, selectbox, toggle, selectable_dataframe, button, region
+from rank42.ui_components import selectbox, toggle, selectable_dataframe, button, region
 
 SEARCH_SIGNAL_KEYS={
     'candidates_completed','candidates_planned','trials_completed','trials_planned',
@@ -157,21 +158,61 @@ def _pairs(db, limit=100, *, wanted_id=None):
     return [(row, _summary_for_job(row)) for row in rows]
 
 
-def _scoreboard(db,pairs):
-    search=[(r,s) for r,s in pairs if _is_search_summary(s)]
-    completed=sum(int(s.get('candidates_completed') or s.get('trials_completed') or s.get('shortlist_searched') or 0) for _,s in search)
-    native=sum(int(s.get('new_native_fibers') or 0) for _,s in search)
-    mapped=sum(int(s.get('mapped_extra_points') or 0) for _,s in search)
-    growth=sum(int(s.get('rank_growth_curves') or s.get('rigorous_hits') or 0) for _,s in search)
-    best_screen=max([0,*[int(s.get('best_screened_rank') or 0) for _,s in search]])
-    c1,c2,c3,c4,c5,c6=st.columns(6)
-    with c1: metric_card('Search runs',len(search),key='results-runs')
-    with c2: metric_card('Candidates completed',f'{completed:,}',key='results-completed')
-    with c3: metric_card('Native hits',f'{native:,}',key='results-native')
-    with c4: metric_card('Mapped extras',f'{mapped:,}',key='results-mapped')
-    with c5: metric_card('Rank-growth hits',f'{growth:,}',key='results-growth')
-    with c6: metric_card('Best rigorous rank',_best_rigorous_display(db),key='results-best')
-    st.caption(f'Best numerical/screened basis seen in parsed search logs: {best_screen}. This is not a proof claim.')
+def _selected_job_metrics(db, row, summary):
+    """Use evidence from the selected job, never an all-jobs aggregate."""
+    elapsed = _duration(row)
+    elapsed_label = '—' if elapsed is None else (
+        f'{elapsed // 3600:02d}:{elapsed % 3600 // 60:02d}:{elapsed % 60:02d}'
+    )
+    metrics = [('Status', str(row['status']).replace('_', ' ').title())]
+    if str(row['kind']) == 'pipeline_search':
+        live = dict(_pipeline_stat_cards(db, row) or [])
+        metrics.extend((
+            ('Candidates', live.get('Candidates completed', '—')),
+            ('Best certified', live.get('Best certified rank', '—')),
+            ('Current stage', live.get('Current stage', '—')),
+        ))
+    elif _is_search_summary(summary):
+        table = _table_row(row, summary)
+        lower = summary.get('best_rigorous_lower')
+        hits = summary.get('rigorous_hits')
+        if hits is None:
+            hits = summary.get('rank_growth_curves')
+        metrics.extend((
+            ('Progress', table['progress']),
+            ('Best certified', f'≥ {int(lower)}' if lower else '—'),
+            ('Rank growth', _fmt_stat(hits)),
+        ))
+    else:
+        lower = summary.get('best_rigorous_lower')
+        exact = summary.get('exact_rank')
+        points = summary.get('rational_points')
+        if points is None:
+            points = summary.get('selected')
+        metrics.extend((
+            ('Best certified', f'= {int(exact)}' if exact is not None else f'≥ {int(lower)}' if lower else '—'),
+            ('Points', _fmt_stat(points)),
+            ('New independent', _fmt_stat(summary.get('new_independent'))),
+        ))
+    metrics.append(('Elapsed', elapsed_label))
+    return metrics
+
+
+def _scoreboard(db, row, summary):
+    cards = []
+    for label, value in _selected_job_metrics(db, row, summary):
+        shown = html.escape(str(value))
+        cards.append(
+            '<div class="rh-results-mini-stat">'
+            f'<span>{html.escape(label.upper())}</span>'
+            f'<strong title="{html.escape(str(value), quote=True)}">{shown}</strong>'
+            '</div>'
+        )
+    st.html(
+        f'<div class="rh-results-selected-job">JOB #{int(row["id"])} · '
+        f'{html.escape(str(row["label"]))}</div>'
+        '<div class="rh-results-mini-grid">' + ''.join(cards) + '</div>'
+    )
 
 
 
@@ -295,7 +336,14 @@ def _table_row(row,s):
 
 
 def _detail(db,row,s,science_python=None):
-    st.markdown(f"### Job #{row['id']} · {row['label']}")
+    st.html(
+        '<div class="rh-results-detail-head">'
+        '<span>SELECTED JOB</span>'
+        f'<h2>Job #{int(row["id"])} · {html.escape(str(row["label"]))}</h2>'
+        f'<p>{html.escape(str(row["kind"]).replace("_", " ").title())} · '
+        f'{html.escape(str(row["created_at"] or "Time unavailable"))}</p>'
+        '</div>'
+    )
     result=_display_result(row,s)
     st.html(f'<div class="rh-result-outcome rh-result-{str(result).lower().replace(" ","-")}"><strong>{result}</strong></div>')
     _dynamic_stats(row,s,db)
@@ -679,42 +727,54 @@ def render_jobs_results(db, ctx):
     render_feature_hook(db, ctx, 'manage.jobs.results.after_header')
 
     wanted=st.session_state.pop('results_selected_job_id',None)
-    history_limit=int(
-        st.selectbox(
-            'Results window',
-            [50,100,250,500],
-            index=1,
-            key='results-history-limit',
-            help='Only this many recent job logs are parsed. Open a specific older job from Jobs to include it explicitly.',
-        )
-    )
-    pairs=_pairs(db,limit=history_limit,wanted_id=wanted)
-    _scoreboard(db,pairs)
-    st.caption(f'Scoreboard and filters cover the loaded window of {len(pairs):,} job(s).')
+    with st.container(key='rh-results-hero', border=True):
+        intro_col, window_col = st.columns([3.2, 1], gap='medium', vertical_alignment='bottom')
+        with intro_col:
+            st.html(
+                '<div class="rh-results-intro"><span>RESEARCH OUTPUT</span>'
+                '<h2>Selected job at a glance</h2>'
+                '<p>Pick a job below to see its own progress and rank evidence here.</p></div>'
+            )
+        with window_col:
+            history_limit=int(
+                st.selectbox(
+                    'Recent jobs to load',
+                    [50,100,250,500],
+                    index=1,
+                    key='results-history-limit',
+                    help='Only this many recent job logs are parsed. Open a specific older job from Jobs to include it explicitly.',
+                )
+            )
+        pairs=_pairs(db,limit=history_limit,wanted_id=wanted)
+        hero_stats = st.empty()
+        st.caption(f'Showing results from {len(pairs):,} loaded job(s).')
     if not pairs:
+        hero_stats.info('No job results to show yet.')
         st.info('No Rank Hunter jobs yet.')
         return
 
     kinds=sorted({str(r['kind']) for r,_ in pairs})
-    f1,f2,f3=st.columns([1.15,0.85,1.35])
-    with f1:
-        mode=selectbox(
-            'Jobs',
-            ['All','Active','Completed','Stopped / killed','Failed / interrupted'],
-            semantic='results-mode',
-        )
-    with f2:
-        interesting=toggle(
-            'Interesting only',
-            value=False,
-            semantic='results-interesting',
-        )
-    with f3:
-        kind=selectbox(
-            'Kind',
-            ['All kinds',*kinds],
-            semantic='results-kind',
-        )
+    with st.container(key='rh-results-browser', border=True):
+        st.markdown('#### Browse jobs')
+        f1,f2,f3=st.columns([1.15,0.85,1.35])
+        with f1:
+            mode=selectbox(
+                'Status',
+                ['All','Active','Completed','Stopped / killed','Failed / interrupted'],
+                semantic='results-mode',
+            )
+        with f2:
+            interesting=toggle(
+                'Interesting only',
+                value=False,
+                semantic='results-interesting',
+            )
+        with f3:
+            kind=selectbox(
+                'Job type',
+                ['All kinds',*kinds],
+                semantic='results-kind',
+            )
 
     shown=pairs
     if mode=='Active': shown=[x for x in shown if x[0]['status'] in ACTIVE]
@@ -725,22 +785,30 @@ def render_jobs_results(db, ctx):
     if kind!='All kinds': shown=[x for x in shown if x[0]['kind']==kind]
 
     if not shown:
+        hero_stats.info('No jobs match these filters.')
         st.info('No jobs match these filters.')
         return
     table=[_table_row(r,s) for r,s in shown]
     by_id={int(r['id']):(r,s) for r,s in shown}
-    selected=selectable_dataframe(
-        table,
-        table,
-        semantic='results-table',
-        selected_id=wanted,
-        id_key='job',
-        selection_state_key='results_table_job_id',
-    )
+    with st.container(key='rh-results-table', border=True):
+        st.markdown('#### Job history')
+        st.caption(f'{len(shown):,} matching jobs · select a row to inspect its result')
+        selected=selectable_dataframe(
+            table,
+            table,
+            semantic='results-table',
+            selected_id=wanted or st.session_state.get('results_table_job_id'),
+            id_key='job',
+            selection_state_key='results_table_job_id',
+        )
     if selected is None:
+        hero_stats.info('Select a job to see its results.')
         return
     row,s=by_id[int(selected['job'])]
-    _detail(db,row,s,ctx.detected_science_python())
+    with hero_stats.container():
+        _scoreboard(db,row,s)
+    with st.container(key='rh-results-detail', border=True):
+        _detail(db,row,s,ctx.detected_science_python())
 
 
 def page(db, ctx):

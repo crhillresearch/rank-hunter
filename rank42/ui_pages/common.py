@@ -8,7 +8,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from rank42.theme_loader import Theme
-from rank42.icon_sprite import rh_css_mask_uri
 from rank42.curve_research_state import list_curve_research_states
 from rank42.launch_context import (
     launch_context_snapshot,
@@ -824,6 +823,8 @@ def fa_markdown_icon(name, *, alt="", style="solid"):
 PAGE_ICONS = {
     "Dashboard": ":material/space_dashboard:",
     "Search": ":material/search:",
+    "New Search": ":material/search:",
+    "AI Hunt": ":material/auto_awesome:",
     "Pencils": ":material/edit:",
     "Auto Search": ":material/bolt_boost:",
     "Auto": ":material/bolt_boost:",
@@ -864,85 +865,174 @@ PAGE_ICONS = {
     "ICARM Submit": ":material/cloud_upload:",
 }
 
-_BREADCRUMB_ROUTE_LABELS = {
-    "Corpora": "Libraries",
-    "External Catalog": "Catalogs",
-}
-
-
-def page_breadcrumb_path(name, state=None):
-    """Return the canonical root-to-page breadcrumb for one rendered page."""
-    state = st.session_state if state is None else state
-    route = str(state.get("rh_page") or name or "Dashboard")
-    if route.startswith("extension:"):
-        leaf = str(name or route)
-    else:
-        leaf = _BREADCRUMB_ROUTE_LABELS.get(route, route)
-    if route == "Dashboard":
-        return (("Dashboard", None),)
-    return (("Dashboard", "Dashboard"), (leaf, None))
-
-
-def _set_breadcrumb_route(route):
-    st.session_state["rh_page"] = str(route)
-
-
-def _render_page_breadcrumb(name):
-    path = page_breadcrumb_path(name)
-    if len(path) == 1:
-        return
-
-    leaf = str(path[-1][0])
-    breadcrumb_key = rh_key(f"page-breadcrumb-{leaf}")
-    trailing = json.dumps(f"› {leaf}", ensure_ascii=False)
-    with st.container(key=breadcrumb_key):
-        st.html(
-            "<style>"
-            f"div[class*='st-key-{breadcrumb_key}']{{"
-            "margin-top:-.5rem!important;margin-bottom:0!important;"
-            "padding:0!important;min-height:1.05rem!important;"
-            "overflow:visible!important}"
-            f"div[class*='st-key-{breadcrumb_key}'] [data-testid='stButton']{{"
-            "position:relative!important;width:max-content!important;"
-            "margin:0!important;padding:0!important;overflow:visible!important}"
-            f"div[class*='st-key-{breadcrumb_key}'] [data-testid='stButton']::after{{"
-            f"content:{trailing};"
-            "position:absolute;left:calc(100% + .18rem);top:50%;transform:translateY(-50%);"
-            "white-space:nowrap;pointer-events:none;"
-            "font-size:.78rem;font-weight:600;line-height:1.05rem;"
-            "color:var(--rh-text-secondary,#31333f)}"
-            f"div[class*='st-key-{breadcrumb_key}'] button[kind='tertiary']{{"
-            "padding:0!important;min-height:1.05rem!important;height:1.05rem!important;"
-            "font-size:.78rem!important;font-weight:500!important;line-height:1.05rem!important;"
-            "white-space:nowrap!important;color:var(--rh-muted,#737780)!important;"
-            "box-shadow:none!important;background:transparent!important}"
-            f"div[class*='st-key-{breadcrumb_key}'] button[kind='tertiary']:hover{{"
-            "color:var(--rh-text,#31333f)!important;background:transparent!important}"
-            "</style>"
-        )
-        st.button(
-            str(path[0][0]),
-            key=rh_key(f"breadcrumb-{leaf}-dashboard"),
-            type="tertiary",
-            width="content",
-            on_click=_set_breadcrumb_route,
-            args=(str(path[0][1]),),
-        )
-        st.html(
-            "<span aria-current='page' class='rh-page-breadcrumb-current-sr'>"
-            + html.escape(leaf)
-            + "</span>"
-            "<style>.rh-page-breadcrumb-current-sr{position:absolute!important;"
-            "width:1px!important;height:1px!important;padding:0!important;"
-            "margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;"
-            "white-space:nowrap!important;border:0!important}</style>"
-        )
-
-
 ###
 # A HUMAN WAS HERE :-)
 ###
 _EMBEDDED_PAGE_TITLE = ContextVar("rank42_embedded_page_title", default=False)
+
+_PAGE_BAR_GROUPS = (
+    ("AI Hunt", "Search", "Pipelines", "Candidates"),
+    ("Tools",),
+    ("Curves", "Points", "Models", "Corpora", "External Catalog"),
+    ("Jobs", "Campaigns", "Plugins"),
+    ("Database", "Settings", "Themes"),
+)
+_PAGE_BAR_LABELS = {"Corpora": "Libraries", "External Catalog": "Catalogs"}
+_PAGE_LOCAL_ICONS = {
+    "Rank Lab": {"Certify points": "verified", "Prove rank": "rule", "Search rank": "search"},
+    "AI Hunt": {"Campaigns": "bookmark", "New hunt": "auto_awesome"},
+    "Pipelines": {"Editor": "tune", "Saved": "inventory_2", "Runs": "history"},
+    "Candidates": {"Generate": "add_circle", "Pools": "stacks"},
+    "Curves": {"Inventory": "show_chart", "Hall of Fame": "emoji_events", "Import": "upload_file"},
+    "Models": {"Inventory": "category", "Create model": "add_box"},
+    "Corpora": {"Browse Library": "library_books", "Build Library": "add_circle"},
+    "External Catalog": {"ICARM": "public", "LMFDB": "travel_explore"},
+    "Jobs": {"Active": "play_circle", "Queue": "queue", "History": "history", "Results": "analytics"},
+    "Plugins": {"Families": "account_tree", "Extensions": "extension"},
+    "Diagnostics": {"Overview": "space_dashboard", "Runtime": "memory", "Plugins & Libraries": "extension", "State": "database", "Legacy Auto": "archive", "Report": "description"},
+    "Database": {"Overview": "database", "Import / Export": "import_export", "Advanced SQL": "terminal"},
+    "Settings": {"General": "tune", "Runtimes": "memory", "Services": "cloud", "About": "info"},
+}
+_PAGE_LOCAL_VIEWS = {
+    "Rank Lab": (("Certify points", "Prove rank", "Search rank"), "analysis-hub-lane", None, True),
+    "AI Hunt": (("Campaigns", "New hunt"), "ai-search-view-v2", None, True),
+    "Pipelines": (("Editor", "Saved", "Runs"), "builder-main-tabs", "builder_main_view", False),
+    "Candidates": (("Generate", "Pools"), "candidates-main-tabs", "candidates_tab", False),
+    "Curves": (("Inventory", "Hall of Fame", "Import"), "curves-section", None, False),
+    "Models": (("Inventory", "Create model"), "models-section", None, False),
+    "Corpora": (("Browse Library", "Build Library"), "libraries-section", None, False),
+    "External Catalog": (("ICARM", "LMFDB"), "external-catalog-source", None, False),
+    "Jobs": (("Active", "Queue", "History", "Results"), "jobs-main-tabs", "jobs_section", False),
+    "Plugins": (("Families", "Extensions"), "plugins-main-tabs", "plugins_tab", False),
+    "Diagnostics": (("Overview", "Runtime", "Plugins & Libraries", "State", "Legacy Auto", "Report"), "diagnostics-main-tabs", "diagnostics_tab", False),
+    "Database": (("Overview", "Import / Export", "Advanced SQL"), "database-main-tabs", "database_tab", False),
+    "Settings": (("General", "Runtimes", "Services", "About"), "settings-view-tabs", "settings_view", False),
+}
+_PAGE_BAR_JS = (
+    Path(__file__).resolve().parents[1] / "ui_assets" / "tools_command_bar.js"
+).read_text(encoding="utf-8")
+
+
+def _page_bar_route(route, local=False, widget_key=None, state_key=None):
+    if route == "New Campaign":
+        st.session_state["campaign_create_from_pagebar"] = True
+        return
+    if st.session_state.get("rh_page") == "Settings" and route in {"Restart", "Power off"}:
+        st.session_state["settings_lifecycle_action"] = route
+        return
+    if local:
+        if widget_key:
+            st.session_state[widget_key] = route
+        if state_key:
+            st.session_state[state_key] = route
+        if st.session_state.get("rh_page") == "Jobs" and route == "Queue":
+            st.session_state["jobs_queue_view"] = "Waiting jobs"
+            st.session_state.pop(rh_key("jobs-queue-view"), None)
+        if st.session_state.get("rh_page") == "Curves":
+            st.session_state.pop("curves_detail_id", None)
+        elif st.session_state.get("rh_page") == "Models":
+            st.session_state.pop("models-detail-id", None)
+    else:
+        st.session_state["rh_page"] = route
+
+
+def _material_page_icon(icon):
+    value = str(icon or "")
+    if value.startswith(":material/"):
+        return value.removeprefix(":material/").removesuffix(":")
+    return value if re.fullmatch(r"[a-z][a-z0-9_]*", value) else "extension"
+
+
+def _render_page_bar(name, icon):
+    route = str(st.session_state.get("rh_page") or name)
+    local_spec = _PAGE_LOCAL_VIEWS.get(route)
+    pages = (
+        local_spec[0] if local_spec is not None
+        else ("Campaigns", "New Campaign") if route == "Campaigns"
+        else next((group for group in _PAGE_BAR_GROUPS if route in group), (route,))
+    )
+    widget_key = None
+    state_key = None
+    if local_spec is not None:
+        _, tab_key, state_key, direct = local_spec
+        if route == "Pipelines":
+            tab_key += f"-{int(st.session_state.get('builder_view_revision') or 0)}"
+        widget_key = tab_key if direct else rh_key(tab_key)
+        desired = st.session_state.get(state_key) if state_key else None
+        if desired in pages and st.session_state.get(widget_key) != desired:
+            st.session_state[widget_key] = desired
+        selected = str(
+            st.session_state.get(widget_key)
+            or (st.session_state.get(state_key) if state_key else None)
+            or pages[0]
+        )
+        if route == "Jobs" and st.session_state.get("jobs_section_pending"):
+            pending = st.session_state["jobs_section_pending"]
+            selected = "Queue" if pending == "Scheduled" else pending
+        if selected not in pages:
+            selected = pages[0]
+        # The original widget continues to own its state, but its duplicate
+        # row is hidden after the same choices appear in the page bar.
+        st.html(f"<style>.st-key-{widget_key}{{display:none!important}}</style>")
+    else:
+        selected = route
+    slug = rh_key(route)
+    root_id = f"{slug}-pagebar"
+    bridge_prefix = f"{slug}-pagebar-route-"
+    groups = [{
+        "label": "Views" if local_spec is not None else "Pages",
+        "tools": [
+            {
+                "name": page,
+                "label": _PAGE_BAR_LABELS.get(page, page) if local_spec is None else page,
+                "icon": (
+                    _PAGE_LOCAL_ICONS.get(route, {}).get(page, "view_agenda")
+                    if local_spec is not None else
+                    "add_circle" if page == "New Campaign" else
+                    _material_page_icon(PAGE_ICONS.get(page))
+                ),
+                "description": f"Open {_PAGE_BAR_LABELS.get(page, page)}" if local_spec is None else f"Show {page}",
+                "isAction": page == "New Campaign",
+            }
+            for page in pages
+        ],
+    }]
+    config = {
+        "selected": selected,
+        "groups": groups,
+        "rootId": root_id,
+        "bridgePrefix": bridge_prefix,
+        "controllerSlot": "__rhPageBar",
+        "queryParam": None,
+        "toolbarLabel": f"{name} page navigation",
+        "pageTitle": str(name),
+        "pageIcon": _material_page_icon(icon),
+        "simple": len(pages) <= 5,
+        "simpleShowCurrent": local_spec is not None,
+        "itemNoun": "views" if local_spec is not None else "pages",
+        "mobileLabel": "Views" if local_spec is not None else "Pages",
+        "actions": (
+            [{"name": "Restart", "label": "Restart Rank Hunter", "icon": "restart_alt"},
+             {"name": "Power off", "label": "Power off Rank Hunter", "icon": "power_settings_new"}]
+            if route == "Settings" else []
+        ),
+    }
+    st.html(
+        f'<div id="{root_id}" class="rh-tools-commandbar-host rh-pagebar-simple" '
+        f'aria-label="{html.escape(str(name), quote=True)} page navigation"></div>'
+    )
+    page_bar = st.components.v2.component(
+        "rh_global_page_bar", js=_PAGE_BAR_JS, isolate_styles=False
+    )
+    page_bar(data=config, key=f"{slug}-pagebar-runtime")
+    with st.container(key=f"{slug}-pagebar-bridge"):
+        for page in (*pages, *(("Restart", "Power off") if route == "Settings" else ())):
+            st.button(
+                page,
+                key=f"{bridge_prefix}{rh_key(page).removeprefix('rh-')}",
+                on_click=_page_bar_route,
+                args=(page, local_spec is not None, widget_key, state_key),
+            )
 
 
 @contextmanager
@@ -956,49 +1046,12 @@ def embedded_page_title():
 
 
 def title(name, subtitle=None, kicker=None, icon=None):
-    """Render one consistent application-level page header.
-
-    ``subtitle`` and ``kicker`` remain compatibility arguments for existing
-    callers, but page-level explanatory subtitles are intentionally suppressed.
-    The canonical shell route is shown instead through the shared breadcrumb.
-    """
+    """Render the shared page navigation header."""
     if _EMBEDDED_PAGE_TITLE.get():
         return
     _ = subtitle, kicker
     icon = PAGE_ICONS.get(str(name), icon or "analytics")
-    icon_text = str(icon)
-    with st.container(key=rh_key(f"page-header-{name}")):
-        if icon_text.startswith("text:"):
-            st.title(f"{icon_text[5:]} {name}", anchor=False)
-        elif icon_text.startswith(("rh:", "fa:", "fa-regular:")):
-            try:
-                if icon_text.startswith("rh:"):
-                    mask_uri = rh_css_mask_uri(icon_text.split(":", 1)[1])
-                else:
-                    regular = icon_text.startswith("fa-regular:")
-                    fa_name = icon_text.split(":", 1)[1]
-                    mask_uri = fa_css_mask_uri(
-                        fa_name,
-                        style="regular" if regular else "solid",
-                    )
-            except KeyError:
-                st.title(str(name), anchor=False)
-            else:
-                header_key = rh_key(f"page-header-{name}")
-                st.html(
-                    "<style>"
-                    f"div[class*='st-key-{header_key}'] h1::before{{"
-                    "content:'';display:inline-block;width:.82em;height:.82em;"
-                    "margin-right:.4rem;vertical-align:-.08em;background:currentColor;"
-                    f"-webkit-mask:url('{mask_uri}') center/contain no-repeat;"
-                    f"mask:url('{mask_uri}') center/contain no-repeat;"
-                    "}</style>"
-                )
-                st.title(str(name), anchor=False)
-        else:
-            material_icon = icon_text.removeprefix(":material/").removesuffix(":")
-            st.title(f":material/{material_icon}: {name}", anchor=False)
-        _render_page_breadcrumb(name)
+    _render_page_bar(name, icon)
 
 def section_title(name, subtitle=None):
     st.subheader(str(name))
@@ -1680,7 +1733,7 @@ def _render_active_jobs(
             position: sticky;
             top: 1.75rem;
             z-index: 980;
-            margin: -.7rem 0 .7rem 0 !important;
+            margin: -.7rem 0 .2rem 0 !important;
             width: 100% !important;
             max-width: none !important;
             background: color-mix(
@@ -1801,7 +1854,7 @@ def active_campaign_pin(db):
             position: sticky;
             top: 0;
             z-index: 990;
-            margin: -1rem 0 .7rem 0 !important;
+            margin: -1rem 0 .2rem 0 !important;
             width: 100% !important;
             max-width: none !important;
             background: var(

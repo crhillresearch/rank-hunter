@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 import json
+from contextlib import nullcontext
 from pathlib import Path
 
 import streamlit as st
@@ -338,7 +340,16 @@ def _torsion_pipeline_choice(preset_id, goal_rank):
     }
 
 
-def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
+def render(
+    db,
+    ctx,
+    *,
+    embedded=False,
+    compact=False,
+    only_unsearched=None,
+    prefer_plugin_presets=False,
+    new_search=False,
+):
     if not embedded:
         title(
             "Family Search",
@@ -355,7 +366,12 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
             else:
                 section_title("No candidate pools yet", "Generate a Nagao-ranked pool before launching a family search.")
             if st.button("Generate candidates", type="primary", width="stretch"):
-                st.session_state["rh_page"] = "Candidates"
+                if new_search:
+                    st.session_state["new_search_view"] = "Family"
+                    st.session_state["new-search-family-workflow"] = "Generate"
+                    st.session_state["rh_page"] = "Search"
+                else:
+                    st.session_state["rh_page"] = "Candidates"
                 st.rerun()
         return
 
@@ -365,14 +381,21 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
         if default_id
         else 0
     )
-    pool = select_row(
-        "Candidate pool",
-        pools,
-        index=idx,
-        format_func=lambda p: f"#{p['id']} · {p['name']} · {p['candidate_count']} candidates",
-        key="family-pool-select",
-        label_visibility="collapsed" if compact and embedded else "visible",
+    pool_surface = (
+        st.container(key="rh-search-pool-source", border=True)
+        if new_search and not compact else nullcontext()
     )
+    with pool_surface:
+        if new_search and not compact:
+            st.markdown("### :material/folder_open: Choose a pool")
+        pool = select_row(
+            "Candidate pool",
+            pools,
+            index=idx,
+            format_func=lambda p: f"#{p['id']} · {p['name']} · {p['candidate_count']} candidates",
+            key="family-pool-select",
+            label_visibility="collapsed" if embedded else "visible",
+        )
     st.session_state["family_search_pool_id"] = int(pool["id"])
     try:
         plugin = get_plugin(ctx.project_root, pool["plugin_id"])
@@ -406,7 +429,38 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
     total = int(pool["candidate_count"])
     remaining = max(0, total - int(resume))
 
-    if not compact:
+    if new_search and not compact:
+        claim = family_rank_claim(plugin, variant)
+        if claim["verified_lower"] is not None:
+            rank_label = "Verified generic lower"
+            rank_value = f"≥{claim['verified_lower']}"
+        elif claim["effective_lower"] is not None:
+            rank_label = "Generic lower"
+            rank_value = f"≥{claim['effective_lower']}"
+        elif claim["historical_lower"] is not None:
+            rank_label = "Historical claim"
+            rank_value = f"≥{claim['historical_lower']}"
+        else:
+            rank_label, rank_value = "Generic rank", "—"
+        cells = (
+            ("Family", f"{plugin.name} · {variant.name}"),
+            ("Candidates", f"{total:,}"),
+            ("Remaining", f"{remaining:,}"),
+            (rank_label, rank_value),
+        )
+        st.html(
+            '<div class="rh-search-pool-summary" aria-label="Selected pool summary">'
+            + "".join(
+                '<div class="rh-search-pool-summary-item">'
+                f'<span>{html.escape(label)}</span><strong>{html.escape(value)}</strong>'
+                '</div>'
+                for label, value in cells
+            )
+            + '</div>'
+        )
+        if claim["verified_lower"] is None and claim["historical_lower"] is not None:
+            st.caption(claim["status"] or "Rank Hunter verification pending")
+    elif not compact:
         claim = family_rank_claim(plugin, variant)
         metrics = st.columns(4)
         metrics[0].metric("Pool candidates", total)
@@ -422,14 +476,25 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
             metrics[3].metric("Generic rank", "—")
 
     if compact:
-        launch_col = st.container()
-        guide_col = None
+        if prefer_plugin_presets and presets:
+            launch_col, guide_col = st.columns([1.3, 0.7], gap="medium")
+        else:
+            launch_col = st.container()
+            guide_col = None
     else:
-        launch_col, guide_col = st.columns([1.12, 0.88])
+        launch_col, guide_col = st.columns(
+            [1.3, 0.7] if new_search else [1.12, 0.88], gap="medium"
+        )
 
     with launch_col:
-        with st.container(border=not compact):
-            if not compact:
+        with st.container(
+            key="rh-search-pool-controls" if new_search and not compact else None,
+            border=not compact,
+        ):
+            if new_search and not compact:
+                st.markdown("### :material/tune: Search setup")
+                st.caption("Choose the backend and candidate slice, then launch the search.")
+            elif not compact:
                 section_title("Search setup", "Choose backend, candidate slice, and the exact search strategy for this stored pool.")
                 st.caption(
                     f"Detected: **{plugin.name} v{plugin.version}**"
@@ -444,7 +509,7 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                     "I understand this run will not exactly reproduce the original pool environment.",
                     key=f"pool-drift-{pool['id']}",
                 )
-            elif not compact:
+            elif not compact and not new_search:
                 if pool["family_sha256"] if "family_sha256" in pool.keys() else None:
                     st.success("Installed family/adapter fingerprints match this pool.")
                 else:
@@ -452,7 +517,11 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                         "Legacy pool: no content fingerprint is stored; only plugin/version metadata can be compared."
                     )
 
-            mode_key = f"family-search-mode-{int(pool['id'])}"
+            mode_key = (
+                f"new-search-family-mode-{int(pool['id'])}"
+                if prefer_plugin_presets
+                else f"family-search-mode-{int(pool['id'])}"
+            )
             modes = []
             if torsion_groups:
                 modes.append("Torsion")
@@ -460,7 +529,11 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                 modes.append("Plugin")
             modes.append("FREE")
             if st.session_state.get(mode_key) not in modes:
-                st.session_state[mode_key] = modes[0]
+                st.session_state[mode_key] = (
+                    "Plugin"
+                    if prefer_plugin_presets and presets and "Plugin" in modes
+                    else modes[0]
+                )
             if compact:
                 m1, m2 = st.columns(2, gap="small")
                 with m1:
@@ -492,6 +565,26 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                 max_offset = max(0, total - 1)
                 default_offset = min(resume, max_offset)
                 offset = default_offset
+            elif new_search:
+                search_mode = st.segmented_control("Backend", modes, key=mode_key) or modes[0]
+                max_offset = max(0, total - 1)
+                default_offset = min(resume, max_offset)
+                c1, c2, c3 = st.columns([0.85, 0.85, 1.05], gap="small", vertical_alignment="bottom")
+                offset = int(c1.number_input(
+                    "Pool offset", min_value=0, max_value=max_offset,
+                    value=default_offset, step=1,
+                    help="Zero-based position in this pool. Defaults to the resume cursor.",
+                ))
+                count_key = f"family-count-{pool['id']}"
+                count = int(c2.number_input(
+                    "Candidates", min_value=1, max_value=max(1, total), step=1,
+                    key=count_key,
+                    **_widget_default_kwargs(count_key, value=min(20, max(1, total))),
+                ))
+                unsearched = c3.checkbox(
+                    "Only unsearched", value=True, key=f"family-unsearched-{pool['id']}"
+                )
+                rp_backend, rp_exec = ratpoints_selector(db, key=f"family-ratpoints-{pool['id']}")
             else:
                 search_mode = st.radio("Backend", modes, horizontal=True, key=mode_key)
                 c1, c2, c3 = st.columns(3)
@@ -582,6 +675,12 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                                         key=f"dashboard-family-offset-{pool['id']}",
                                     )
                                 )
+                        elif new_search:
+                            with st.expander("Plugin search options", expanded=False):
+                                opts.update(_render_option_groups(
+                                    defs, f"fam-{plugin.id}", border=False,
+                                    allow_expanders=False,
+                                ))
                         else:
                             st.caption("Plugin search controls")
                             opts.update(_render_option_groups(defs, f"fam-{plugin.id}"))
@@ -602,7 +701,7 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                     opts["ratpoints_backend"] = rp_backend
                     opts["plugin_variant"] = variant.id
                     opts["family_spec"] = pool["family_spec"]
-                    if not compact:
+                    if not compact and not new_search:
                         adapter_path = (
                             Path(plugin.adapter_path).resolve()
                             if plugin.adapter_path is not None
@@ -720,7 +819,7 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
 
             if resume >= total:
                 st.caption("Pool complete — no unsearched candidates remain.")
-            elif resume and not compact:
+            elif resume and not compact and not new_search:
                 st.caption(
                     f"Resume cursor is candidate **{resume + 1}**. Cancelled or in-flight candidates do not advance it."
                 )
@@ -927,14 +1026,63 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                 st.success(f"Started search job #{jid}.")
 
     if compact:
+        if guide_col is not None:
+            with guide_col:
+                with st.container(key="rh-new-search-plugin-presets", border=True):
+                    st.markdown("### :material/extension: Plugin Presets")
+                    st.caption(f"{plugin.name} · {variant.name}")
+                    if search_mode != "Plugin":
+                        st.caption("Select the Plugin backend to use these search presets.")
+                    preset_cols = st.columns(2, gap="small")
+                    active_id = str(st.session_state.get(f"family-preset-{pool['id']}") or "")
+                    for index, preset in enumerate(presets):
+                        preset_id = str(preset.get("id") or "")
+                        with preset_cols[index % 2]:
+                            st.button(
+                                str(preset.get("label") or preset_id or "Preset"),
+                                key=f"family-preset-button-{pool['id']}-{preset_id}",
+                                type="primary" if preset_id == active_id else "secondary",
+                                width="stretch",
+                                disabled=not enabled or search_mode != "Plugin",
+                                on_click=_apply_family_preset,
+                                args=(plugin.id, int(pool["id"]), preset, defs, total, True),
+                                help=str(preset.get("description") or "") or None,
+                            )
+                    active = next((rec for rec in presets if str(rec.get("id")) == active_id), None)
+                    if active is not None:
+                        modified = (
+                            _family_preset_modified(active, opts, count, defs, total)
+                            if search_mode == "Plugin"
+                            else False
+                        )
+                        label = str(active.get("label") or active.get("id"))
+                        st.caption(f"Selected: {label}" + (" · Modified" if modified else ""))
+                        if active.get("description"):
+                            st.caption(str(active["description"]))
+                        if active.get("candidate"):
+                            st.caption(
+                                "Its generation settings apply when making a new pool. "
+                                "This run uses the selected stored pool."
+                            )
+                    if torsion_groups:
+                        st.caption("Use the Torsion backend to require an exact group match.")
         return
 
     with guide_col:
-        with st.container(border=True):
-            section_title(
-                "Search style",
-                "Like Target Search, the left side owns execution controls. Family-owned presets fill the visible controls; torsion mode explains its exact-gated Pipeline here.",
-            )
+        with st.container(
+            key="rh-search-pool-presets" if new_search else None,
+            border=True,
+        ):
+            if new_search and search_mode == "Plugin":
+                st.markdown("### :material/extension: Plugin Presets")
+                st.caption(f"{plugin.name} · {variant.name}")
+            elif new_search:
+                st.markdown("### Search strategy")
+            else:
+                section_title(
+                    "Search style",
+                    "Like Target Search, the left side owns execution controls. Family-owned presets fill the visible controls; torsion mode explains its exact-gated Pipeline here.",
+                )
             if search_mode == "Torsion":
                 strategy = next(
                     (
@@ -965,6 +1113,11 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                             str(preset.get("label") or preset.get("id") or "Preset"),
                             key=f"family-preset-button-{pool['id']}-{preset.get('id')}",
                             width="stretch",
+                            type=(
+                                "primary" if new_search and str(preset.get("id"))
+                                == str(st.session_state.get(f"family-preset-{pool['id']}"))
+                                else "secondary"
+                            ),
                             disabled=not enabled,
                             on_click=_apply_family_preset,
                             args=(plugin.id, int(pool["id"]), preset, defs, total, False),
@@ -986,6 +1139,8 @@ def render(db, ctx, *, embedded=False, compact=False, only_unsearched=None):
                 st.caption(
                     "FREE mode ignores family-specific subgroup/search geometry and runs the generic exact-curve search path."
                 )
+        if new_search:
+            return
         with st.container(border=True):
             section_title(
                 "How this search works",

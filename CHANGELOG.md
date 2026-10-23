@@ -2,6 +2,100 @@
 
 All notable changes to Rank Hunter are documented here.
 
+## [0.10.2] — Unreleased
+
+### Added
+
+- Added one Search workbench for family, torsion, candidate-pool, stored-curve,
+  and general searches, plus family candidate generation.
+- Added a Gemini API key field in Settings → Services and an **AI Hunt** page.
+  Gemini can choose and run compatible Pipelines, read their results, and choose
+  the next search within the campaign's time and candidate limits. Rank Hunter
+  still certifies points and ranks through its existing exact checks.
+- Candidates can now build pools from a torsion group or a custom Weierstrass
+  equation. Group scans save a pool for each selected family. Custom equations
+  are checked symbolically and registered as local searchable families.
+
+### Changed
+
+- Casebook now puts the research queue, curve context, next step, and editable
+  notes on one page. Evidence, family context, and history remain in collapsed
+  sections. The Tools section is gone.
+- Settings opens on General with appearance and installation details. Restart
+  and power-off controls moved from the sidebar to the Settings header, with
+  their confirmation dialogs intact. Diagnostics left the main navigation but
+  remains available for troubleshooting.
+- Reduced the gap above Best Exact Rank in the Dashboard hero.
+- Removed the extra introduction above Rank Lab's portfolio counts.
+- Jobs Results separates the browser from the selected job's detail. Its hero
+  holds the recent-jobs picker and compact stats for that job, which update
+  when a different row is selected.
+- Dashboard Attention can acknowledge all terminal alerts in one click. The
+  best curve's ID, torsion, family, and parameter now sit beneath its rank and
+  plot.
+- Rank Lab's header now switches between its own research views. Fixed page-bar
+  links for Diagnostics Plugins & Libraries and Database Import / Export.
+- AI Hunt has a few editable goal prompts and shorter section headings.
+- Jobs now keeps future schedules inside Queue. Waiting jobs and saved
+  schedules have their own views there, and existing schedule links open the
+  right view. The scheduler still creates a queued job when a run is due.
+- Moved the version beside the appearance button in the sidebar, with the moon
+  icon first. Page titles now have a separator before their navigation. Each
+  page tab has its own icon, Campaigns has a New Campaign action in its header,
+  and pages with former tab spacers start closer to their content.
+- Reduced the gaps between the sticky work notices, page navigation, and page
+  content. The Candidates Pools tab now opens reliably from the new header.
+- Moved Pipelines above Candidates in the Dashboard menu to match the sidebar.
+  Page names and icons now sit in the navigation bar, and the old breadcrumb is
+  gone. Local page tabs live in that bar too; short groups use direct links.
+  The Dashboard keeps the Rank Hunter mark in the bar.
+- Renamed the Family search tab from Detailed to Pool Search. The stored-pool
+  form now puts the pool, remaining work, backend, and launch controls up front;
+  plugin options remain available in an expandable section.
+- Auto, the old Search, and Target stay available as hidden compatibility pages,
+  while the sidebar and Dashboard menu show one Search entry. Existing curve and
+  pool handoffs open the matching view in Search.
+- Search shows each family's presets, including Deep and Widen, when
+  searching a Candidate Pool with the Plugin backend. Choosing one fills the
+  plugin's search controls and keeps the selected preset in run provenance.
+- Search uses the Dashboard/Tools command bar for Family, Torsion,
+  Candidates, Target, and General. Its generation, pool search, and target
+  controls each show the applicable Plugin Presets beside the form.
+- Brought the old Family Search's pool and adapter controls into Search. Family
+  and torsion views can also generate candidate pools from a custom equation.
+  Curve, pool, Casebook, and lattice handoffs now open the matching Search view
+  with the selected object carried across.
+- Updated the app version to 0.10.2, shown beside the sidebar appearance button
+  and in Settings.
+- AI Hunt can keep hunting across checkpoints up to a chosen overall limit.
+  When a bounded hunt ends, it saves a proposed next move; you can continue
+  that hunt without losing its earlier Pipeline runs.
+- Reworked AI Hunt around live hunt status and a shorter launch flow, with
+  advanced limits tucked away until they are needed.
+- Put AI Hunt's curve retention floor in the launch form. Each completed
+  Pipeline round now clears its own below-floor curves, including rounds that
+  hit their time limit. Curves needed by a paused Pipeline stay available, as
+  do certified results within ten ranks of the local best even when they are
+  below a hunt's retention floor.
+- AI Hunt now passes certified candidate ranks and torsion groups into the next
+  strategy decision, so a strong result outside the selected group is recorded
+  as a separate lead instead of counting toward the current torsion goal.
+- Stopping an AI Hunt job now updates its campaign and Pipeline round too, so
+  a killed hunt no longer appears to be running.
+- AI Hunt now makes hunt outcomes easier to spot: stopped hunts are red and
+  verified rank goals are green.
+- Put AI Hunt first under Search and added it to the Dashboard page nav.
+- Put Generate and Pools in the Candidates page bar. The Generate from card
+  offers Family, Torsion Group, and Custom Equation. The page now shows
+  unsearched and searched counts, stored pools, and the newest pool.
+- Candidate ranking can use Nagao or Mestre–Nagao and reserve some slots for
+  small parameters. Torsion-mode pool searches check each curve's exact group.
+
+### Fixed
+
+- Opening Torsion Group on Candidates no longer loads Sage in the UI process
+  and crashes the page.
+
 ## [0.10.1] — Unreleased
 
 ### Added

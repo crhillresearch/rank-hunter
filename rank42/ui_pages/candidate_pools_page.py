@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import html
 import json
 import sqlite3
 
@@ -27,7 +28,8 @@ from rank42.plugins import (
     plugin_fingerprints,
     variant_for_family_spec,
 )
-from rank42.ui_components import selectable_dataframe
+from rank42.ui_components import rh_key, selectable_dataframe
+from rank42.ui_handoffs import route_pool_to_search
 
 from .common import section_title, select_row, title
 
@@ -106,8 +108,8 @@ def _candidate_corpus_view(row):
 def _render_import_export(db, ctx):
     left,right=st.columns(2)
     with left:
-        with st.container(border=True):
-            section_title('Export pool','Reproducible JSONL interchange for a stored SQLite pool.')
+        with st.container(key='rh-candidates-export', border=True):
+            section_title('Export a pool','Choose a stored pool, prepare its JSONL file, then download it.')
             pools=list_pools(db,limit=200)
             if pools:
                 pool=select_row('Export pool',pools,format_func=lambda p:f"#{p['id']} · {p['name']}",key='cand-export')
@@ -133,8 +135,8 @@ def _render_import_export(db, ctx):
             else:
                 st.info('Nothing to export yet.')
     with right:
-        with st.container(border=True):
-            section_title('Import JSONL','Attach an external candidate list to a specific plugin and exact family variant.')
+        with st.container(key='rh-candidates-import', border=True):
+            section_title('Import a pool','Attach a JSONL candidate list to the family and variant that produced it.')
             plugins=[p for p in discover_plugins(ctx.project_root) if isinstance(p,Plugin) and p.plugin_type=='family']
             if plugins:
                 imported_plugin=st.selectbox('Plugin for imported pool',plugins,format_func=lambda p:f"{p.name} ({p.id})",key='cand-import-plugin')
@@ -151,7 +153,7 @@ def _render_import_export(db, ctx):
                     fp=plugin_fingerprints(imported_plugin,imported_variant)
                     pool=import_jsonl(db,temp,name=imported_name,plugin_id=imported_plugin.id,plugin_version=imported_plugin.version,family_spec=spec,generation={'imported_filename':upload.name,'variant_id':imported_variant.id,'variant_name':imported_variant.name},**fp)
                     st.success(f"Imported pool #{pool['id']} with {pool['candidate_count']} candidates.")
-            st.caption('JSONL is interchange/export. SQLite candidate pools remain authoritative scientific state.')
+            st.caption('The imported SQLite pool becomes the searchable queue.')
 
 
 def page(db, ctx, *, embedded=False):
@@ -176,12 +178,24 @@ def page(db, ctx, *, embedded=False):
         ):
             st.session_state["candidate_pools_view"] = "Browse"
             st.rerun()
-        st.html("<div style='height:.85rem'></div>")
         _render_import_export(db, ctx)
         return
 
     st.session_state["candidate_pools_view"] = "Browse"
     pools=list_pools(db,limit=200)
+    totals=db.execute(
+        "SELECT COUNT(*) AS pools, COALESCE(SUM(candidate_count),0) AS candidates "
+        "FROM candidate_pools"
+    ).fetchone()
+    st.html(
+        '<section class="rh-candidates-overview" aria-label="Candidate pool overview">'
+        '<div><span>STORED POOLS</span>'
+        f'<strong>{int(totals["pools"] or 0):,}</strong></div>'
+        '<div><span>QUEUED CANDIDATES</span>'
+        f'<strong>{int(totals["candidates"] or 0):,}</strong></div>'
+        '<p>Saved parameter queues are ready for searching and exact rank checks.</p>'
+        '</section>'
+    )
 
     title_col, transfer_col = st.columns(
         [5.4, 1.2],
@@ -190,7 +204,7 @@ def page(db, ctx, *, embedded=False):
     with title_col:
         section_title(
             'Stored pools',
-            'SQLite is authoritative. Search completion advances only after durable candidate writes.',
+            'Select a pool to inspect its candidates or send it to Family Search.',
         )
     with transfer_col:
         if st.button(
@@ -201,17 +215,19 @@ def page(db, ctx, *, embedded=False):
         ):
             st.session_state["candidate_pools_view"] = "Import & Export"
             st.rerun()
-    st.html("<div style='height:.35rem'></div>")
-
     if not pools:
-        st.info('No candidate pools yet.')
+        st.info('No candidate pools yet. Generate one from a searchable family.')
+        if st.button('Create a pool', icon=':material/add_circle:',
+                     key='candidate-pools-create-first'):
+            st.session_state['candidates_tab']='Generate'
+            st.session_state[rh_key('candidates-main-tabs')]='Generate'
+            st.rerun()
     else:
         selected=selectable_dataframe(
             [{
-                'id':p['id'],'name':p['name'],'plugin':p['plugin_id'],
-                'variant':(json.loads(p['generation_json'] or '{}').get('variant_id') or '—'),
-                'chart':(json.loads(p['generation_json'] or '{}').get('chart_id') or 'native'),
-                'count':p['candidate_count'],'status':p['status'],'created':p['created_at'][:19]
+                'id':p['id'],'name':p['name'],'family':p['plugin_id'],
+                'candidates':p['candidate_count'],'status':p['status'],
+                'created':p['created_at'][:16]
             } for p in pools],
             pools,
             semantic='candidate-pools-table',
@@ -219,23 +235,104 @@ def page(db, ctx, *, embedded=False):
             selection_state_key='candidates_selected_pool_id',
         )
         resume=pool_resume_offset(db,selected['id'])
-        m1,m2,m3=st.columns(3)
-        m1.metric('Candidates',int(selected['candidate_count']))
-        m2.metric('Resume offset',int(resume))
-        m3.metric('Remaining',max(0,int(selected['candidate_count'])-int(resume)))
+        count=int(selected['candidate_count'])
+        remaining=max(0,count-int(resume))
+        generation=json.loads(selected['generation_json'] or '{}')
+        with st.container(key='rh-candidates-pool-detail', border=True):
+            name_col, action_col=st.columns([4, 1.2], vertical_alignment='center')
+            name_col.markdown(f"### Pool #{int(selected['id'])} · {selected['name']}")
+            if action_col.button('Open in Search', icon=':material/arrow_forward:',
+                                 width='stretch', type='primary',
+                                 key=f"candidate-open-search-{int(selected['id'])}"):
+                route_pool_to_search(
+                    st.session_state,
+                    int(selected['id']),
+                    torsion_group=(
+                        generation.get('target_torsion_group')
+                        if generation.get('source_method') == 'torsion_group'
+                        else None
+                    ),
+                )
+                st.rerun()
+            st.caption(
+                f"{selected['plugin_id']} · variant {generation.get('variant_id') or 'native'} "
+                f"· chart {generation.get('chart_id') or 'native'}"
+                + (f" · {generation['target_torsion_group']} batch"
+                   if generation.get('source_method') == 'torsion_group' else '')
+                + f" · {selected['status']}"
+            )
+            st.html(
+                '<div class="rh-candidates-pool-facts">'
+                f'<div><span>CANDIDATES</span><strong>{count:,}</strong></div>'
+                f'<div><span>RESUME OFFSET</span><strong>{int(resume):,}</strong></div>'
+                f'<div><span>REMAINING</span><strong>{remaining:,}</strong></div>'
+                '</div>'
+            )
 
-        preview_limit = st.selectbox(
-            "Preview rows",
-            [100, 250, 500, 1000],
-            index=1,
-            key=f"candidate-preview-limit-{int(selected['id'])}",
-            help="Only the preview is limited; the stored pool is unchanged.",
-        )
-        rows=candidate_rows(
-            db,
-            selected['id'],
-            limit=int(preview_limit),
-        )
+        with st.container(key='rh-candidates-preview', border=True):
+            preview_head, preview_size=st.columns([4, 1], vertical_alignment='center')
+            preview_head.markdown('### Candidates in this pool')
+            preview_limit = preview_size.selectbox(
+                "Preview rows",
+                [100, 250, 500, 1000],
+                index=1,
+                key=f"candidate-preview-limit-{int(selected['id'])}",
+                help="Only the preview is limited; the stored pool is unchanged.",
+            )
+            rows=candidate_rows(
+                db,
+                selected['id'],
+                limit=int(preview_limit),
+            )
+            st.caption('Select a row to see its score, search outcome, and exact rank evidence.')
+            display_rows=[]
+            for rec in rows:
+                ranking_label,ranking_value=_candidate_ranking_view(rec)
+                corpus_name,_=_candidate_corpus_view(rec)
+                display_rows.append({
+                    '#':rec['rank_order'],
+                    'parameter':rec['parameter'],
+                    'score type':ranking_label,
+                    'score':ranking_value,
+                    'status':rec['status'],
+                    'outcome':candidate_outcome(rec),
+                    'rigorous rank':_candidate_rank_view(rec),
+                    'curve #':rec['curve_id'],
+                    'library':corpus_name,
+                })
+            picked=selectable_dataframe(
+                display_rows,
+                rows,
+                semantic=f"candidate-table-{selected['id']}",
+                selected_id=st.session_state.get(f"candidate_selected_id_{selected['id']}"),
+                selection_state_key=f"candidate_selected_id_{selected['id']}",
+            )
+
+        if rows and picked is not None:
+            try: pmeta=json.loads(picked['metadata_json'] or '{}')
+            except Exception: pmeta={}
+            last=pmeta.get('last_search') if isinstance(pmeta.get('last_search'),dict) else {}
+            ranking_label, ranking_value = _candidate_ranking_view(picked)
+            shown_ranking = '—' if ranking_value is None else f"{float(ranking_value):.4f}"
+            with st.container(key='rh-candidates-selected', border=True):
+                st.markdown(f"### Candidate #{int(picked['rank_order'])} · parameter {picked['parameter']}")
+                st.caption(f"{candidate_outcome(picked)} · curve #{picked['curve_id'] or '—'}")
+                st.html(
+                    '<div class="rh-candidates-pool-facts rh-candidates-result-facts">'
+                    f'<div><span>{html.escape(str(ranking_label).upper())}</span>'
+                    f'<strong>{html.escape(shown_ranking)}</strong></div>'
+                    f'<div><span>RIGOROUS RANK</span><strong>{html.escape(_candidate_rank_view(picked))}</strong></div>'
+                    f'<div><span>QUICK UPPER</span><strong>{html.escape(str(last.get("quick_upper") if last.get("quick_upper") is not None else "—"))}</strong></div>'
+                    f'<div><span>DESCENT UPPER</span><strong>{html.escape(str(last.get("descent_upper") if last.get("descent_upper") is not None else "—"))}</strong></div>'
+                    '</div>'
+                )
+                b1,b2=st.columns(2)
+                if b1.button('Open curve',icon=':material/line_curve:',key=f"candidate-open-curve-{picked['id']}",disabled=not bool(picked['curve_id']),width='stretch'):
+                    st.session_state['curves_selected_id']=int(picked['curve_id']); st.session_state['rh_page']='Curves'; st.rerun()
+                if b2.button('Open job result',icon=':material/terminal:',key=f"candidate-open-job-{picked['id']}",disabled=not bool(last.get('job_id')),width='stretch'):
+                    st.session_state['results_selected_job_id']=int(last['job_id']); st.session_state['rh_page']='Results'; st.rerun()
+                with st.expander('Full candidate/search metadata'):
+                    st.json(pmeta)
 
         with st.expander('Pool maintenance', expanded=False):
             st.caption(
@@ -255,22 +352,6 @@ def page(db, ctx, *, embedded=False):
                         st.warning(
                             'Pool reconciliation deferred because the database is busy.'
                         )
-        picked=selectable_dataframe(
-            [{
-                '#':r['rank_order'],'parameter':r['parameter'],
-                'ranking':_candidate_ranking_view(r)[0],'ranking value':_candidate_ranking_view(r)[1],
-                'prime bound':r['prime_bound'],
-                'state':r['status'],'outcome':candidate_outcome(r),'curve id':r['curve_id'],'curve status':r['curve_status'],
-                'rigorous rank':_candidate_rank_view(r),
-                'corpus':_candidate_corpus_view(r)[0],
-                'corpus rank':_candidate_corpus_view(r)[1],
-            } for r in rows],
-            rows,
-            semantic=f"candidate-table-{selected['id']}",
-            selected_id=st.session_state.get(f"candidate_selected_id_{selected['id']}"),
-            selection_state_key=f"candidate_selected_id_{selected['id']}",
-        )
-
         # Reproducibility fingerprint audit for this historical pool.
         try:
             installed=get_plugin(ctx.project_root,selected['plugin_id'])
@@ -288,35 +369,14 @@ def page(db, ctx, *, embedded=False):
             if drift:
                 st.warning('Pool reproducibility drift: '+ ' · '.join(drift))
             elif selected['family_sha256'] if 'family_sha256' in selected.keys() else None:
-                st.success('Pool fingerprints match the currently installed plugin files.')
+                fingerprint_note='Pool fingerprints match the installed plugin files.'
             else:
-                st.info('Legacy pool: content hashes were not stored when this pool was generated.')
+                fingerprint_note='Legacy pool: content hashes were not stored at generation time.'
         with st.expander('Pool reproducibility'):
+            if installed and installed.plugin_type=='family' and not drift:
+                st.caption(fingerprint_note)
             st.code(f"plugin {selected['plugin_id']} @ {selected['plugin_version'] or '—'}\nfamily {str(selected['family_sha256'] or 'legacy')[:20]}\nadapter {str(selected['adapter_sha256'] or 'legacy')[:20]}\nmanifest {str(selected['plugin_manifest_sha256'] or 'legacy')[:20]}",language='text')
             st.code(str(selected['family_spec']),language='text')
-
-        if rows and picked is not None:
-            try: pmeta=json.loads(picked['metadata_json'] or '{}')
-            except Exception: pmeta={}
-            last=pmeta.get('last_search') if isinstance(pmeta.get('last_search'),dict) else {}
-            st.markdown(f"**Outcome:** {candidate_outcome(picked)}")
-            q1,q2,q3,q4=st.columns(4)
-            ranking_label, ranking_value = _candidate_ranking_view(picked)
-            shown_ranking = '—' if ranking_value is None else f"{float(ranking_value):.4f}"
-            q1.metric(ranking_label, shown_ranking)
-            q2.metric('Historical quick upper',last.get('quick_upper') if last.get('quick_upper') is not None else '—')
-            q3.metric('Historical descent upper',last.get('descent_upper') if last.get('descent_upper') is not None else '—')
-            q4.metric('Live rigorous rank',_candidate_rank_view(picked))
-            b1,b2=st.columns(2)
-            if b1.button('Open curve',key=f"candidate-open-curve-{picked['id']}",disabled=not bool(picked['curve_id']),width='stretch'):
-                st.session_state['curves_selected_id']=int(picked['curve_id']); st.session_state['rh_page']='Curves'; st.rerun()
-            if b2.button('Open job result',key=f"candidate-open-job-{picked['id']}",disabled=not bool(last.get('job_id')),width='stretch'):
-                st.session_state['results_selected_job_id']=int(last['job_id']); st.session_state['rh_page']='Results'; st.rerun()
-            with st.expander('Full candidate/search metadata'):
-                st.json(pmeta)
-
-        if st.button('Open in Search',width='stretch',type='primary'):
-            st.session_state['family_search_pool_id']=int(selected['id']); st.session_state['search_tab']='Family'; st.session_state['rh_page']='Search'; st.rerun()
 
         with st.expander('Delete candidate pool'):
             st.caption('Deletes this queue and its candidate rows only. Curves, points, lattices, and other scientific results are preserved.')

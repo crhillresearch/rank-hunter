@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+import json
 
 import pytest
 
@@ -29,9 +30,9 @@ def test_candidate_engine_contract_includes_sampled():
 def test_generated_family_candidates_type_nagao_ranking_and_native_variant():
     source = CANDIDATE_GENERATE.read_text(encoding="utf-8")
 
-    assert "rec['ranking_kind']='nagao'" in source
+    assert "rec['ranking_kind']=args.score_method" in source
     assert "rec['ranking_value']=float(rec['score'])" in source
-    assert "rec['score_provenance']['ranking_kind']='nagao'" in source
+    assert "rec['score_provenance']['ranking_kind']=args.score_method" in source
     assert "rec['native_variant_id']=chart.native_variant_id" in source
     assert "rec['native_variant_id']=variant.id" in source
 
@@ -53,8 +54,12 @@ def test_candidate_controls_serialize_to_candidate_only_pipeline():
         "nagao_rescore",
         "corpus_filter",
     ]
-    assert stages[0]["config"] == {"prime_bound": 127, "keep": 10000}
-    assert stages[1]["config"] == {"prime_bound": 523, "keep": 2000}
+    assert stages[0]["config"] == {
+        "prime_bound": 127, "keep": 10000, "score_method": "mestre_nagao",
+    }
+    assert stages[1]["config"] == {
+        "prime_bound": 523, "keep": 2000, "score_method": "mestre_nagao",
+    }
     assert stages[2]["config"]["policy"] == "annotate"
     assert validate_pipeline("family", stages) == []
 
@@ -88,6 +93,102 @@ def test_candidate_controls_allow_progressive_nagao_rescore_rounds():
         500,
     ]
     assert validate_pipeline("family", stages) == []
+
+
+def test_torsion_candidate_choice_scores_then_defers_exact_torsion():
+    choice = _candidate_pipeline_choice(
+        "c8-pools", "127,523", "1000,250", 250, "off",
+        target_mode="torsion", score_method="nagao", compact_share=0.2,
+    )
+    stages = choice["pipeline"]["stages"]
+    assert choice["pipeline"]["target_mode"] == "torsion"
+    assert [stage["id"] for stage in stages] == [
+        "nagao_screen", "nagao_rescore", "exact_torsion",
+    ]
+    assert stages[0]["config"]["score_method"] == "nagao"
+    assert stages[0]["config"]["compact_share"] == 0.2
+    assert validate_pipeline("torsion", stages) == []
+
+
+def test_torsion_generation_creates_one_pool_per_selected_provider(
+    tmp_path, monkeypatch,
+):
+    from rank42.pipeline_state import create_pipeline_run, get_pipeline_run
+
+    db = connect(tmp_path / "rank42.db")
+    choice = _candidate_pipeline_choice(
+        "c8-pools", "127", "10", 10, "off", target_mode="torsion",
+    )
+    target = {
+        "torsion_group": "C8", "selected_provider_keys": ["alpha:v1", "beta:v2"],
+        "output_pool_name": "c8-pools",
+    }
+    run_id = create_pipeline_run(
+        db, pipeline_name="Candidate torsion test", target_mode="torsion",
+        target=target, stages=choice["pipeline"]["stages"],
+        run_config={"candidate_only": True}, project_root=ROOT,
+    )
+    monkeypatch.setattr(
+        runner, "get_plugin", lambda root, plugin_id: SimpleNamespace(id=plugin_id),
+    )
+    monkeypatch.setattr(
+        runner, "get_variant", lambda plugin, variant_id: SimpleNamespace(id=variant_id),
+    )
+
+    def generate(connection, root, source_run_id, plugin, variant, stages,
+                 config, target=None):
+        create_pool(
+            connection, name=target["output_pool_name"], plugin_id=plugin.id,
+            family_spec=f"{plugin.id}:{variant.id}", status="ready",
+        )
+        return [{"parameter": "1/2", "score": 4.5,
+                 "score_provenance": {"ranking_kind": "nagao"}}]
+
+    monkeypatch.setattr(runner, "_family_candidates", generate)
+    providers = [
+        {"provider_key": f"{plugin}:{variant}", "plugin_id": plugin,
+         "variant_id": variant}
+        for plugin, variant in (("alpha", "v1"), ("beta", "v2"))
+    ]
+    result = runner._run_torsion_candidate_generation_lane(
+        db, run=get_pipeline_run(db, run_id), run_config={},
+        stages=choice["pipeline"]["stages"], target=target,
+        providers=providers, project_root=ROOT,
+    )
+    assert [pool["candidate_pool_name"] for pool in result["pools"]] == [
+        "c8-pools-alpha-v1", "c8-pools-beta-v2",
+    ]
+    assert db.execute(
+        "SELECT COUNT(*) FROM search_pipeline_candidates WHERE run_id=?",
+        (run_id,),
+    ).fetchone()[0] == 2
+    stored = db.execute(
+        "SELECT generation_json FROM candidate_pools WHERE name=?",
+        ("c8-pools-alpha-v1",),
+    ).fetchone()
+    assert json.loads(stored[0])["target_torsion_group"] == "C8"
+    db.close()
+
+
+def test_custom_equation_registers_a_searchable_family(tmp_path):
+    from rank42.custom_candidate_family import register_custom_candidate_family
+    from rank42.plugins import get_plugin
+
+    formula = {
+        "name": "Custom test curve", "parameter": "t",
+        "a_invariants": ["0", "0", "0", "-t^2", "1"],
+    }
+    result = register_custom_candidate_family(tmp_path, formula)
+    assert result["validation_parameter"] == "0"
+    assert register_custom_candidate_family(tmp_path, formula)["plugin_id"] == result["plugin_id"]
+    plugin = get_plugin(tmp_path, result["plugin_id"])
+    assert "candidate_generation" in plugin.capabilities
+    assert plugin.variants[0].id == "custom"
+    with pytest.raises(ValueError, match="generic equation is invalid"):
+        register_custom_candidate_family(tmp_path, {
+            "name": "Singular model", "parameter": "t",
+            "a_invariants": ["0", "0", "0", "0", "0"],
+        })
 
 
 @pytest.mark.parametrize(

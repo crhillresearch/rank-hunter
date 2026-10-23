@@ -365,7 +365,6 @@ def page(db, ctx):
         variant="line",
         width="content",
     )
-    st.html("<div style='height:.85rem'></div>")
     if active == "LMFDB":
         _lmfdb_tab(db)
     else:

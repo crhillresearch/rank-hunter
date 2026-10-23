@@ -420,7 +420,7 @@ def test_quartics_curve_browser_remains_native_streamlit_only():
     assert not asset.exists()
 
 
-def test_shared_page_title_supports_material_icons_and_global_breadcrumbs():
+def test_shared_page_title_uses_navigation_bar_without_breadcrumbs():
     source = (ROOT / "rank42" / "ui_pages" / "common.py").read_text(encoding="utf-8")
     shell = (ROOT / "rank42" / "ui.py").read_text(encoding="utf-8")
     title_source = inspect.getsource(common.title)
@@ -430,55 +430,21 @@ def test_shared_page_title_supports_material_icons_and_global_breadcrumbs():
     assert '":material/space_dashboard:"' in source
     assert '":material/line_curve:"' in source
     assert '":material/salinity:"' in source
-    assert 'material_icon = icon_text.removeprefix(":material/").removesuffix(":")' in title_source
-    assert 'st.title(f":material/{material_icon}: {name}", anchor=False)' in title_source
+    assert '_render_page_bar(name, icon)' in title_source
     assert 'NAV_ICONS.get(page, ":material/chevron_right:")' in shell
-
-    assert "def page_breadcrumb_path" in source
-    assert "def _render_page_breadcrumb" in source
-    assert '"Dashboard", "Dashboard"' in source
+    assert "def _render_page_breadcrumb" not in source
     assert '"Corpora": "Libraries"' in source
     assert '"External Catalog": "Catalogs"' in source
-    assert 'st.session_state["rh_page"] = str(route)' in source
-    assert 'type="tertiary"' in source
-    assert "aria-current='page'" in source
-    assert "_render_page_breadcrumb(name)" in title_source
-    assert title_source.index("_render_page_breadcrumb(name)") > title_source.index("st.title(")
+    assert 'st.session_state["rh_page"] = route' in source
+    assert '"simple": len(pages) <= 5' in source
+    assert '"Settings": (("Runtimes", "Services", "About")' in source
     assert "st.caption(str(subtitle))" not in title_source
-    assert "if len(path) == 1:" in source
-    assert "margin-top:-.5rem" in source
-    assert "min-height:1.05rem" in source
-    assert "width:max-content" in source
-    assert "[data-testid='stButton']::after" in source
-    assert "left:calc(100% + .18rem)" in source
-    assert "left:4.45rem" not in source
-    assert 'trailing = json.dumps(f"› {leaf}", ensure_ascii=False)' in source
-    assert "pointer-events:none" in source
-    breadcrumb_source = inspect.getsource(common._render_page_breadcrumb)
-    assert "st.columns(" not in breadcrumb_source
 
 
-def test_page_breadcrumb_path_uses_canonical_shell_route_labels():
-    assert common.page_breadcrumb_path(
-        "Curves",
-        {"rh_page": "Curves"},
-    ) == (("Dashboard", "Dashboard"), ("Curves", None))
-    assert common.page_breadcrumb_path(
-        "Libraries",
-        {"rh_page": "Corpora"},
-    ) == (("Dashboard", "Dashboard"), ("Libraries", None))
-    assert common.page_breadcrumb_path(
-        "Catalogs",
-        {"rh_page": "External Catalog"},
-    ) == (("Dashboard", "Dashboard"), ("Catalogs", None))
-    assert common.page_breadcrumb_path(
-        "Dashboard",
-        {"rh_page": "Dashboard"},
-    ) == (("Dashboard", None),)
-    assert common.page_breadcrumb_path(
-        "Curve Explorer",
-        {"rh_page": "extension:curve_explorer:curve_explorer"},
-    ) == (("Dashboard", "Dashboard"), ("Curve Explorer", None))
+def test_short_page_groups_use_direct_links():
+    assert ("Jobs", "Campaigns", "Plugins") in common._PAGE_BAR_GROUPS
+    assert ("Diagnostics", "Database", "Settings", "Themes") in common._PAGE_BAR_GROUPS
+    assert common._PAGE_BAR_LABELS["Corpora"] == "Libraries"
 
 
 def test_shared_navigation_prefers_themeable_native_tabs_and_keeps_shadcn_fallback():

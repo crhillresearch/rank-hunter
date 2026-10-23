@@ -491,22 +491,14 @@ def campaign_page_style():
 
 
 def render_campaign_header(db, ctx):
-    header_title, header_spacer, header_action = st.columns(
-        [2.4, 5.5, 2.1],
-        gap="small",
-        vertical_alignment="center",
+    title(
+        "Campaigns",
+        "Manage durable research objectives across Auto, Search, Target, "
+        "Pipelines, and scheduled work.",
+        "Manage",
     )
-    with header_title:
-        with st.container(key=rh_key("campaigns-header-title")):
-            title(
-                "Campaigns",
-                "Manage durable research objectives across Auto, Search, Target, "
-                "Pipelines, and scheduled work.",
-                "Manage",
-            )
-    with header_action:
-        with st.container(key=rh_key("campaigns-header-action")):
-            _campaign_add_button(db, ctx)
+    if st.session_state.pop("campaign_create_from_pagebar", False):
+        _create_campaign_dialog(ctx)
 
 
 def campaign_search_blob(row):

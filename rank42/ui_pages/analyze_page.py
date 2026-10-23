@@ -54,6 +54,8 @@ def _go(page, curve_id, *, family_pool_id=None, point_ids=None):
     elif page == "Target":
         st.session_state.pop("target-curve-native", None)
         set_active_curve_id(st.session_state, curve_id, "target_curve_id")
+        st.session_state["new_search_view"] = "Target"
+        page = "Search"
     elif page == "Curves":
         st.session_state["curves_detail_id"] = curve_id
     elif page == "Search":
@@ -62,6 +64,11 @@ def _go(page, curve_id, *, family_pool_id=None, point_ids=None):
         if family_pool_id is not None:
             st.session_state.pop(rh_key("family-pool-select"), None)
             st.session_state["family_search_pool_id"] = int(family_pool_id)
+            st.session_state["new_search_view"] = "Candidates"
+        else:
+            st.session_state["new_search_view"] = "Family"
+            st.session_state["new-search-family-workflow"] = "Pool Search"
+        page = "Search"
     st.session_state["rh_page"] = page
 
 

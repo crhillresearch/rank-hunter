@@ -1,0 +1,158 @@
+/* AI Hunt uses the same restrained workbench surfaces as the other Tools pages. */
+.rh-ai-hero {
+    overflow: hidden;
+    margin: .2rem 0 .9rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 13px;
+    background:
+        radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--rh-primary) 9%, transparent), transparent 57%),
+        var(--rh-card);
+    color: var(--rh-text);
+    box-shadow: 0 5px 16px color-mix(in srgb, var(--rh-text) 3%, transparent);
+}
+.rh-ai-hero--success {
+    border-color: color-mix(in srgb, var(--rh-success) 30%, var(--rh-border));
+    background:
+        radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--rh-success) 10%, transparent), transparent 57%),
+        var(--rh-card);
+}
+.rh-ai-hero--danger {
+    border-color: color-mix(in srgb, var(--rh-danger) 30%, var(--rh-border));
+    background:
+        radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--rh-danger) 9%, transparent), transparent 57%),
+        var(--rh-card);
+}
+.rh-ai-hero--warning {
+    border-color: color-mix(in srgb, var(--rh-warning) 30%, var(--rh-border));
+}
+.rh-ai-hero-main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem .85rem;
+}
+.rh-ai-eyebrow,
+.rh-ai-hero-facts span {
+    color: var(--rh-muted);
+    font-size: .64rem;
+    font-weight: 750;
+    letter-spacing: .09em;
+}
+.rh-ai-hero h2 {
+    margin: .18rem 0 .15rem;
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
+    line-height: 1.2;
+    letter-spacing: -.025em;
+}
+.rh-ai-hero p {
+    margin: 0;
+    color: var(--rh-text-secondary);
+    font-size: .82rem;
+    line-height: 1.45;
+}
+.rh-ai-status {
+    flex: 0 0 auto;
+    margin-top: .1rem;
+    padding: .25rem .52rem;
+    border: 1px solid color-mix(in srgb, var(--rh-primary) 22%, var(--rh-border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--rh-primary) 8%, var(--rh-card));
+    color: var(--rh-primary-deep);
+    font-size: .62rem;
+    font-weight: 760;
+    letter-spacing: .05em;
+}
+.rh-ai-hero--success .rh-ai-status,
+.rh-ai-campaign-status.rh-ai-campaign-status--success {
+    border-color: color-mix(in srgb, var(--rh-success) 25%, var(--rh-border));
+    background: color-mix(in srgb, var(--rh-success) 10%, var(--rh-card));
+    color: var(--rh-success);
+}
+.rh-ai-hero--danger .rh-ai-status,
+.rh-ai-campaign-status.rh-ai-campaign-status--danger {
+    border-color: color-mix(in srgb, var(--rh-danger) 25%, var(--rh-border));
+    background: color-mix(in srgb, var(--rh-danger) 10%, var(--rh-card));
+    color: var(--rh-danger);
+}
+.rh-ai-hero--warning .rh-ai-status,
+.rh-ai-campaign-status.rh-ai-campaign-status--warning {
+    border-color: color-mix(in srgb, var(--rh-warning) 25%, var(--rh-border));
+    background: color-mix(in srgb, var(--rh-warning) 10%, var(--rh-card));
+    color: var(--rh-warning);
+}
+.rh-ai-hero-facts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-top: 1px solid var(--rh-border);
+}
+.rh-ai-hero-facts > div { min-width: 0; padding: .65rem 1.25rem; }
+.rh-ai-hero-facts > div + div { border-left: 1px solid var(--rh-border); }
+.rh-ai-hero-facts span,
+.rh-ai-hero-facts strong { display: block; }
+.rh-ai-hero-facts strong {
+    margin-top: .15rem;
+    font-size: 1.08rem;
+    font-weight: 730;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.rh-ai-hero--active .rh-ai-hero-facts > div:first-child strong {
+    color: var(--rh-primary-deep);
+}
+.rh-ai-hero--success .rh-ai-hero-facts > div:first-child strong {
+    color: var(--rh-success);
+}
+.st-key-rh-ai-target-card,
+.st-key-rh-ai-plan-card,
+.st-key-rh-ai-limits-card,
+.st-key-rh-ai-launch-card,
+.st-key-rh-ai-setup,
+[class*="st-key-rh-ai-campaign-"] {
+    border-color: var(--rh-border) !important;
+    border-radius: 13px !important;
+    background: var(--rh-card) !important;
+    box-shadow: 0 5px 15px color-mix(in srgb, var(--rh-text) 3%, transparent);
+}
+.st-key-rh-ai-target-card,
+.st-key-rh-ai-plan-card,
+.st-key-rh-ai-limits-card,
+.st-key-rh-ai-launch-card { margin-top: .7rem; }
+.st-key-rh-ai-target-card h3,
+.st-key-rh-ai-plan-card h3,
+.st-key-rh-ai-limits-card h3,
+.st-key-rh-ai-launch-card h3 { margin-top: 0; }
+[class*="st-key-rh-ai-campaign-"] { margin-top: .65rem; }
+.rh-ai-campaign-facts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .45rem 1rem;
+    margin: .15rem 0 .4rem;
+    color: var(--rh-text-secondary);
+    font-size: .76rem;
+}
+.rh-ai-campaign-facts strong {
+    color: var(--rh-text);
+    font-variant-numeric: tabular-nums;
+}
+.rh-ai-campaign-status {
+    padding: .16rem .45rem;
+    border: 1px solid color-mix(in srgb, var(--rh-primary) 20%, var(--rh-border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--rh-primary) 9%, var(--rh-card));
+    color: var(--rh-primary-deep);
+    font-size: .67rem;
+    font-weight: 720;
+}
+@media (max-width: 700px) {
+    .rh-ai-hero-main { padding: .85rem 1rem; }
+    .rh-ai-hero-facts > div { padding: .55rem .65rem; }
+    .rh-ai-hero-facts span { font-size: .55rem; letter-spacing: .04em; }
+    .rh-ai-hero-facts strong { font-size: .9rem; }
+    .rh-ai-status { font-size: .56rem; }
+    .st-key-rh-ai-target-card [data-testid="stSegmentedControl"] {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+}

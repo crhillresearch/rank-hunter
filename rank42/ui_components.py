@@ -523,7 +523,7 @@ def tabs(
         selected = st.segmented_control(
             label or "View",
             options,
-            default=current,
+            default=current if semantic not in st.session_state else None,
             selection_mode="single",
             required=True,
             key=semantic,

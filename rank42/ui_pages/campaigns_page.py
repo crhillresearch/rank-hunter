@@ -178,6 +178,8 @@ def _go_campaign_action(action):
         elif page == "Target":
             st.session_state.pop(rh_key("target-curve-select"), None)
             st.session_state["target_curve_id"] = curve_id
+            st.session_state["new_search_view"] = "Target"
+            page = "Search"
     if page == "Jobs" and action.get("jobs_section"):
         st.session_state["jobs_section_pending"] = str(action["jobs_section"])
     if page == "Pipelines" and action.get("pipeline_run_id") is not None:
@@ -916,7 +918,8 @@ def _schedules(snapshot):
         hide_index=True,
     )
     if st.button("Manage schedules", width="stretch", key=f"campaign-manage-schedules-{snapshot['campaign']['id']}"):
-        st.session_state["jobs_section_pending"] = "Scheduled"
+        st.session_state["jobs_section_pending"] = "Queue"
+        st.session_state["jobs_queue_view"] = "Schedules"
         st.session_state["rh_page"] = "Jobs"
         st.rerun()
 

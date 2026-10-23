@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "axiom",
   "name": "Axiom",
-  "version": "1.1.36",
+  "version": "1.1.56",
   "description": "A clean Rank Hunter research dashboard with coordinated light and GitHub-Primer-inspired dark appearances, cobalt accents, readable typography, and restrained semantic status colors.",
   "preview_image": "assets/rank-hunter-mark.png",
   "stylesheets": [
@@ -25,13 +25,18 @@
     "appearance.css",
     "frontier-presentation.css",
     "analysis-hub.css",
+    "ai-search.css",
+    "candidates-page.css",
+    "new-search.css",
     "casebook.css",
     "tools-page.css",
     "descent-page.css",
     "pencils-page.css",
     "arithmetic-neighborhood.css",
     "mobile.css",
-    "hall-of-fame.css"
+    "hall-of-fame.css",
+    "results-page.css",
+    "settings-page.css"
   ],
   "streamlit_theme": "streamlit-theme.toml",
   "branding": {

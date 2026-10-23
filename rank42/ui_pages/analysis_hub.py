@@ -68,12 +68,6 @@ def _metric(label, value, detail):
 
 def _overview(queue, lanes):
     with st.container(key="rh-analysis-hub-hero"):
-        st.html(
-            '<div class="rh-analysis-hub-intro"><span>RESEARCH PORTFOLIO</span>'
-            '<h2>Find the next rigorous rank gain.</h2>'
-            '<p>Work across curves: certify points already found, close rank '
-            'intervals, or search for another independent point.</p></div>'
-        )
         totals = (
             ("POINT CERTIFICATES", len(lanes["Certify points"]), "curves with exact points to test"),
             ("OPEN RANK PROOFS", len(lanes["Prove rank"]), "curves with unresolved bounds"),

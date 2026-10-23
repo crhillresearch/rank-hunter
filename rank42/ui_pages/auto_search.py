@@ -624,7 +624,7 @@ def _schedule_auto_pipeline(
     return int(schedule_id), int(run_id)
 
 
-def _render_auto(db, ctx):
+def _render_auto(db, ctx, *, search_by=None, embedded=False):
     ensure_auto_search_schema(db)
 
     blocking_jobs = _blocking_auto_jobs(db)
@@ -654,18 +654,24 @@ def _render_auto(db, ctx):
             "that is not currently available to Auto. Auto remains manual."
         )
 
-    _, main_col, _ = st.columns([0.6, 2.8, 0.6])
+    if embedded:
+        main_col = st.container()
+    else:
+        _, main_col, _ = st.columns([0.6, 2.8, 0.6])
     with main_col:
-        section_title(
-            "Auto Search",
-            "Choose a family or torsion target and a rigorous rank goal.",
-        )
-        search_by = st.radio(
-            "Search by",
-            ["Family", "Torsion"],
-            horizontal=True,
-            key="auto-search-mode",
-        )
+        if search_by is None:
+            section_title(
+                "Auto Search",
+                "Choose a family or torsion target and a rigorous rank goal.",
+            )
+            search_by = st.radio(
+                "Search by",
+                ["Family", "Torsion"],
+                horizontal=True,
+                key="auto-search-mode",
+            )
+        elif search_by not in {"Family", "Torsion"}:
+            raise ValueError(f"unsupported Auto search target {search_by!r}")
 
         plugin = None
         variant = None

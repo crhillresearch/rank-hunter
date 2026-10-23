@@ -13,20 +13,11 @@ from rank42.analyze_workspace import curve_analysis_snapshot, research_inbox
 from rank42.manage_store import list_campaigns
 from rank42.research_timeline import research_timeline
 from rank42.ui_active_curve import get_active_curve_id, set_active_curve_id
+from rank42.ui_handoffs import route_curve_to_target, route_pool_to_search
 from rank42.ui_pages.common import title
 from rank42.ui_components import rh_key
 
 
-ANALYSIS_TOOLS = (
-    ("Descent", "Close a rigorous rank interval with bounded proof methods.", ":material/trending_down:"),
-    ("Independence", "Certify whether exact points add new Mordell–Weil directions.", ":material/schema:"),
-    ("Saturation", "Check whether the stored Mordell–Weil subgroup is saturated.", ":material/salinity:"),
-    ("Lattices", "Inspect generator heights, correlations, and lattice geometry.", ":material/grid_4x4:"),
-    ("Quartics", "Search quartics and coverings for rational points.", ":material/functions:"),
-    ("Points", "Review exact points and their certification status.", ":material/grain:"),
-    ("Pencils", "Compare known elliptic pencils and their specializations.", ":material/edit:"),
-    ("Curves", "Browse retained curves and open a curve’s full record.", ":material/line_curve:"),
-)
 _FOCUS_ACTION_KINDS = {
     "Close the rigorous rank interval": ("descent",),
     "Resolve candidate point independence": ("independence",),
@@ -36,15 +27,23 @@ _FOCUS_ACTION_KINDS = {
     "Explain family / specialization structure": ("study_jump",),
     "Compare related fibers": ("search_related",),
 }
-_DOSSIER_SECTIONS = ("Overview", "Evidence", "Family", "Activity", "Case notes", "Tools")
-
-
-def _open_tool(route: str) -> None:
-    st.session_state["rh_page"] = route
-    st.rerun()
 
 
 def _open_curve_tool(route: str, curve_id: int, *, family_pool_id=None) -> None:
+    if route == "Target":
+        route_curve_to_target(st.session_state, int(curve_id))
+        st.rerun()
+        return
+    if route == "Search":
+        set_active_curve_id(st.session_state, int(curve_id), "analysis_workcenter_curve_id")
+        if family_pool_id is not None:
+            route_pool_to_search(st.session_state, int(family_pool_id))
+        else:
+            st.session_state["new_search_view"] = "Family"
+            st.session_state["new-search-family-workflow"] = "Pool Search"
+            st.session_state["rh_page"] = "Search"
+        st.rerun()
+        return
     set_active_curve_id(
         st.session_state, int(curve_id), "analyze_curve_id", "analysis_curve_id",
         "independence_curve_id", "descent_curve_id", "target_curve_id",
@@ -52,12 +51,6 @@ def _open_curve_tool(route: str, curve_id: int, *, family_pool_id=None) -> None:
     )
     if route == "Curves":
         st.session_state["curves_detail_id"] = int(curve_id)
-    elif route == "Search":
-        st.session_state.pop(rh_key("search-main-tabs"), None)
-        st.session_state["search_tab"] = "Family"
-        if family_pool_id is not None:
-            st.session_state.pop(rh_key("family-pool-select"), None)
-            st.session_state["family_search_pool_id"] = int(family_pool_id)
     st.session_state["rh_page"] = route
     st.rerun()
 
@@ -100,11 +93,11 @@ def _render_recommendation(snapshot, plan, case):
     curve_id = int(snapshot["curve"]["id"])
     goal = "" if case is None else str(case["research_goal"] or "")
     action = _goal_action(plan, goal)
-    with st.container(key=rh_key("casebook-next-step"), border=True, height="stretch"):
+    with st.container(key=rh_key("casebook-next-step"), border=True):
         st.subheader("Recommended next step" if not goal else f"Next step · {goal}")
         if action is None:
             if goal and goal in _FOCUS_ACTION_KINDS:
-                st.info("No matching action follows from the stored evidence. Review the dossier or choose another tool.")
+                st.info("No matching action follows from the stored evidence. Review the evidence below or change the research goal.")
             else:
                 st.info("No immediate action is recommended from the current evidence.")
             return
@@ -128,61 +121,32 @@ def _render_recommendation(snapshot, plan, case):
                 "Review family analysis", type="primary",
                 key=f"analysis-workcenter-family-next-{curve_id}", width="stretch",
             ):
-                st.session_state[f"analysis-workcenter-section-{curve_id}"] = "Family"
+                st.session_state["casebook-family-open"] = True
                 st.rerun()
 
 
-def _render_overview(snapshot, plan, case):
+def _render_overview(snapshot):
     curve, state, arithmetic = snapshot["curve"], snapshot["state"], snapshot["arithmetic"]
     torsion = arithmetic.get("torsion") or {}
     conductor = arithmetic.get("conductor")
-    curve_col, next_col = st.columns([1.2, 1], gap="medium")
-    with curve_col:
-        with st.container(key=rh_key("casebook-curve-info"), border=True, height="stretch"):
-            st.subheader(f"Curve #{int(curve['id'])}")
-            st.caption(
-                f"{curve['family']} · t={curve['parameter']} · {curve['plugin_id'] or 'external/imported'}"
-                + (f" v{curve['plugin_version']}" if curve["plugin_version"] else "")
-            )
-            a, b, c = st.columns(3)
-            a.metric("Rigorous rank", _rank_label(state))
-            b.metric("Torsion", torsion.get("label") or "Unknown")
-            c.metric("Conductor", f"{int(conductor):,}" if conductor else "—")
-            d, e = st.columns(2)
-            d.metric("Independent witnesses", len(snapshot["witnesses"]))
-            e.metric("Points to review", len(snapshot["actionable_points"]))
-            if state["inconsistent"]:
-                st.error("The rigorous upper and lower evidence conflict. Treat the rank statement as unresolved until reconciled.")
-            elif state["exact_rank"] is not None:
-                st.success(f"Exact rank {int(state['exact_rank'])} is supported by matching rigorous bounds.")
-            elif state["rigorous_upper"] is not None:
-                st.info(f"Current rigorous interval: {int(state['rigorous_lower'])} ≤ rank ≤ {int(state['rigorous_upper'])}.")
-            else:
-                st.info(f"Current rigorous result: rank ≥ {int(state['rigorous_lower'])}; no rigorous upper bound is stored.")
-            if state["conditional_analytic_upper"] is not None:
-                st.caption(f"Conditional analytic upper bound: {int(state['conditional_analytic_upper'])}; separate from rigorous algebraic bounds.")
-    with next_col:
-        _render_recommendation(snapshot, plan, case)
-
-
-def _dossier_buttons(curve_id: int) -> str:
-    section_key = f"analysis-workcenter-section-{curve_id}"
-    section = str(st.session_state.get(section_key) or "Overview")
-    if section not in _DOSSIER_SECTIONS:
-        section = "Overview"
-        st.session_state[section_key] = section
-    with st.container(key=rh_key("casebook-dossier-nav")):
-        for column, label in zip(st.columns(len(_DOSSIER_SECTIONS), gap="small"), _DOSSIER_SECTIONS):
-            with column:
-                if st.button(
-                    label,
-                    key=f"casebook-section-{curve_id}-{label.lower().replace(' ', '-')}",
-                    type="primary" if label == section else "secondary",
-                    width="stretch",
-                ):
-                    st.session_state[section_key] = label
-                    st.rerun()
-    return section
+    with st.container(key=rh_key("casebook-curve-info"), border=True):
+        st.subheader(f"Curve #{int(curve['id'])}")
+        st.caption(
+            f"{curve['family']} · t={curve['parameter']} · {curve['plugin_id'] or 'external/imported'}"
+            + (f" v{curve['plugin_version']}" if curve["plugin_version"] else "")
+        )
+        a, b, c = st.columns(3)
+        a.metric("Rigorous rank", _rank_label(state))
+        b.metric("Torsion", torsion.get("label") or "Unknown")
+        c.metric("Conductor", f"{int(conductor):,}" if conductor else "—")
+        st.caption(
+            f"{len(snapshot['witnesses'])} independent witnesses · "
+            f"{len(snapshot['actionable_points'])} points to review"
+        )
+        if state["inconsistent"]:
+            st.error("Stored rigorous bounds conflict. Review the evidence before treating this rank as settled.")
+        if state["conditional_analytic_upper"] is not None:
+            st.caption(f"Conditional analytic upper bound: {int(state['conditional_analytic_upper'])} (separate from rigorous bounds).")
 
 
 def _render_evidence(snapshot):
@@ -285,7 +249,7 @@ def _render_activity(db, curve_id):
 
 
 def _render_case_notes(db, curve_id):
-    st.subheader("Researcher case notes")
+    st.subheader("Research notes")
     if not analysis_case_schema_ready(db):
         st.info("Research case notes are not available in this database yet.")
         return
@@ -306,18 +270,17 @@ def _render_case_notes(db, curve_id):
             if int(campaign["id"]) == int(current["campaign_id"]):
                 campaign_index = i
                 break
-    st.caption("These notes record researcher intent only; they never change scientific evidence.")
     with st.form(f"analysis-workcenter-case-{int(curve_id)}"):
-        a, b, c = st.columns(3)
+        a, b = st.columns(2)
         priority = a.selectbox("Priority", priority_names, index=priority_names.index(priority_label) if priority_label in priority_names else 1)
         status = b.selectbox("Case status", list(CASE_WORKFLOW_STATUSES), index=list(CASE_WORKFLOW_STATUSES).index(current_status) if current_status in CASE_WORKFLOW_STATUSES else 0)
-        campaign = c.selectbox(
+        campaign = st.selectbox(
             "Campaign", choices, index=campaign_index,
             format_func=lambda item: "None" if item is None else f"#{int(item['id'])} · {item['name']} · {item['status']}",
         )
         goal = st.selectbox("Research goal", goals, index=goals.index(current_goal) if current_goal in goals else 0, format_func=lambda value: value or "Follow planner recommendation")
         reason = st.text_input("Why is this curve a research case?", value="" if current is None else str(current["reason"] or ""))
-        note = st.text_area("Working notes", value="" if current is None else str(current["note"] or ""), height=120)
+        note = st.text_area("Working notes", value="" if current is None else str(current["note"] or ""), height=180)
         submitted = st.form_submit_button("Save case", type="primary", width="stretch")
     if submitted:
         saved = save_analysis_case(
@@ -329,30 +292,8 @@ def _render_case_notes(db, curve_id):
         st.rerun()
 
 
-def _render_tools(curve_id=None):
-    st.subheader("Analysis tools")
-    st.caption("Specialist tools own the computations and scientific records they produce.")
-    for start in range(0, len(ANALYSIS_TOOLS), 2):
-        cols = st.columns(2, gap="medium")
-        for col, (label, description, icon) in zip(cols, ANALYSIS_TOOLS[start:start + 2]):
-            with col:
-                with st.container(border=True):
-                    st.markdown(f"### {icon}  {label}")
-                    st.write(description)
-                    if st.button(f"Open {label}", key=f"analysis-workcenter-open-{label.casefold()}-{curve_id or 'none'}", width="stretch"):
-                        if curve_id is None:
-                            _open_tool(label)
-                        else:
-                            _open_curve_tool(label, int(curve_id))
-
-
 def page(db, ctx):
-    title(
-        "Casebook",
-        "A curve-centered casebook for deciding what is known and what to do next.",
-        "Analysis",
-        icon=":material/menu_book:",
-    )
+    title("Casebook", icon=":material/menu_book:")
     queue = research_inbox(db, limit=10000)
     by_id = {int(item["curve_id"]): item for item in queue}
     current_curve_id = get_active_curve_id(st.session_state, "analysis_workcenter_curve_id")
@@ -428,6 +369,7 @@ def page(db, ctx):
             label_visibility="collapsed",
             help=f"{matching_count:,} matching curves; showing the first {len(candidates):,} by priority.",
         )
+        st.caption(f"{matching_count:,} matching cases · showing the first {len(candidates):,}")
     set_active_curve_id(
         st.session_state, int(selected_id), "analysis_workcenter_curve_id",
         "analyze_curve_id", "analysis_curve_id", "independence_curve_id",
@@ -453,30 +395,17 @@ def page(db, ctx):
     snapshot = curve_analysis_snapshot(db, curve_id)
     plan = analysis_plan(snapshot)
     case = get_analysis_case(db, curve_id)
-    _render_overview(snapshot, plan, case)
+    summary_col, notes_col = st.columns([.9, 1.1], gap="medium", vertical_alignment="top")
+    with summary_col:
+        _render_overview(snapshot)
+        _render_recommendation(snapshot, plan, case)
+    with notes_col:
+        with st.container(key=rh_key("casebook-notes"), border=True):
+            _render_case_notes(db, curve_id)
 
-    section = _dossier_buttons(curve_id)
-    st.divider()
-    if section == "Evidence":
+    with st.expander("Rank evidence and points", expanded=bool(snapshot["state"]["inconsistent"])):
         _render_evidence(snapshot)
-    elif section == "Family":
+    with st.expander("Family context", expanded=bool(st.session_state.pop("casebook-family-open", False))):
         _render_family(snapshot)
-    elif section == "Activity":
+    with st.expander("Research history"):
         _render_activity(db, curve_id)
-    elif section == "Case notes":
-        _render_case_notes(db, curve_id)
-    elif section == "Tools":
-        _render_tools(curve_id)
-    else:
-        st.subheader("Case summary")
-        if case is None:
-            st.caption("No researcher case has been saved for this curve yet. Add a goal and notes in Case notes.")
-        else:
-            st.markdown(f"**{str(case['workflow_status']).title()} · {case_priority_label(case['priority'])} priority**")
-            if case["research_goal"]:
-                st.write(f"Goal: {case['research_goal']}")
-            if case["reason"]:
-                st.write(case["reason"])
-            if case["note"]:
-                st.caption(str(case["note"]))
-        st.caption("Use the dossier sections for evidence, family context, activity, case notes, and tools.")

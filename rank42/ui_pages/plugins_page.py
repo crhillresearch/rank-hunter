@@ -1294,7 +1294,6 @@ def page(db, ctx, initial_tab=None):
         width="content",
     )
     st.session_state["plugins_tab"] = choice
-    st.html("<div style='height:.85rem'></div>")
 
     unavailable = unavailable_plugin_states(
         db,

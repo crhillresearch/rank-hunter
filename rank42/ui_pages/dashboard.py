@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 
 import streamlit as st
 
-from rank42 import __version__
 from rank42.catalog import (
     catalog_status,
     external_torsion_factors,
@@ -38,7 +37,7 @@ from .dashboard_sections import _torsion_research_data
 
 _DASHBOARD_NAV_GROUPS = (
     ("Explore", ("Dashboard", "Curves", "Points", "Models")),
-    ("Search", ("Candidates", "Search", "Auto", "Target", "Pipelines")),
+    ("Search", ("AI Hunt", "Search", "Pipelines", "Candidates")),
     ("Analysis", ("Casebook", "Rank Lab", "Tools")),
     ("Manage", ("Jobs", "Campaigns", "Plugins", "Settings")),
 )
@@ -575,7 +574,9 @@ def _frontier_leaderboard(db, torsion_group=None):
     )
 
 
-def _dashboard_page_nav():
+def _dashboard_page_nav(ctx):
+    logo_svg = (Path(ctx.project_root) / "assets" / "rank-hunter-logo.svg").read_bytes()
+    logo_uri = "data:image/svg+xml;base64," + base64.b64encode(logo_svg).decode("ascii")
     groups = [
         {
             "label": label,
@@ -601,6 +602,8 @@ def _dashboard_page_nav():
         "itemNoun": "pages",
         "currentNoun": "page",
         "mobileLabel": "Pages",
+        "pageTitle": "Rank Hunter",
+        "pageLogoUrl": logo_uri,
     }).replace("<", "\\u003c")
     st.html(
         '<div id="rh-dashboard-commandbar" class="rh-tools-commandbar-host" '
@@ -670,6 +673,21 @@ def _local_frontier_panel(rows, research, db, ctx, genus2_model_count=0,
         best_row = ({"id": zero_rank_curve_id} if best_rank == 0
                     else by_rank[best_rank][f"strongest_{best_kind}"][1]
                     if best_rank is not None else None)
+        best_detail = ""
+        if best_row is not None:
+            curve = db.execute(
+                "SELECT torsion_label,family,parameter FROM curves WHERE id=?",
+                (int(best_row["id"]),),
+            ).fetchone()
+            if curve is not None:
+                detail = (
+                    f"CURVE #{int(best_row['id'])} · {curve['torsion_label'] or 'Unknown'}"
+                    f" · {curve['family'] or 'Unknown'} · t={curve['parameter'] or '—'}"
+                )
+                best_detail = (
+                    '<div class="rh-frontier-best-detail">'
+                    f'{html.escape(detail)}</div>'
+                )
         prefix = "=" if best_kind == "exact" else "&ge;"
         empty_curve_label = (
             "No certified curve yet" if research["rank"]["curve_count"]
@@ -704,6 +722,7 @@ def _local_frontier_panel(rows, research, db, ctx, genus2_model_count=0,
                    else f'<span class="rh-frontier-empty-curve">{empty_curve_label}</span>')
                 + '</div>'
                 + '</div>'
+                + best_detail
                 + f'<div class="rh-frontier-best-exact"><span>BEST EXACT RANK</span><strong>{best_exact_label}</strong></div>'
                 + '</section>'
             )
@@ -1000,7 +1019,14 @@ def _icarm_leaderboard(db):
 
 
 def _go_to_jobs_section(section):
-    st.session_state["jobs_section_pending"] = str(section)
+    section = str(section)
+    st.session_state["jobs_section_pending"] = (
+        "Queue" if section == "Scheduled" else section
+    )
+    if section in {"Queue", "Scheduled"}:
+        st.session_state["jobs_queue_view"] = (
+            "Schedules" if section == "Scheduled" else "Waiting jobs"
+        )
     st.session_state["rh_page"] = "Jobs"
 
 
@@ -1090,7 +1116,8 @@ def _open_attention_item(item):
         st.session_state["byo_focus_run_id"] = int(object_id)
     elif object_type == "schedule":
         st.session_state["manage_schedule_id"] = int(object_id)
-        st.session_state["jobs_section_pending"] = "Scheduled"
+        st.session_state["jobs_section_pending"] = "Queue"
+        st.session_state["jobs_queue_view"] = "Schedules"
     elif object_type == "dispatcher":
         st.session_state["jobs_section_pending"] = "Queue"
 
@@ -1109,6 +1136,17 @@ def _acknowledge_attention_item(db_path, item):
     finally:
         live.close()
     st.session_state["dashboard_attention_notice"] = "Attention item acknowledged."
+
+
+def _acknowledge_all_attention_items(db_path, items):
+    """Dismiss terminal alerts together; live issues remain visible until resolved."""
+    live = connect_existing(db_path)
+    try:
+        for item in items:
+            acknowledge_dashboard_attention(live, item)
+    finally:
+        live.close()
+    st.session_state["dashboard_attention_notice"] = f"Acknowledged {len(items)} attention items."
 
 
 def _render_attention_item(db_path, item, index):
@@ -1176,6 +1214,18 @@ def _attention_panel(db_path, items):
             st.caption("No current cross-system attention items.")
             return
 
+        acknowledgeable = [item for item in items if item.get("acknowledgeable")]
+        if acknowledgeable:
+            st.button(
+                f"Acknowledge all ({len(acknowledgeable)})",
+                key="rh-dashboard-attention-acknowledge-all",
+                icon=":material/done_all:",
+                type="secondary",
+                help="Clear terminal alerts from this queue. Active issues stay until resolved.",
+                on_click=_acknowledge_all_attention_items,
+                args=(db_path, acknowledgeable),
+            )
+
         st.caption(
             "Open an item to fix it at its owner. Terminal Job/Pipeline failures may be acknowledged without changing history."
         )
@@ -1187,20 +1237,6 @@ def _attention_panel(db_path, items):
                 for index, item in enumerate(items):
                     _render_attention_item(db_path, item, index)
 
-
-
-def _dashboard_header(ctx):
-    logo_path = Path(ctx.project_root) / "assets" / "rank-hunter-logo.svg"
-    logo = logo_path.read_text(encoding="utf-8").replace('fill="#006DFC"', 'fill="#000000"')
-    logo_uri = "data:image/svg+xml;base64," + base64.b64encode(logo.encode("utf-8")).decode("ascii")
-    with region("dashboard-brand-header", border=False):
-        st.html(
-            '<div class="rh-dashboard-brand-header">'
-            f'<span class="rh-dashboard-brand-logo"><img src="{logo_uri}" alt="Rank Hunter logo" width="24" height="24"></span>'
-            '<h1>Rank Hunter</h1>'
-            f'<span class="rh-dashboard-version-badge">v{html.escape(__version__)}</span>'
-            '</div>'
-        )
 
 
 def _frontier_stats_html(research, genus2_model_count=0):
@@ -1307,7 +1343,6 @@ def _render_dashboard(db, ctx):
 
 
 def page(db, ctx):
-    _dashboard_header(ctx)
-    _dashboard_page_nav()
+    _dashboard_page_nav(ctx)
     render_feature_hook(db, ctx, "dashboard.after_header")
     _render_dashboard(db, ctx)

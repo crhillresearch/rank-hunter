@@ -133,12 +133,28 @@ def research_handoff_for_curve(state, curve_id):
 
 
 def route_curve_to_target(state, curve_id, *, handoff=None):
-    """Route one stored curve to the ordinary Target page."""
+    """Open the stored curve in Search's Target view."""
     curve_id = set_active_curve_id(state, curve_id, "target_curve_id")
     if handoff is not None:
         set_research_handoff(state, handoff)
-    state["rh_page"] = "Target"
+    state["new_search_view"] = "Target"
+    state["rh_page"] = "Search"
     return curve_id
+
+
+def route_pool_to_search(state, pool_id, *, torsion_group=None):
+    """Open one saved candidate pool in Search without changing the pool."""
+    pool_id = _positive_int(pool_id)
+    if pool_id is None:
+        raise ValueError("candidate pool id must be a positive integer")
+    state.pop("rh-family-pool-select", None)
+    state["family_search_pool_id"] = pool_id
+    if torsion_group:
+        state[f"new-search-family-mode-{pool_id}"] = "Torsion"
+        state[f"family-torsion-group-{pool_id}"] = str(torsion_group)
+    state["new_search_view"] = "Candidates"
+    state["rh_page"] = "Search"
+    return pool_id
 
 
 def route_selection_to_pipelines(state, handoff):

@@ -3199,6 +3199,14 @@ def resume_job(db, db_path, job_id):
         cwd=str(row["cwd"]),
         metadata=meta,
     )
+    if str(row["kind"]) == "ai_search":
+        from rank42.ai_search import get_ai_campaign, update_ai_campaign
+
+        ai_id = int(meta.get("ai_search_campaign_id") or 0)
+        campaign = get_ai_campaign(db, ai_id) if ai_id else None
+        if campaign is not None and int(campaign["job_id"] or 0) == int(job_id):
+            update_ai_campaign(db, ai_id, job_id=int(new_id), status="queued",
+                               finished_at=None, error=None)
 
     source_meta.pop("pause_requested", None)
     source_meta.pop("paused_at", None)

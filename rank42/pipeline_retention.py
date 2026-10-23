@@ -32,10 +32,32 @@ def cleanup_pipeline_run(db, run_id, *, floor_override=None, dry_run=False):
     result = {
         "run_id": int(run_id), "floor": floor,
         "removed": 0, "preexisting": 0, "active_elsewhere": 0,
-        "retained": 0, "curve_ids_removed": [],
+        "retained": 0, "frontier_retained": 0,
+        "curve_ids_removed": [],
     }
     if floor == 0:
         return result
+
+    frontier_threshold = None
+    if config.get("preserve_near_frontier"):
+        has_evidence = db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='rank_evidence'"
+        ).fetchone() is not None
+        if has_evidence:
+            best = db.execute(
+                """SELECT MAX(MAX(COALESCE(rigorous_lower,0),
+                                  COALESCE(exact_rank,0)))
+                   FROM rank_evidence WHERE rigorous=1
+                     AND status IN ('completed','certified_independent')"""
+            ).fetchone()
+        else:
+            best = db.execute(
+                "SELECT MAX(exact_rank),MAX(descent_lower),MAX(generic_lower) FROM curves"
+            ).fetchone()
+        local_high = max(int(value or 0) for value in best)
+        margin = max(0, int(config.get("frontier_margin", 10)))
+        frontier_threshold = max(3, local_high - margin)
+    result["frontier_threshold"] = frontier_threshold
 
     rows = db.execute(
         """SELECT DISTINCT c.id,c.created_at,pc.score_provenance_json
@@ -64,7 +86,7 @@ def cleanup_pipeline_run(db, run_id, *, floor_override=None, dry_run=False):
             """SELECT 1 FROM search_pipeline_candidates pc
                JOIN search_pipeline_runs r ON r.id=pc.run_id
                WHERE pc.curve_id=? AND pc.run_id<>?
-                 AND r.status IN ('queued','running') LIMIT 1""",
+                 AND r.status IN ('queued','running','paused') LIMIT 1""",
             (curve_id, int(run_id)),
         ).fetchone()
         if active is not None:
@@ -73,6 +95,11 @@ def cleanup_pipeline_run(db, run_id, *, floor_override=None, dry_run=False):
         state = get_curve_research_state(db, curve_id)
         if int(state.get("rigorous_lower") or 0) >= floor:
             result["retained"] += 1
+            continue
+        if (frontier_threshold is not None
+                and int(state.get("rigorous_lower") or 0) >= frontier_threshold):
+            result["retained"] += 1
+            result["frontier_retained"] += 1
             continue
         if not dry_run:
             if not discard_unpromoted_search_curve(
@@ -128,14 +155,14 @@ def cleanup_auto_campaign(db, campaign_id):
             """SELECT 1 FROM auto_search_trials t
                JOIN auto_search_campaigns a ON a.id=t.campaign_id
                WHERE t.curve_id=? AND t.campaign_id<>?
-                 AND a.status IN ('queued','running') LIMIT 1""",
+                 AND a.status IN ('queued','running','paused') LIMIT 1""",
             (curve_id, int(campaign_id)),
         ).fetchone()
         if active is None:
             active = db.execute(
                 """SELECT 1 FROM search_pipeline_candidates pc
                    JOIN search_pipeline_runs r ON r.id=pc.run_id
-                   WHERE pc.curve_id=? AND r.status IN ('queued','running') LIMIT 1""",
+                   WHERE pc.curve_id=? AND r.status IN ('queued','running','paused') LIMIT 1""",
                 (curve_id,),
             ).fetchone()
         if active is not None:

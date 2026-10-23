@@ -48,7 +48,7 @@ def test_navigation_contract_v089():
 def test_page_header_is_page_owned_not_parent_section_owned():
     common = (root() / "rank42" / "ui_pages" / "common.py").read_text()
     extensions = (root() / "rank42" / "ui_extensions.py").read_text()
-    assert 'st.title(f":material/{icon}: {name}", anchor=False)' in common
+    assert '_render_page_bar(name, icon)' in common
     assert 'title(page.label, plugin.description or None, icon=plugin.icon)' in extensions
 
 

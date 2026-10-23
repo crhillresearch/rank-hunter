@@ -589,6 +589,85 @@ def _run_candidate_generation_lane(
     }
 
 
+def _run_torsion_candidate_generation_lane(
+    db, *, run, run_config, stages, target, providers, project_root
+):
+    """Build separate searchable family pools for selected torsion providers."""
+    selected = {str(key) for key in target.get("selected_provider_keys") or []}
+    if not selected:
+        raise ValueError("select at least one torsion provider")
+    print("[torsion candidates] provider families only · exact torsion of each "
+          "specialization is deferred until pool search", flush=True)
+    available = {str(provider["provider_key"]) for provider in providers}
+    unknown = selected - available
+    if unknown:
+        raise ValueError("selected torsion providers are unavailable: " + ", ".join(sorted(unknown)))
+    base_name = str(target.get("output_pool_name") or f"torsion-run-{run['id']}").strip()
+    if not base_name:
+        raise ValueError("candidate output pool name must be non-empty")
+    pools = []
+    for provider in providers:
+        key = str(provider["provider_key"])
+        if key not in selected:
+            continue
+        plugin = get_plugin(project_root, provider["plugin_id"])
+        variant = get_variant(plugin, provider["variant_id"])
+        provider_target = dict(target)
+        provider_target["output_pool_name"] = (
+            f"{base_name}-{provider['plugin_id']}-{provider['variant_id']}"
+        )
+        candidates = _family_candidates(
+            db, project_root, run["id"], plugin, variant, stages, run_config,
+            target=provider_target,
+        )
+        pool = db.execute(
+            "SELECT id,name,candidate_count FROM candidate_pools WHERE name=?",
+            (provider_target["output_pool_name"],),
+        ).fetchone()
+        if pool is None:
+            raise RuntimeError(f"candidate generator returned without pool for {key}")
+        stored_generation = db.execute(
+            "SELECT generation_json FROM candidate_pools WHERE id=?",
+            (int(pool["id"]),),
+        ).fetchone()
+        generation = json.loads(stored_generation["generation_json"] or "{}")
+        generation.update({
+            "source_method": "torsion_group",
+            "target_torsion_group": str(target["torsion_group"]),
+            "selected_provider_keys": sorted(selected),
+        })
+        db.execute(
+            "UPDATE candidate_pools SET generation_json=?,updated_at=? WHERE id=?",
+            (json.dumps(generation, sort_keys=True), now(), int(pool["id"])),
+        )
+        db.commit()
+        for candidate in candidates:
+            upsert_pipeline_candidate(
+                db, run_id=run["id"], provider_key=key,
+                parameter=candidate["parameter"], score=candidate.get("score"),
+                score_provenance=candidate.get("score_provenance"),
+                status="completed",
+            )
+        pools.append({
+            "candidate_pool_id": int(pool["id"]),
+            "candidate_pool_name": str(pool["name"]),
+            "candidate_count": int(pool["candidate_count"] or len(candidates)),
+            "plugin_id": plugin.id, "variant_id": variant.id,
+        })
+        print(f"[torsion candidates] {key} · pool #{pool['id']} · "
+              f"{len(candidates)} queued", flush=True)
+    progress = run_progress(db, run["id"])
+    update_pipeline_run(
+        db, run["id"], candidates_total=progress["total"],
+        candidates_done=progress["done"],
+    )
+    return {
+        "torsion_group": str(target["torsion_group"]),
+        "exact_torsion_verified": False,
+        "pools": pools,
+    }
+
+
 def _general_source_candidates(target):
     mode = str(target.get("pool_mode") or "seeded")
     count = max(10, int(target.get("pool_size") or 5000))
@@ -7439,7 +7518,12 @@ def main():
                     f"no enabled torsion provider matched {torsion}{detail}"
                 )
             print(f"[pipeline torsion] providers={len(providers)} exact={torsion}", flush=True)
-            if population_mode:
+            if bool(run_config.get("candidate_only")):
+                candidate_generation_result = _run_torsion_candidate_generation_lane(
+                    db, run=run, run_config=run_config, stages=stages,
+                    target=target, providers=providers, project_root=project_root,
+                )
+            elif population_mode:
                 items = []
                 for pindex, provider in enumerate(providers, 1):
                     print(

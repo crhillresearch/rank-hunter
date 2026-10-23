@@ -1,5 +1,85 @@
 # Changelog
 
+## 1.1.56 — 2026-10-23
+
+- Reworked Casebook as a queue and notes workspace, added compact Settings cards and header power controls, and tightened the Dashboard exact-rank spacing.
+
+## 1.1.55 — 2026-10-23
+
+- Tightened the Rank Lab overview after removing its introductory copy.
+
+## 1.1.54 — 2026-10-23
+
+- Made the Results hero cards smaller and tied them to the job selected in the table.
+
+## 1.1.53 — 2026-10-23
+
+- Put the Results window control and summary cards together in one compact hero.
+
+## 1.1.52 — 2026-10-23
+
+- Gave Jobs Results a clearer job browser and detail panel, and placed the Dashboard's best-curve details beneath its rank and plot.
+
+## 1.1.51 — 2026-10-23
+
+- Restored the separator after page titles and tightened the content below pages whose tabs moved into the header. Campaigns now shows New Campaign in its header.
+
+## 1.1.50 — 2026-10-23
+
+- Tightened the space around the page navigation bar and its first content block.
+
+## 1.1.49 — 2026-10-23
+
+- Put page names, icons, and local tabs inside the navigation bar. The Dashboard bar keeps the Rank Hunter mark and version badge. Short groups use inline links without separators, menus, or search.
+
+## 1.1.48 — 2026-10-23
+
+- Styled Pool Search with a compact pool summary and a cleaner Axiom setup card.
+
+## 1.1.47 — 2026-10-23
+
+- Put New Search on the same compact command bar used by Dashboard and Tools, including its dropdowns, icons, and keyboard search.
+
+## 1.1.46 — 2026-10-23
+
+- Changed New Search to the same page-menu treatment as the other workbenches and removed its inventory header. Plugin Presets sit beside the relevant controls.
+
+## 1.1.45 — 2026-10-23
+
+- Styled the New Search target selector and setup area as one Axiom workbench, with a compact inventory header and mobile layout.
+
+## 1.1.44 — 2026-10-23
+
+- Returned the Generate and Pools tabs to page navigation and kept the generation source switch inside its card. The overview now shows live candidate inventory.
+
+## 1.1.43 — 2026-10-23
+
+- Rebuilt Candidates with an overview, one compact navigation card, and separate source and scoring cards.
+
+## 1.1.42 — 2026-10-23
+
+- Put the Candidates tabs and generation controls inside one workbench card.
+
+## 1.1.41 — 2026-10-23
+
+- Removed the extra Generate-tab guidance card and let families without presets use the full form width.
+
+## 1.1.40 — 2026-10-23
+
+- Matched the Generate a pool step to the other Candidates cards instead of showing Streamlit's default form border.
+
+## 1.1.39 — 2026-10-23
+
+- Matched both Candidates tabs to the newer Axiom workbench cards and compact result panels.
+
+## 1.1.38 — 2026-10-23
+
+- Colored stopped and killed AI hunts red, completed rank goals green, and paused hunts amber.
+
+## 1.1.37 — 2026-10-23
+
+- Gave AI Hunt a compact hunt overview, matching Axiom workbench cards, and readable campaign progress.
+
 ## 1.1.20 — 2026-10-19
 
 - Matched the lower-place rank-marker color to its score and made each Hall of Fame torsion-group curve table a collapsed expander.

@@ -124,7 +124,8 @@ def test_jobs_owns_results_and_reuses_scientific_result_renderer():
     raw_log_source = inspect.getsource(results_page._render_job_raw_log)
     results_source = inspect.getsource(results_page.render_jobs_results)
 
-    assert '["Active", "Queue", "History", "Results", "Scheduled"]' in jobs_source
+    assert '["Active", "Queue", "History", "Results"]' in jobs_source
+    assert '["Waiting jobs", "Schedules"]' in jobs_source
     assert "results_page.render_jobs_results(db, ctx)" in jobs_source
     assert "results_page.render_job_scientific_result(" in detail_source
 
@@ -153,7 +154,7 @@ def test_jobs_tabs_flow_directly_into_content_without_spacing_divider():
     between = source[tabs_pos:content_pos]
 
     assert 'st.session_state["jobs_section"] = active' in between
-    assert 'st.html("<div style=\'height:.85rem\'></div>")' in between
+    assert 'height:.85rem' not in between
     assert "st.divider()" not in between
     assert "margin-top:-" not in between
     assert "margin-bottom:-" not in between

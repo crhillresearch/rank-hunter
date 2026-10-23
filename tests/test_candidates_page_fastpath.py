@@ -1,5 +1,8 @@
 import inspect
 import sqlite3
+from pathlib import Path
+
+from streamlit.testing.v1 import AppTest
 
 from rank42 import candidates
 from rank42.db import connect
@@ -28,12 +31,49 @@ def test_candidates_use_one_canonical_shell_with_generate_and_pools_subpages():
     assert 'icon="scatter_plot"' in shell
     assert '["Generate", "Pools"]' in shell
     assert 'key="candidates-main-tabs"' in shell
+    assert shell.index('title(\n        "Candidates",') < shell.index('choice = tabs(')
+    assert shell.index('choice = tabs(') < shell.index('rh-candidates-hero')
     assert 'variant="line"' in shell
     assert 'variant="page"' not in shell
     assert 'width="content"' in shell
     assert 'st.session_state["candidates_tab"] = choice' in shell
     assert "candidate_pools_page.page(db, ctx, embedded=True)" in shell
     assert "candidate_generate_page.page(db, ctx, embedded=True)" in shell
+
+
+def test_torsion_candidate_picker_stays_out_of_sage_provider_preflight():
+    source = inspect.getsource(candidate_generate_page)
+    assert "torsion_auto_search" not in source
+    assert "_torsion_provider_choices(db, ctx, group)" in source
+
+
+def test_torsion_candidate_tab_renders_without_leaving_candidates(tmp_path):
+    db_path = tmp_path / "rank42.db"
+    db = connect(db_path)
+    db.close()
+    root = Path(__file__).resolve().parents[1]
+    app_path = tmp_path / "candidate_app.py"
+    app_path.write_text(
+        "from pathlib import Path\n"
+        "from types import SimpleNamespace\n"
+        "import streamlit as st\n"
+        "from rank42.db import connect_existing\n"
+        "from rank42.ui_pages import candidate_generate_page\n"
+        "st.session_state.setdefault('rh_page', 'Candidates')\n"
+        f"db = connect_existing({str(db_path)!r})\n"
+        f"ctx = SimpleNamespace(project_root=Path({str(root)!r}), db_path=Path({str(db_path)!r}))\n"
+        "candidate_generate_page.page(db, ctx, embedded=True)\n"
+        "db.close()\n"
+    )
+    app = AppTest.from_file(str(app_path), default_timeout=30).run()
+    assert not app.exception
+    app.button_group[0].set_value("Torsion Group").run()
+    assert not app.exception
+    assert app.session_state["rh_page"] == "Candidates"
+    assert app.selectbox[0].label == "Torsion group"
+    app.button_group[0].set_value("Custom Equation").run()
+    assert not app.exception
+    assert app.text_input[0].label == "Family name"
 
 
 def test_candidate_pools_uses_export_subpage_instead_of_subtabs():

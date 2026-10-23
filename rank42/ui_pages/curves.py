@@ -17,6 +17,7 @@ from rank42.curve_research_state import curve_rank_summary_map
 from rank42.feature_hooks import render_feature_hook
 from rank42.manage_store import campaign_curve_ids_readonly, list_campaigns
 from rank42.ui_active_curve import set_active_curve_id
+from rank42.ui_handoffs import route_curve_to_target, route_pool_to_search
 from rank42.torsion import MAZUR_TORSION_CHOICES, ensure_torsion_schema
 from rank42.ui_components import selectable_dataframe, tabs
 from rank42.ui_extensions import enabled_extension_pages
@@ -980,6 +981,18 @@ def _open_planner_destination(action, curve_id):
         "MW Geometry": "Lattices",
         "Lattices & Heights": "Lattices",
     }.get(page, page)
+    if page == "Target":
+        route_curve_to_target(st.session_state, curve_id)
+        return
+    if page == "Search":
+        family_pool_id = action.get("family_pool_id")
+        if family_pool_id is not None:
+            route_pool_to_search(st.session_state, int(family_pool_id))
+        else:
+            st.session_state["new_search_view"] = "Family"
+            st.session_state["new-search-family-workflow"] = "Pool Search"
+            st.session_state["rh_page"] = "Search"
+        return
 
     state_key = {
         "Independence": "independence_curve_id",
@@ -1849,12 +1862,7 @@ def _render_curve_actions(db, ctx, row):
         type="secondary",
         key=f"curve-target-{row['id']}",
     ):
-        set_active_curve_id(
-            st.session_state,
-            int(row["id"]),
-            "target_curve_id",
-        )
-        st.session_state["rh_page"] = "Target"
+        route_curve_to_target(st.session_state, int(row["id"]))
         st.rerun()
     if c.button("Points", width="stretch", key=f"curve-points-{row['id']}"):
         set_active_curve_id(
@@ -2498,7 +2506,6 @@ def page(db, ctx):
             variant="line",
             width="content",
         )
-        st.html("<div style='height:.85rem'></div>")
         if section == "Hall of Fame":
             selected_curve_id = _render_hall_of_fame(db)
         elif section == "Import":

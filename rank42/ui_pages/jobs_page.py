@@ -158,6 +158,8 @@ def _pipeline_run_handoff(db, ctx):
         section = _pipeline_job_section(row)
         st.session_state["manage_job_id"] = int(row["id"])
         st.session_state["jobs_section_pending"] = section
+        if section == "Queue":
+            st.session_state["jobs_queue_view"] = "Waiting jobs"
         selector_key = {
             "Active": "jobs-active-select",
             "Queue": "jobs-queue-select",
@@ -210,6 +212,7 @@ def _pipeline_run_handoff(db, ctx):
                 )
                 st.session_state["manage_job_id"] = int(new_id)
                 st.session_state["jobs_section_pending"] = "Queue"
+                st.session_state["jobs_queue_view"] = "Waiting jobs"
                 st.session_state.pop("manage_pipeline_run_id", None)
                 st.success(f"Queued resume attempt as job #{new_id}.")
                 st.rerun()
@@ -220,6 +223,9 @@ def _pipeline_run_handoff(db, ctx):
 
 
 def page(db, ctx):
+    if st.session_state.get("jobs_section") == "Scheduled":
+        st.session_state["jobs_section"] = "Queue"
+        st.session_state["jobs_queue_view"] = "Schedules"
     title(
         "Jobs",
         "Manage running, queued, completed, and scheduled Rank Hunter computation.",
@@ -228,11 +234,17 @@ def page(db, ctx):
     render_feature_hook(db, ctx, "manage.jobs.after_header")
     _pipeline_run_handoff(db, ctx)
 
-    sections = ["Active", "Queue", "History", "Results", "Scheduled"]
+    sections = ["Active", "Queue", "History", "Results"]
     pending = st.session_state.pop("jobs_section_pending", None)
+    if pending == "Scheduled":
+        # Older handoffs and browser sessions still use the former page name.
+        pending = "Queue"
+        st.session_state["jobs_queue_view"] = "Schedules"
     if pending in sections:
         st.session_state["jobs_section"] = pending
         st.session_state.pop(rh_key("jobs-main-tabs"), None)
+        if pending == "Queue":
+            st.session_state.pop(rh_key("jobs-queue-view"), None)
     current = st.session_state.get("jobs_section") or "Active"
     active = tabs(
         sections,
@@ -240,15 +252,22 @@ def page(db, ctx):
         key="jobs-main-tabs",
     )
     st.session_state["jobs_section"] = active
-    st.html("<div style='height:.85rem'></div>")
 
     if active == "Active":
         _active(db, ctx)
     elif active == "Queue":
-        _queue(db, ctx)
+        queue_view = tabs(
+            ["Waiting jobs", "Schedules"],
+            value=st.session_state.get("jobs_queue_view") or "Waiting jobs",
+            key="jobs-queue-view",
+            variant="line",
+        )
+        st.session_state["jobs_queue_view"] = queue_view
+        if queue_view == "Schedules":
+            _scheduled(db, ctx)
+        else:
+            _queue(db, ctx)
     elif active == "History":
         _history(db, ctx)
     elif active == "Results":
         results_page.render_jobs_results(db, ctx)
-    else:
-        _scheduled(db, ctx)

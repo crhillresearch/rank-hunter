@@ -41,6 +41,8 @@ from rank42.ui_store import ensure_dispatcher_running
 from rank42.ui_pages import (
     dashboard,
     search_page,
+    new_search_page,
+    ai_search_page,
     pencils_page,
     target_curve,
     auto_search,
@@ -74,6 +76,7 @@ from rank42.ui_pages import (
 NAV_ICONS = {
     "Dashboard": PAGE_ICONS["Dashboard"],
     "Search": PAGE_ICONS["Search"],
+    "AI Hunt": PAGE_ICONS["AI Hunt"],
     "Target": PAGE_ICONS["Target"],
     "Auto": PAGE_ICONS["Auto"],
     "Pipelines": PAGE_ICONS["Pipelines"],
@@ -110,10 +113,14 @@ NAV_ICONS = {
 
 
 _LEGACY_ROUTE_ALIASES = {
+    "AI Search": "AI Hunt",
+    "New Search": "Search",
     "Family Search": "Search",
     "General Hunt": "Search",
-    "Auto Search": "Auto",
-    "Auto Hunter": "Auto",
+    "Auto Search": "Search",
+    "Auto Hunter": "Search",
+    "Auto": "Search",
+    "Target": "Search",
     "Geometry Search": "Tools",
     "Guided Search": "Pipelines",
     "Analysis Hub": "Rank Lab",
@@ -121,7 +128,7 @@ _LEGACY_ROUTE_ALIASES = {
     "Geometry": "Tools",
     "Build Your Own": "Pipelines",
     "Builder": "Pipelines",
-    "Target Curve": "Target",
+    "Target Curve": "Search",
     "Work Center": "Curves",
     "Rank Proof": "Descent",
     "MW Geometry": "Lattices",
@@ -150,6 +157,8 @@ def _normalize_route(page, state):
             candidate_tab = "Pools"
         elif requested == "Candidate Generate":
             candidate_tab = "Generate"
+        elif legacy_tab in {"Generate", "Pools"}:
+            candidate_tab = legacy_tab
         elif page_nav_tab in {"Generate", "Pools"}:
             candidate_tab = page_nav_tab
         else:
@@ -187,8 +196,28 @@ def _normalize_route(page, state):
     else:
         canonical = _LEGACY_ROUTE_ALIASES.get(requested, requested)
 
-    if requested in {"Family Search", "General Hunt"}:
-        state["search_tab"] = "General" if requested == "General Hunt" else "Family"
+    if requested in {"Target", "Target Curve"}:
+        state["new_search_view"] = "Target"
+    elif requested in {"Auto", "Auto Search", "Auto Hunter"}:
+        state["new_search_view"] = (
+            "Torsion" if state.get("auto-search-mode") == "Torsion" else "Family"
+        )
+        state["new-search-family-workflow"] = "Automatic"
+        state["new-search-torsion-workflow"] = "Automatic"
+    elif requested == "Family Search":
+        state["new_search_view"] = "Family"
+        state["new-search-family-workflow"] = "Pool Search"
+    elif requested == "General Hunt":
+        state["new_search_view"] = "General"
+    elif requested == "New Search" and not state.get("new_search_view"):
+        state["new_search_view"] = "Family"
+    elif requested == "Search" and not state.get("new_search_view"):
+        if state.get("search_tab") == "General":
+            state["new_search_view"] = "General"
+        elif state.get("family_search_pool_id"):
+            state["new_search_view"] = "Candidates"
+        else:
+            state["new_search_view"] = "Family"
     elif requested == "Geometry":
         state["tools_selection"] = "Lattices"
     elif requested == "Geometry Search":
@@ -265,7 +294,7 @@ def _nav_button(label, page, *, icon=True, icon_value=None, state_updates=None):
     )
 
 
-def _nav_group(group, items, active_page, *, footer=None):
+def _nav_group(group, items, active_page):
     expanded = any(item[1] == active_page for item in items)
     with st.container(key=rh_key(f"nav-group-{group}")):
         with st.expander(group, expanded=expanded):
@@ -280,8 +309,6 @@ def _nav_group(group, items, active_page, *, footer=None):
                         icon_value=item_icon,
                         state_updates=state_updates,
                     )
-                if footer is not None:
-                    footer()
 
 
 _SYSTEM_METRICS_REFRESH_SECONDS = 3.0
@@ -369,18 +396,24 @@ def _sidebar_branding(ctx):
 
 
 def _sidebar_utility_style(active_appearance):
-    """Style appearance and lifecycle utility controls with compact icon treatment."""
+    """Style the compact sidebar appearance control."""
     toggle_key = rh_key("appearance-toggle")
+    version_row_key = rh_key("sidebar-version-appearance")
     appearance_button_key = rh_key("appearance-toggle-button")
-    restart_key = rh_key("server-restart")
-    power_key = rh_key("server-power")
-    lifecycle_key = rh_key("server-lifecycle")
     search_group_key = rh_key("nav-group-Search")
     system_group_key = rh_key("nav-group-System")
     st.html(
         "<style>"
+        + f"div[class*='st-key-{version_row_key}']{{"
+          "width:7.6rem!important;margin:-.2rem auto .1rem!important;padding:0!important}"
+        + f"div[class*='st-key-{version_row_key}'] [data-testid='stHorizontalBlock']{{"
+          "gap:0!important;align-items:center!important}"
+        + ".rh-sidebar-version{height:2.25rem;display:flex;align-items:center;"
+          "justify-content:flex-start;gap:.38rem;white-space:nowrap;"
+          "font-size:.72rem;font-weight:700;color:var(--rh-muted,#8a9099)}"
+        + ".rh-sidebar-version-separator{color:var(--rh-border-strong,#cbd2dc);font-weight:500}"
         + f"div[class*='st-key-{toggle_key}']{{"
-          "width:2.75rem!important;margin:-.45rem auto!important;"
+          "width:2.75rem!important;margin:0 auto!important;"
           "padding:0!important;border:0!important;border-radius:999px!important;"
           "background:transparent!important;box-shadow:none!important}"
         + ",".join(
@@ -399,42 +432,10 @@ def _sidebar_utility_style(active_appearance):
         + f"div[class*='st-key-{toggle_key}'] button[kind='secondary']:hover{{"
           "background:var(--rh-surface-hover,rgba(127,127,127,.10))!important;"
           "color:var(--rh-text,#31333f)!important}"
-        + ",".join(
-            f"div[class*='st-key-{key}'] button [data-testid='stMarkdownContainer']"
-            for key in (appearance_button_key, restart_key, power_key)
-        )
+        + f"div[class*='st-key-{appearance_button_key}'] button [data-testid='stMarkdownContainer']"
         + "{display:none!important}"
         + f"div[class*='st-key-{appearance_button_key}'] button [data-testid='stIconMaterial']"
         + "{font-size:1.2rem!important;margin:0!important}"
-        + f"div[class*='st-key-{lifecycle_key}']{{"
-          "width:5.35rem!important;margin:.35rem auto .1rem!important;"
-          "padding:.2rem!important;border:0!important;border-radius:999px!important;"
-          "background:rgba(220,38,38,.05)!important;box-shadow:none!important}"
-        + f"div[class*='st-key-{lifecycle_key}'] [data-testid='stHorizontalBlock']{{"
-          "gap:0!important;align-items:center!important}"
-        + f"div[class*='st-key-{lifecycle_key}'] [data-testid='column']{{"
-          "padding:0!important}"
-        + ",".join(
-            f"div[class*='st-key-{key}'] button"
-            for key in (restart_key, power_key)
-        )
-        + "{height:2.25rem!important;min-height:2.25rem!important;width:2.25rem!important;"
-          "padding:0!important;margin:0 auto!important;background:transparent!important;"
-          "border:0!important;border-radius:999px!important;box-shadow:none!important;"
-          "color:#dc2626!important;display:flex!important;align-items:center!important;"
-          "justify-content:center!important}"
-        + ",".join(
-            f"div[class*='st-key-{key}'] button:hover"
-            for key in (restart_key, power_key)
-        )
-        + "{background:rgba(220,38,38,.08)!important;color:#b91c1c!important}"
-        + ",".join(
-            f"div[class*='st-key-{key}'] button [data-testid='stIconMaterial']"
-            for key in (restart_key, power_key)
-        )
-        + "{font-size:1.2rem!important;margin:0!important}"
-        + f"div[class*='st-key-{power_key}'] button [data-testid='stIconMaterial']{{"
-          "transform:scale(.92)!important;transform-origin:center!important}"
         + "</style>"
     )
 
@@ -480,19 +481,28 @@ def _appearance_control(db, ctx):
         appearance = "light"
 
     _sidebar_utility_style(appearance)
-    with st.container(key=rh_key("appearance-toggle"), border=False):
-        next_appearance = "light" if appearance == "dark" else "dark"
-        if st.button(
-            "",
-            icon=":material/dark_mode:",
-            type="primary" if appearance == "dark" else "secondary",
-            key=rh_key("appearance-toggle-button"),
-            help=f"Switch to {next_appearance} mode",
-            width="stretch",
-        ):
-            _apply_native_streamlit_appearance(ctx.theme, next_appearance)
-            save_setting_value(db, "ui_appearance", next_appearance)
-            st.rerun()
+    with st.container(key=rh_key("sidebar-version-appearance"), border=False):
+        appearance_col, version_col = st.columns([.8, 1.35], gap=None, vertical_alignment="center")
+        with appearance_col:
+            with st.container(key=rh_key("appearance-toggle"), border=False):
+                next_appearance = "light" if appearance == "dark" else "dark"
+                if st.button(
+                    "",
+                    icon=":material/dark_mode:",
+                    type="primary" if appearance == "dark" else "secondary",
+                    key=rh_key("appearance-toggle-button"),
+                    help=f"Switch to {next_appearance} mode",
+                    width="stretch",
+                ):
+                    _apply_native_streamlit_appearance(ctx.theme, next_appearance)
+                    save_setting_value(db, "ui_appearance", next_appearance)
+                    st.rerun()
+        with version_col:
+            st.html(
+                '<div class="rh-sidebar-version">'
+                '<span class="rh-sidebar-version-separator" aria-hidden="true">│</span>'
+                f'v{html.escape(__version__)}</div>'
+            )
 
 
 @st.dialog("Restart Rank Hunter?")
@@ -543,33 +553,6 @@ def _shutdown_server_confirmation():
         shutdown_server()
 
 
-def _server_lifecycle_controls(ctx):
-    restart_key = rh_key("server-restart")
-    power_key = rh_key("server-power")
-    with st.container(key=rh_key("server-lifecycle"), border=False):
-        restart_col, power_col = st.columns(2, gap=None)
-        with restart_col:
-            if st.button(
-                "Restart Rank Hunter",
-                icon=":material/restart_alt:",
-                type="secondary",
-                key=restart_key,
-                width="stretch",
-                help="Restart Rank Hunter",
-            ):
-                _restart_server_confirmation(ctx)
-        with power_col:
-            if st.button(
-                "Power off Rank Hunter",
-                icon=":material/power_settings_new:",
-                type="secondary",
-                key=power_key,
-                width="stretch",
-                help="Power off Rank Hunter",
-            ):
-                _shutdown_server_confirmation()
-
-
 def navigation(db, ctx, extension_rows):
     with st.sidebar:
         logo, logo_width, show_footer = _sidebar_branding(ctx)
@@ -588,9 +571,8 @@ def navigation(db, ctx, extension_rows):
 
         groups = {
             "Search": [
-                ("Auto", "Auto"),
+                ("AI Hunt", "AI Hunt"),
                 ("Search", "Search"),
-                ("Target", "Target"),
                 ("Pipelines", "Pipelines"),
                 ("Candidates", "Candidates"),
             ],
@@ -611,21 +593,12 @@ def navigation(db, ctx, extension_rows):
                 ("Campaigns", "Campaigns"),
                 ("Plugins", "Plugins"),
             ],
-            "System": [("Diagnostics", "Diagnostics"), ("Database", "Database"), ("Settings", "Settings")],
+            "System": [("Database", "Database"), ("Settings", "Settings")],
         }
 
         active_page = st.session_state.get("rh_page", "Dashboard")
         for group, items in groups.items():
-            _nav_group(
-                group,
-                items,
-                active_page,
-                footer=(
-                    (lambda: _server_lifecycle_controls(ctx))
-                    if group == "System"
-                    else None
-                ),
-            )
+            _nav_group(group, items, active_page)
 
         st.divider()
         _system_metrics_panel()
@@ -748,10 +721,12 @@ def main():
 
         routes = {
             "Dashboard": dashboard.page,
-            "Search": search_page.page,
+            "Search": new_search_page.page,
+            "AI Hunt": ai_search_page.page,
             "Pencils": pencils_page.page,
-            "Target": target_curve.page,
-            "Auto": auto_search.page,
+            "Legacy Search": search_page.page,
+            "Legacy Auto": auto_search.page,
+            "Legacy Target": target_curve.page,
             "Pipelines": build_your_own.page,
             "Curves": curves.page,
             "Models": genus2_page.page,

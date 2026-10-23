@@ -194,7 +194,7 @@ def _torsion_target_presets(target_presets):
     )
 
 
-def _apply_target_preset(plugin_id, curve_id, preset, defs):
+def _apply_target_preset(plugin_id, curve_id, preset, defs, mode_key=None):
     settings=dict(preset.get('target') or {})
     by_key={str(rec.get('key')):rec for rec in defs}
     for name,value in settings.items():
@@ -202,7 +202,7 @@ def _apply_target_preset(plugin_id, curve_id, preset, defs):
             st.session_state[rh_key(f'target-ratpoints-{int(curve_id)}')]=str(value).upper()
             continue
         if name=='backend':
-            st.session_state[f'target-mode-{int(curve_id)}']=str(value)
+            st.session_state[mode_key or f'target-mode-{int(curve_id)}']=str(value)
             continue
         if name=='pipeline_preset':
             st.session_state[f'target-torsion-strategy-{int(curve_id)}']=str(value)
@@ -249,7 +249,7 @@ def _target_preset_modified(
     return False
 
 
-def page(db,ctx):
+def page(db,ctx,*,new_search=False):
     title(
         'Target',
         'Attack one promising specialization harder. Torsion mode preserves the exact prescribed-torsion gate even when the family has no target adapter; Plugin mode uses family-native structure; FREE treats the curve in isolation.',
@@ -385,15 +385,30 @@ def page(db,ctx):
         modes.insert(0,'Plugin')
     if torsion_groups:
         modes.insert(0,'Torsion')
-    mode_key=f'target-mode-{row["id"]}'
+    mode_key=(
+        f'new-search-target-mode-{row["id"]}'
+        if new_search else f'target-mode-{row["id"]}'
+    )
     if st.session_state.get(mode_key) not in modes:
-        st.session_state[mode_key]=modes[0]
+        plugin_presets_available=any(
+            str((rec.get('target') or {}).get('backend') or 'Plugin')!='Torsion'
+            for rec in target_presets
+        )
+        st.session_state[mode_key]=(
+            'Plugin'
+            if new_search and 'Plugin' in modes and plugin_presets_available
+            else modes[0]
+        )
 
     torsion_strategy=None
     torsion_goal=None
     torsion_group=None
 
-    setup_col,guide_col=st.columns([1.08,.92])
+    if new_search and not target_presets:
+        setup_col=st.container()
+        guide_col=st.container()
+    else:
+        setup_col,guide_col=st.columns([1.3,.7] if new_search else [1.08,.92])
     with setup_col:
         with st.container(border=True):
             section_title(
@@ -773,10 +788,14 @@ def page(db,ctx):
     with guide_col:
         if target_presets:
             with st.container(border=True):
-                section_title(
-                    'Search style',
-                    'Family-owned target presets fill the visible controls. Torsion presets can switch the backend and Pipeline recipe without requiring a target adapter.',
-                )
+                if new_search:
+                    st.markdown('### :material/extension: Plugin Presets')
+                    st.caption(f'{plugin.name} · {variant.name if variant else "default"}')
+                else:
+                    section_title(
+                        'Search style',
+                        'Family-owned target presets fill the visible controls. Torsion presets can switch the backend and Pipeline recipe without requiring a target adapter.',
+                    )
                 pcols=st.columns(2)
                 for i,preset in enumerate(target_presets):
                     preset_target=dict(preset.get('target') or {})
@@ -797,7 +816,7 @@ def page(db,ctx):
                             width='stretch',
                             disabled=disabled,
                             on_click=_apply_target_preset,
-                            args=(plugin.id,int(row['id']),preset,defs),
+                            args=(plugin.id,int(row['id']),preset,defs,mode_key),
                             help=str(preset.get('description') or '') or None,
                         )
                 active_id=str(
@@ -824,6 +843,8 @@ def page(db,ctx):
                     if active.get('description'):
                         st.caption(str(active['description']))
 
+        if new_search:
+            return
         with st.container(border=True):
             section_title(
                 'What targeting changes',

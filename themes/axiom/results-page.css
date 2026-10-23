@@ -1,0 +1,120 @@
+.st-key-rh-results-hero {
+    margin: .15rem 0 1rem;
+    padding: 1.1rem 1.2rem .9rem;
+    border-color: var(--rh-border) !important;
+    border-radius: 13px !important;
+    background:
+        radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--rh-primary) 8%, transparent), transparent 55%),
+        var(--rh-card);
+}
+.rh-results-intro {
+    padding-bottom: .15rem;
+}
+.rh-results-intro > span,
+.rh-results-detail-head > span {
+    color: var(--rh-primary);
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .12em;
+}
+.rh-results-intro h2,
+.rh-results-detail-head h2 {
+    margin: .2rem 0 .1rem;
+    color: var(--rh-text);
+    font-size: 1.2rem;
+    line-height: 1.25;
+}
+.rh-results-intro p,
+.rh-results-detail-head p {
+    margin: 0;
+    color: var(--rh-text-secondary);
+    font-size: .82rem;
+}
+.st-key-rh-results-hero [data-testid="stSelectbox"] { max-width: 14rem; margin-left: auto; }
+.rh-results-selected-job {
+    margin: .65rem 0 .45rem;
+    padding-top: .65rem;
+    border-top: 1px solid var(--rh-border);
+    color: var(--rh-text-secondary);
+    font-size: .72rem;
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+.rh-results-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: .45rem;
+}
+.rh-results-mini-stat {
+    min-width: 0;
+    padding: .52rem .62rem .48rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--rh-card) 88%, var(--rh-primary) 12%);
+}
+.rh-results-mini-stat span {
+    display: block;
+    margin-bottom: .13rem;
+    color: var(--rh-muted);
+    font-size: .57rem;
+    font-weight: 750;
+    letter-spacing: .07em;
+    white-space: nowrap;
+}
+.rh-results-mini-stat strong {
+    display: block;
+    overflow: hidden;
+    color: var(--rh-text);
+    font-size: .95rem;
+    font-weight: 750;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.st-key-rh-results-browser,
+.st-key-rh-results-table,
+.st-key-rh-results-detail {
+    margin-top: .8rem;
+    border-color: var(--rh-border) !important;
+    border-radius: 12px !important;
+    background: var(--rh-card);
+}
+.st-key-rh-results-browser h4,
+.st-key-rh-results-table h4 { margin: 0 0 .45rem; }
+.rh-results-detail-head { margin: .1rem 0 .7rem; }
+.st-key-rh-results-detail .rh-result-outcome {
+    display: inline-flex;
+    margin-bottom: .65rem;
+    padding: .25rem .65rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 999px;
+    background: var(--rh-surface-active);
+    color: var(--rh-primary);
+    font-size: .7rem;
+    letter-spacing: .06em;
+}
+.st-key-rh-results-detail .rh-result-succeeded {
+    background: color-mix(in srgb, var(--rh-success) 10%, var(--rh-card));
+    color: var(--rh-success);
+}
+.st-key-rh-results-detail .rh-result-failed,
+.st-key-rh-results-detail .rh-result-killed,
+.st-key-rh-results-detail .rh-result-interrupted {
+    background: color-mix(in srgb, var(--rh-danger) 10%, var(--rh-card));
+    color: var(--rh-danger);
+}
+.st-key-rh-dashboard-local-frontier .rh-frontier-best-detail {
+    width: 100%;
+    margin-top: .2rem;
+    color: var(--rh-text-secondary);
+    font-size: .68rem;
+    font-weight: 650;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+    .st-key-rh-results-hero { padding: .9rem; }
+    .st-key-rh-results-hero [data-testid="stSelectbox"] { max-width: none; margin-left: 0; }
+    .rh-results-mini-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

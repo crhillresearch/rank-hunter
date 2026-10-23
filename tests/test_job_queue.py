@@ -379,7 +379,8 @@ def test_migrated_ui_launch_and_scheduler_paths_queue_work():
     assert "dispatch_due_schedules" not in ui_source
     assert "ensure_dispatcher_running(" in ui_source
 
-    assert '["Active", "Queue", "History", "Results", "Scheduled"]' in jobs_source
+    assert '["Active", "Queue", "History", "Results"]' in jobs_source
+    assert '["Waiting jobs", "Schedules"]' in jobs_source
 
 
 def test_jobs_queue_exposes_bounded_priority_presets():

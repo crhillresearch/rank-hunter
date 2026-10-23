@@ -15,7 +15,7 @@ def render(db, ctx, *, embedded=False, compact=False):
         )
 
     surface = st.container()
-    if embedded:
+    if embedded and not compact:
         _, surface, _ = st.columns([0.6, 2.8, 0.6])
 
     with surface:

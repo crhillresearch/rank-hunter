@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from rank42.candidates import create_pool, export_pool_jsonl, replace_pool_rows
+from rank42.candidate_engines import CANDIDATE_ENGINES
 from rank42.corpus import apply_candidate_corpus_policy
 from rank42.db import connect, now
 from rank42.family_loader import load_family
@@ -16,9 +17,6 @@ from rank42.search import (
     canonical_candidate_pair, family_parameter_symmetry, get_tables,
     rescore_stage, stage0_sampled, stage0_scalar, stage0_sieve,
 )
-
-
-CANDIDATE_ENGINES = ("sieve", "scalar", "sampled")
 
 
 def _csv_ints(text):

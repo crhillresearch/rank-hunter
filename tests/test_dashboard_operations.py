@@ -44,6 +44,7 @@ def test_operations_panel_is_navigation_only():
     assert 'args=("Candidate Pools",)' in source
     assert 'args=("Queue",)' in source
     assert 'args=("Scheduled",)' in source
+    assert '"Queue" if section == "Scheduled" else section' in inspect.getsource(dashboard._go_to_jobs_section)
 
     for lifecycle in (
         "pause_pipeline",

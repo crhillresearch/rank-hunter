@@ -480,7 +480,8 @@ def _render_target_handoff(chosen, analysis):
                 int(chosen["curve_id"]),
                 "target_curve_id",
             )
-            st.session_state["rh_page"] = "Target"
+            st.session_state["new_search_view"] = "Target"
+            st.session_state["rh_page"] = "Search"
             st.rerun()
 
 

@@ -8,6 +8,7 @@ import streamlit as st
 from rank42.curve_research_state import curve_research_state_map
 from rank42.feature_hooks import render_feature_hook
 from rank42.ui_active_curve import get_active_curve_id, set_active_curve_id
+from rank42.ui_handoffs import route_curve_to_target
 from rank42.points import list_actionable_points, list_points
 from rank42.ui_components import (
     metric_card,
@@ -354,8 +355,7 @@ def _render_point_detail(db, point):
         st.session_state["rh_page"] = "Lattices & Heights"
         st.rerun()
     if c4.button("Target Curve", width="stretch", key=f"pt-target-{point_id}"):
-        set_active_curve_id(st.session_state, curve_id, "target_curve_id")
-        st.session_state["rh_page"] = "Target"
+        route_curve_to_target(st.session_state, curve_id)
         st.rerun()
     if c5.button(
         "Open Results",

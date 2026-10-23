@@ -227,15 +227,15 @@ def test_target_geometry_hint_is_curve_scoped():
 def test_mw_geometry_page_is_actionable_but_not_a_proof_engine():
     source = (ROOT / "rank42" / "ui_pages" / "lattices_page.py").read_text(encoding="utf-8")
 
-    assert 'title(\n        "MW Geometry"' in source
+    assert 'title(\n        "Lattices"' in source
     assert '"Rigorous witness basis"' in source
     assert '"Rigorous basis + selected candidates"' in source
     assert '"--source",' in source
     assert '"--point-id"' in source
     assert "Open selected in Independence" in source
-    assert "Open Target with MW Geometry hint" in source
+    assert "Open Target with Lattice hint" in source
     assert 'st.session_state["target_geometry_hint"] = hint' in source
-    assert 'st.session_state["rh_page"] = "Target"' in source
+    assert 'st.session_state["rh_page"] = "Search"' in source
     assert 'st.session_state["rh_page"] = "Independence"' in source
     assert "point_ledger_candidate_residuals(chosen)" in source
     assert "scheduling evidence only" in source
@@ -250,9 +250,10 @@ def test_mw_geometry_page_is_actionable_but_not_a_proof_engine():
 def test_shell_uses_mw_geometry_canonical_route_with_legacy_alias():
     source = (ROOT / "rank42" / "ui.py").read_text(encoding="utf-8")
 
-    assert '("MW Geometry", "MW Geometry")' in source
-    assert '"MW Geometry": lattices_page.page' in source
-    assert '"Lattices & Heights": "MW Geometry"' in source
+    assert '("Tools", "Tools")' in source
+    assert '"Lattices": lattices_page.page' in source
+    assert '"Lattices & Heights": "Lattices"' in source
+    assert '"MW Geometry": "Lattices"' in source
 
 
 def test_planner_routes_lattice_work_to_mw_geometry():

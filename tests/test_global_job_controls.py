@@ -483,7 +483,8 @@ def test_jobs_owns_results_tab_and_shared_scientific_renderer():
     detail_source = inspect.getsource(jobs_page._job_detail)
     controls_source = inspect.getsource(jobs_detail_panel._render_job_controls)
 
-    assert 'sections = ["Active", "Queue", "History", "Results", "Scheduled"]' in page_source
+    assert 'sections = ["Active", "Queue", "History", "Results"]' in page_source
+    assert '["Waiting jobs", "Schedules"]' in page_source
     assert 'elif active == "Results":' in page_source
     assert "results_page.render_jobs_results(db, ctx)" in page_source
 

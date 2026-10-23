@@ -3152,7 +3152,7 @@ def _pipeline_editor_style():
         """
         <style>
         div[class*="st-key-byo-search-space"] {
-            margin-top: 0.8rem;
+            margin-top: 0.15rem;
             margin-bottom: 1.15rem;
             padding: 0.5rem 0.7rem 0.6rem;
             border-radius: 0.7rem;

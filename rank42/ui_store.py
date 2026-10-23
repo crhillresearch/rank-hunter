@@ -1970,12 +1970,23 @@ def stop_job(db, job_id, *, force=False, pause=False):
             "killed" if force else "stopped",
         )
 
+    def retire_ai_campaign():
+        if str(row["kind"]) != "ai_search":
+            return
+        from rank42.ai_search import reconcile_ai_job
+
+        reconcile_ai_job(
+            db, job_id,
+            stopped_as="killed" if force else ("paused" if pause else "stopped"),
+        )
+
     if not pid or not process_alive(pid):
         _best_effort_ui_write(
             db,
             lambda: _record_interrupted_scientific_stage(db, row),
         )
         _best_effort_ui_write(db, finalize_dead)
+        _best_effort_ui_write(db, retire_ai_campaign)
         return False
 
     sig = signal.SIGKILL if force else signal.SIGTERM
@@ -2011,6 +2022,7 @@ def stop_job(db, job_id, *, force=False, pause=False):
                 metadata_json=metadata_json,
             ),
         )
+    _best_effort_ui_write(db, retire_ai_campaign)
     return True
 
 

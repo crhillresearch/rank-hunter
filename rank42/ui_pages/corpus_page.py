@@ -1349,7 +1349,6 @@ def page(db, ctx):
         variant="line",
         width="content",
     )
-    st.html("<div style='height:.85rem'></div>")
     if section == "Build Library":
         _render_build_library(db, ctx)
     else:

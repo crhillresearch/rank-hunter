@@ -136,57 +136,20 @@ def test_workspace_extensions_are_isolated_in_conditional_workspace_nav():
     assert 'visual_group = "Manage" if section == "Plugins" else section' not in navigation
 
 
-def test_system_lifecycle_controls_use_material_icons_and_confirm_actions():
+def test_system_lifecycle_controls_live_in_settings_header():
     source = _ui_source()
+    common = _common_source()
 
     assert '@st.dialog("Restart Rank Hunter?")' in source
     assert '@st.dialog("Power off Rank Hunter?")' in source
-    assert 'icon=":material/restart_alt:"' in source
-    assert 'icon=":material/power_settings_new:"' in source
-    assert 'icon=":material/power:"' not in source
-    assert 'rh_css_mask_uri("restart")' not in source
-    assert 'rh_css_mask_uri("power-off")' not in source
-
-    nav_group = source[
-        source.index("def _nav_group(group, items, active_page, *, footer=None):"):
-        source.index("_SYSTEM_METRICS_REFRESH_SECONDS")
-    ]
-    assert "with st.expander(group, expanded=expanded):" in nav_group
-    assert "if footer is not None:" in nav_group
-    assert "footer()" in nav_group
-
     navigation = source[
         source.index("def navigation(db, ctx, extension_rows):"):
         source.index("_PAGE_END_RUNWAY_HTML")
     ]
-    assert 'if group == "System"' in navigation
-    assert "footer=(" in navigation
-    assert "_server_lifecycle_controls(ctx)" in navigation
-
-    controls = source[
-        source.index("def _server_lifecycle_controls(ctx):"):
-        source.index("def navigation(db, ctx, extension_rows):")
-    ]
-    assert 'restart_col, power_col = st.columns(2, gap=None)' in controls
-
-    style = source[
-        source.index("def _sidebar_utility_style(active_appearance):"):
-        source.index("def _appearance_control(db, ctx):")
-    ]
-    assert 'lifecycle_key = rh_key("server-lifecycle")' in style
-    assert 'width:5.35rem!important' in style
-    assert 'background:rgba(220,38,38,.05)!important' in style
-    assert 'border:0!important;border-radius:999px!important' in style
-    assert 'box-shadow:none!important' in style
-    assert 'color:#dc2626!important' in style
-    assert 'width:2.25rem!important' in style
-    assert 'height:2.25rem!important' in style
-    assert 'transform:scale(.92)!important' in style
-    assert style.count('font-size:1.2rem!important') >= 2
-    assert "_restart_server_confirmation(ctx)" in controls
-    assert "_shutdown_server_confirmation()" in controls
-    assert "restart_server(" not in controls
-    assert "shutdown_server(" not in controls
+    assert '_nav_group(group, items, active_page)' in navigation
+    assert '_server_lifecycle_controls' not in source
+    assert '"Restart", "label": "Restart Rank Hunter", "icon": "restart_alt"' in common
+    assert '"Power off", "label": "Power off Rank Hunter", "icon": "power_settings_new"' in common
 
     restart_dialog = source[
         source.index('def _restart_server_confirmation(ctx):'):
@@ -194,7 +157,7 @@ def test_system_lifecycle_controls_use_material_icons_and_confirm_actions():
     ]
     shutdown_dialog = source[
         source.index("def _shutdown_server_confirmation():"):
-        source.index("def _server_lifecycle_controls(ctx):")
+        source.index("def navigation(db, ctx, extension_rows):")
     ]
     assert "restart_server(" in restart_dialog
     assert "shutdown_server()" in shutdown_dialog

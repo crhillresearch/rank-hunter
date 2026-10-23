@@ -216,13 +216,7 @@
     .rh-frontier-presentation .rh-frontier-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* Dashboard branding and independent landscape card. */
-.st-key-rh-dashboard-brand-header { position: relative; }
-.rh-dashboard-brand-header { display: flex; align-items: center; gap: 12px; padding: 1.25rem 0 12px; color: var(--rh-text); }
-.rh-dashboard-brand-header h1 { margin: 0; padding: 0; color: var(--rh-text); line-height: 1.2; }
-.rh-dashboard-brand-logo { display: inline-flex; flex: 0 0 auto; align-items: center; color: var(--rh-text); }
-.rh-dashboard-brand-logo img { display: block; height: 24px; width: 24px; max-width: none; object-fit: contain; }
-.rh-dashboard-version-badge { display: inline-flex; align-items: center; padding: 4px 9px; border: 1px solid var(--rh-border); border-radius: 999px; background: var(--rh-card); color: var(--rh-text-secondary); font-size: 11px; font-weight: 600; white-space: nowrap; }
+/* Independent landscape card. */
 .st-key-rh-dashboard-local-frontier .rh-frontier-feature { padding-top: 0; padding-bottom: 0; }
 .st-key-rh-dashboard-local-frontier .rh-frontier-stat-column { min-width: 0; }
 .st-key-rh-dashboard-local-frontier .rh-frontier-stat-column .rh-frontier-certification { margin-top: .4rem !important; padding-top: .5rem !important; border-top: 1px solid var(--rh-border-subtle) !important; }
@@ -335,7 +329,7 @@
     align-items: center;
     justify-content: center;
     gap: .45rem;
-    margin: 1.8rem auto 0;
+    margin: .9rem auto 0;
     border-color: color-mix(in srgb, var(--rh-primary) 35%, var(--rh-border));
     background: color-mix(in srgb, var(--rh-primary) 8%, var(--rh-card));
     white-space: nowrap;

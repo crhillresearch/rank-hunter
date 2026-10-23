@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from rank42.ui_active_curve import ACTIVE_CURVE_KEY
+from rank42.ui import _normalize_route
 from rank42.ui_handoffs import (
     RESEARCH_HANDOFF_KEY,
     clear_research_handoff,
@@ -10,6 +11,7 @@ from rank42.ui_handoffs import (
     normalize_research_handoff,
     research_handoff_for_curve,
     route_curve_to_target,
+    route_pool_to_search,
     route_selection_to_pipelines,
 )
 
@@ -75,12 +77,49 @@ def test_route_curve_to_target_uses_semantic_active_curve_and_provenance():
     state = {}
     route_curve_to_target(state, 7, handoff=_payload())
 
-    assert state["rh_page"] == "Target"
+    assert state["rh_page"] == "Search"
+    assert state["new_search_view"] == "Target"
     assert state[ACTIVE_CURVE_KEY] == 7
     assert state["target_curve_id"] == 7
     assert state[RESEARCH_HANDOFF_KEY]["selection_hash"]
     assert research_handoff_for_curve(state, 7) is not None
     assert research_handoff_for_curve(state, 8) is None
+
+
+def test_route_pool_to_new_search_preserves_pool_and_torsion_selection():
+    state = {"rh-family-pool-select": 99}
+    route_pool_to_search(state, 12, torsion_group="C2xC8")
+
+    assert state["rh_page"] == "Search"
+    assert state["new_search_view"] == "Candidates"
+    assert state["family_search_pool_id"] == 12
+    assert state["new-search-family-mode-12"] == "Torsion"
+    assert state["family-torsion-group-12"] == "C2xC8"
+    assert "rh-family-pool-select" not in state
+
+
+@pytest.mark.parametrize(
+    ("requested", "expected_view"),
+    [
+        ("New Search", "Family"),
+        ("Target", "Target"),
+        ("Target Curve", "Target"),
+        ("Auto", "Family"),
+        ("Family Search", "Family"),
+        ("General Hunt", "General"),
+    ],
+)
+def test_old_search_routes_open_the_promoted_search_workbench(requested, expected_view):
+    state = {"rh_page": requested}
+    assert _normalize_route(requested, state) == "Search"
+    assert state["new_search_view"] == expected_view
+    assert state["rh_page"] == "Search"
+
+
+def test_auto_torsion_route_keeps_its_selected_group_mode():
+    state = {"rh_page": "Auto", "auto-search-mode": "Torsion"}
+    assert _normalize_route("Auto", state) == "Search"
+    assert state["new_search_view"] == "Torsion"
 
 
 def test_route_selection_to_pipelines_changes_only_navigation_context():

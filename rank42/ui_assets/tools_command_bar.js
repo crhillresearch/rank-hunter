@@ -21,7 +21,8 @@ export default function (component) {
   const signal = controller.signal;
   const tools = config.groups.flatMap(group =>
     group.tools.map(tool => Object.assign({ group: group.label }, tool)));
-  const byName = new Map(tools.map(tool => [tool.name, tool]));
+  const actions = config.actions || [];
+  const byName = new Map([...tools, ...actions].map(tool => [tool.name, tool]));
   const current = byName.get(config.selected) || tools[0];
   let menuAnchor = null;
   let menuItems = [];
@@ -53,10 +54,12 @@ export default function (component) {
   }
   function navigate(name, push) {
     if (!byName.has(name)) return;
-    closeMenu(false);
-    closeSearch(false);
+    if (!config.simple) {
+      closeMenu(false);
+      closeSearch(false);
+    }
     if (push) updateUrl(name, false);
-    const slug = name.toLowerCase().replace(/ /g, "-");
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const bridge = appDocument.querySelector(".st-key-" + bridgePrefix + slug + " button");
     if (bridge) bridge.click();
   }
@@ -64,6 +67,75 @@ export default function (component) {
   root.replaceChildren();
   root.setAttribute("role", "toolbar");
   root.setAttribute("aria-label", toolbarLabel);
+  if (config.pageTitle) {
+    const pageTitle = appDocument.createElement("h1");
+    pageTitle.className = "rh-tools-page-title";
+    if (config.pageLogoUrl) {
+      const logo = appDocument.createElement("img");
+      logo.src = config.pageLogoUrl;
+      logo.alt = "";
+      logo.className = "rh-tools-page-logo";
+      pageTitle.appendChild(logo);
+    } else {
+      pageTitle.appendChild(icon(config.pageIcon || "dashboard"));
+    }
+    pageTitle.appendChild(appDocument.createTextNode(config.pageTitle));
+    root.appendChild(pageTitle);
+    const divider = appDocument.createElement("span");
+    divider.className = "rh-tools-divider";
+    divider.setAttribute("aria-hidden", "true");
+    root.appendChild(divider);
+  }
+  if (config.simple) {
+    if (tools.length > 1) {
+      const links = appDocument.createElement("div");
+      links.className = "rh-tools-simple-links";
+      tools.filter(tool => config.simpleShowCurrent || tool.name !== config.selected).forEach(tool => {
+        const link = button(tool.label || tool.name, "rh-tools-simple-link");
+        link.appendChild(icon(tool.icon));
+        link.insertBefore(link.lastChild, link.firstChild);
+        if (tool.name === config.selected) {
+          link.classList.add("is-active");
+          link.setAttribute("aria-current", "page");
+        }
+        if (tool.isAction) link.classList.add("is-action");
+        link.addEventListener("click", () => navigate(tool.name, true), { signal });
+        links.appendChild(link);
+      });
+      root.appendChild(links);
+    }
+    if (actions.length) {
+      const spacer = appDocument.createElement("span");
+      spacer.className = "rh-tools-spacer";
+      spacer.setAttribute("aria-hidden", "true");
+      root.appendChild(spacer);
+      const actionGroup = appDocument.createElement("div");
+      actionGroup.className = "rh-tools-commandbar-actions";
+      actions.forEach(action => {
+        const control = button("", "rh-tools-commandbar-action");
+        control.appendChild(icon(action.icon));
+        control.setAttribute("aria-label", action.label || action.name);
+        control.title = action.label || action.name;
+        if (action.name === "Power off") control.classList.add("is-power");
+        control.addEventListener("click", () => navigate(action.name, false), { signal });
+        actionGroup.appendChild(control);
+      });
+      root.appendChild(actionGroup);
+    }
+    const observer = new MutationObserver(() => {
+      if (!root.isConnected) destroy();
+    });
+    observer.observe(appDocument.body, { childList: true, subtree: true });
+    function destroy() {
+      controller.abort();
+      observer.disconnect();
+      if (appWindow[controllerSlot] &&
+          appWindow[controllerSlot].destroy === destroy) appWindow[controllerSlot] = null;
+    }
+    appWindow[controllerSlot] = { destroy };
+    return;
+  }
+  if (!config.hideCurrent) {
   const currentItem = appDocument.createElement("div");
   currentItem.className = "rh-tools-current";
   currentItem.setAttribute("aria-label", "Current " + (config.currentNoun || "tool") + ": " + current.name);
@@ -71,10 +143,7 @@ export default function (component) {
   currentLabel.textContent = current.name;
   currentItem.append(icon(current.icon), currentLabel);
   root.appendChild(currentItem);
-  const divider = appDocument.createElement("span");
-  divider.className = "rh-tools-divider";
-  divider.setAttribute("aria-hidden", "true");
-  root.appendChild(divider);
+  }
   const triggers = appDocument.createElement("div");
   triggers.className = "rh-tools-triggers";
   config.groups.forEach(group => {

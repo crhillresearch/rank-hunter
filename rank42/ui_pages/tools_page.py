@@ -123,7 +123,12 @@ def _tool_picker():
         }
         for group_name, names in _GROUPS
     ]
-    config = json.dumps({"selected": selected, "groups": grouped}).replace("<", "\\u003c")
+    config = json.dumps({
+        "selected": selected,
+        "groups": grouped,
+        "pageTitle": "Tools",
+        "pageIcon": "handyman",
+    }).replace("<", "\\u003c")
     st.html(
         '<div id="rh-tools-commandbar" class="rh-tools-commandbar-host" '
         f'aria-label="Research tools; current tool {html.escape(selected)}"></div>',
@@ -139,7 +144,6 @@ def _tool_picker():
 
 
 def page(db, ctx):
-    title("Tools", icon=PAGE_ICONS["Tools"])
     selected = _tool_picker()
     handler, _, description = _TOOLS[selected]
     st.markdown(f"### {selected}")

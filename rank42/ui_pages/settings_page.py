@@ -4,6 +4,13 @@ import streamlit as st
 
 from rank42 import __description__, __repository_url__, __title__, __version__
 from rank42.feature_hooks import render_feature_hook
+from rank42.gemini_api import (
+    GeminiAPIError,
+    check_connection as check_gemini_connection,
+    delete_local_key as delete_gemini_key,
+    key_source as gemini_key_source,
+    write_key as write_gemini_key,
+)
 from rank42.icarm_api import (
     delete_local_token,
     masked_token,
@@ -318,6 +325,59 @@ def _icarm_settings(ctx):
 
 def _services_settings(ctx):
     _icarm_settings(ctx)
+    st.divider()
+    _gemini_settings(ctx)
+
+
+def _gemini_settings(ctx):
+    st.subheader("Google Gemini · AI Hunt")
+    st.caption(
+        "The key stays in your environment or a private local file outside "
+        "rank42.db. AI Hunt sends the chosen target, your objective, available "
+        "Pipeline recipes, and search summaries to Gemini."
+    )
+    source = gemini_key_source(ctx.project_root)
+    st.write(f"Status: **{'configured' if source else 'not configured'}**"
+             + (f" via {source}" if source else ""))
+    if source is None:
+        candidate = text_input(
+            "Gemini API key",
+            type="password",
+            value="",
+            semantic="settings-gemini-key",
+            placeholder="Paste your Gemini API key",
+        )
+        if button("Save key", semantic="settings-gemini-save",
+                  type="primary", disabled=not candidate.strip()):
+            try:
+                write_gemini_key(ctx.project_root, candidate)
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                st.success("Gemini key saved locally.")
+                st.rerun()
+        return
+    if source == "local file":
+        test_col, clear_col = st.columns(2)
+        with test_col:
+            test_clicked = button("Test connection", semantic="settings-gemini-test",
+                                  width="stretch")
+        with clear_col:
+            if button("Clear local key", semantic="settings-gemini-clear",
+                      width="stretch"):
+                delete_gemini_key(ctx.project_root)
+                st.rerun()
+    else:
+        st.caption("GEMINI_API_KEY is set in the environment and takes precedence here.")
+        test_clicked = button("Test connection", semantic="settings-gemini-test-env",
+                              width="stretch")
+    if test_clicked:
+        try:
+            model_name = check_gemini_connection(ctx.project_root)
+        except (GeminiAPIError, ValueError) as exc:
+            st.error(str(exc))
+        else:
+            st.success(f"Gemini connection ready · {model_name}")
 
 
 _PLUGIN_TYPE_LABELS = {
@@ -381,27 +441,60 @@ def _about_settings(ctx):
         st.caption("No installed plugins are currently discoverable.")
 
 
+def _general_settings(db, ctx):
+    appearance = str(setting_value(db, "ui_appearance", "light") or "light").lower()
+    if appearance not in {"light", "dark"}:
+        appearance = "light"
+    with st.container(key="rh-settings-general-appearance", border=True):
+        st.subheader("Appearance")
+        selected = st.segmented_control(
+            "Color mode", ["Light", "Dark"],
+            default=appearance.title(),
+            key=f"settings-general-appearance-{appearance}",
+        ) or appearance.title()
+        if selected.lower() != appearance:
+            from rank42.ui import _apply_native_streamlit_appearance
+            _apply_native_streamlit_appearance(ctx.theme, selected.lower())
+            save_setting_value(db, "ui_appearance", selected.lower())
+            st.rerun()
+
+    with st.container(key="rh-settings-general-installation", border=True):
+        st.subheader("This installation")
+        st.caption(f"Rank Hunter v{__version__} · Axiom theme")
+        st.text_input("Project folder", value=str(ctx.project_root), disabled=True)
+        st.text_input("Database", value=str(ctx.db_path), disabled=True)
+
+
 def page(db, ctx):
     title("Settings")
     render_feature_hook(db, ctx, "settings.after_header")
+
+    lifecycle_action = st.session_state.pop("settings_lifecycle_action", None)
+    if lifecycle_action == "Restart":
+        from rank42.ui import _restart_server_confirmation
+        _restart_server_confirmation(ctx)
+    elif lifecycle_action == "Power off":
+        from rank42.ui import _shutdown_server_confirmation
+        _shutdown_server_confirmation()
 
     notice = st.session_state.pop("settings-runtime-notice", None)
     if notice:
         st.success(str(notice))
 
-    current = str(st.session_state.get("settings_view") or "Runtimes")
-    if current not in {"Runtimes", "Services", "About"}:
-        current = "Runtimes"
+    current = str(st.session_state.get("settings_view") or "General")
+    if current not in {"General", "Runtimes", "Services", "About"}:
+        current = "General"
     choice = tabs(
-        ["Runtimes", "Services", "About"],
+        ["General", "Runtimes", "Services", "About"],
         value=current,
         key="settings-view-tabs",
         variant="line",
     )
     st.session_state["settings_view"] = choice
-    st.html("<div style='height:.65rem'></div>")
 
-    if choice == "Runtimes":
+    if choice == "General":
+        _general_settings(db, ctx)
+    elif choice == "Runtimes":
         _runtime_settings(db, ctx)
     elif choice == "Services":
         _services_settings(ctx)
