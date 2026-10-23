@@ -98,19 +98,65 @@ def _pipeline_stage(db, row, run, *, log=None):
     return label, stage_text
 
 
+def _job_pipeline_context(db, row):
+    """Resolve the Pipeline visible in a direct job or the latest AI round."""
+    try:
+        metadata = json.loads(row["metadata_json"] or "{}")
+        kind = str(row["kind"])
+        if kind == "pipeline_search":
+            return get_pipeline_run(db, int(metadata["pipeline_run_id"])), None
+        if kind == "ai_search":
+            campaign_id = int(metadata["ai_search_campaign_id"])
+            context = db.execute(
+                """SELECT campaign.best_lower AS campaign_best_lower,
+                          campaign.config_json, round.round_number,
+                          round.pipeline_run_id, round.status AS round_status
+                   FROM ai_search_campaigns AS campaign
+                   LEFT JOIN ai_search_rounds AS round ON round.id = (
+                       SELECT id FROM ai_search_rounds
+                       WHERE ai_campaign_id=campaign.id
+                       ORDER BY round_number DESC LIMIT 1
+                   )
+                   WHERE campaign.id=?""",
+                (campaign_id,),
+            ).fetchone()
+            if context is not None:
+                run_id = context["pipeline_run_id"]
+                return (get_pipeline_run(db, int(run_id)) if run_id else None,
+                        context)
+    except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+        pass
+    return None, None
+
+
 def _raw_log_progress(db, row, *, log=None):
     """Build the compact elapsed/stage footer state for one job log."""
     elapsed = _duration(row)
     stage_text = ""
-    if str(row["kind"]) == "pipeline_search":
-        try:
-            metadata = json.loads(row["metadata_json"] or "{}")
-            run_id = int(metadata.get("pipeline_run_id"))
-            run = get_pipeline_run(db, run_id)
-            if run is not None:
-                _, stage_text = _pipeline_stage(db, row, run, log=log)
-        except (TypeError, ValueError, json.JSONDecodeError):
-            pass
+    run, ai_round = _job_pipeline_context(db, row)
+    if run is not None:
+        stage_log = log
+        if ai_round is not None and log is not None:
+            markers = list(re.finditer(
+                r"^ROUND \d+/\d+ · Pipeline #\d+\s*$", log, re.MULTILINE,
+            ))
+            # Earlier rounds share this job's log; their stage markers must not
+            # override the current Pipeline's persisted stage.
+            stage_log = log[markers[-1].start():] if markers else ""
+        _, stage_text = _pipeline_stage(db, row, run, log=stage_log)
+    if str(row["kind"]) == "ai_search":
+        if ai_round is None or ai_round["round_number"] is None:
+            stage_text = "Planning first Pipeline"
+        else:
+            number = int(ai_round["round_number"])
+            try:
+                maximum = int(json.loads(ai_round["config_json"])["max_rounds"])
+            except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+                maximum = number
+            if ai_round["round_status"] == "running" and run is not None:
+                stage_text = f"Round {number}/{maximum} · {stage_text}"
+            else:
+                stage_text = f"Round {number}/{maximum} · {str(ai_round['round_status']).title()}"
     return elapsed, stage_text
 
 
@@ -397,40 +443,39 @@ def _best_rank_found(db, row, log):
             value = 0
         return f"≥ {value}" if value > 0 else "—"
 
-    if str(row["kind"]) == "pipeline_search":
-        try:
-            metadata = json.loads(row["metadata_json"] or "{}")
-            run_id = int(metadata.get("pipeline_run_id"))
-        except (TypeError, ValueError, json.JSONDecodeError):
-            run_id = None
-        if run_id is not None:
-            run = get_pipeline_run(db, run_id)
-            if run is not None:
-                exact = None
-                curve_id = run["best_curve_id"]
-                if curve_id is not None:
-                    candidate = db.execute(
-                        """SELECT exact_rank FROM search_pipeline_candidates
-                           WHERE run_id=? AND curve_id=? AND exact_rank IS NOT NULL
-                           ORDER BY exact_rank DESC LIMIT 1""",
-                        (run_id, int(curve_id)),
-                    ).fetchone()
-                    if candidate is not None:
-                        exact = candidate["exact_rank"]
-                live_rank = db.execute(
-                    """SELECT MAX(curve.descent_lower) AS lower,
-                              MAX(curve.exact_rank) AS exact_rank
-                       FROM search_pipeline_candidates AS candidate
-                       JOIN curves AS curve ON curve.id=candidate.curve_id
-                       WHERE candidate.run_id=?""",
-                    (run_id,),
+    if str(row["kind"]) in {"pipeline_search", "ai_search"}:
+        run, ai_round = _job_pipeline_context(db, row)
+        campaign_lower = int(ai_round["campaign_best_lower"] or 0) if ai_round else 0
+        if run is not None:
+            run_id = int(run["id"])
+            exact = None
+            curve_id = run["best_curve_id"]
+            if curve_id is not None:
+                candidate = db.execute(
+                    """SELECT exact_rank FROM search_pipeline_candidates
+                       WHERE run_id=? AND curve_id=? AND exact_rank IS NOT NULL
+                       ORDER BY exact_rank DESC LIMIT 1""",
+                    (run_id, int(curve_id)),
                 ).fetchone()
-                lower = max(int(run["best_lower"] or 0), int(live_rank["lower"] or 0))
-                if live_rank["exact_rank"] is not None:
-                    exact = max(int(exact or 0), int(live_rank["exact_rank"]))
-                if exact is not None and int(exact) < lower:
-                    exact = None
-                return label(exact, lower)
+                if candidate is not None:
+                    exact = candidate["exact_rank"]
+            live_rank = db.execute(
+                """SELECT MAX(curve.descent_lower) AS lower,
+                          MAX(curve.exact_rank) AS exact_rank
+                   FROM search_pipeline_candidates AS candidate
+                   JOIN curves AS curve ON curve.id=candidate.curve_id
+                   WHERE candidate.run_id=?""",
+                (run_id,),
+            ).fetchone()
+            lower = max(campaign_lower, int(run["best_lower"] or 0),
+                        int(live_rank["lower"] or 0))
+            if live_rank["exact_rank"] is not None:
+                exact = max(int(exact or 0), int(live_rank["exact_rank"]))
+            if exact is not None and int(exact) < lower:
+                exact = None
+            return label(exact, lower)
+        if campaign_lower:
+            return label(None, campaign_lower)
 
     summary = summarize_job(row, log)
     return label(
@@ -441,12 +486,12 @@ def _best_rank_found(db, row, log):
 
 def _newest_pipeline_discovery(db, row):
     """Latest ranked Pipeline candidate, including rank certified mid-stage."""
-    if str(row["kind"]) != "pipeline_search":
+    if str(row["kind"]) not in {"pipeline_search", "ai_search"}:
         return ""
-    try:
-        run_id = int(json.loads(row["metadata_json"] or "{}")["pipeline_run_id"])
-    except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+    run, _ = _job_pipeline_context(db, row)
+    if run is None:
         return ""
+    run_id = int(run["id"])
     candidate = db.execute(
         """SELECT candidate.parameter,candidate.rigorous_lower,candidate.exact_rank,
                   curve.descent_lower AS curve_lower,curve.exact_rank AS curve_exact_rank

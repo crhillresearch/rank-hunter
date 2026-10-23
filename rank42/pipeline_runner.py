@@ -305,6 +305,21 @@ def _restrict_torsion_providers(providers, target):
     ]
 
 
+def _allocate_ai_torsion_budget(target, provider_count):
+    """Share one AI round's candidate and scan caps across torsion providers."""
+    limit = int(target.get("ai_candidate_limit") or 0)
+    if limit <= 0 or provider_count <= 0:
+        return target
+    adjusted = dict(target)
+    generation = dict(adjusted.get("candidate_generation") or {})
+    generation["top"] = max(1, limit // provider_count)
+    scan = int(adjusted.get("ai_scan_limit") or generation.get("sample_count") or 0)
+    if scan > 0:
+        generation["sample_count"] = max(1, scan // provider_count)
+    adjusted["candidate_generation"] = generation
+    return adjusted
+
+
 def _family_candidates(
     db, project_root, run_id, plugin, variant, stages, run_config, target=None
 ):
@@ -7516,6 +7531,17 @@ def main():
                 )
                 raise RuntimeError(
                     f"no enabled torsion provider matched {torsion}{detail}"
+                )
+            if target.get("ai_candidate_limit"):
+                providers = providers[:max(1, int(target["ai_candidate_limit"]))]
+            target = _allocate_ai_torsion_budget(target, len(providers))
+            if target.get("ai_candidate_limit"):
+                generation = target["candidate_generation"]
+                print(
+                    f"[AI torsion budget] providers={len(providers)} "
+                    f"candidates/provider≤{generation['top']} "
+                    f"sampled/provider≤{generation.get('sample_count', 'default')}",
+                    flush=True,
                 )
             print(f"[pipeline torsion] providers={len(providers)} exact={torsion}", flush=True)
             if bool(run_config.get("candidate_only")):

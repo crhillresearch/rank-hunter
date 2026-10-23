@@ -15,6 +15,7 @@ from rank42.ai_search import (
     ensure_ai_schema,
     list_ai_campaigns,
     list_ai_rounds,
+    option_for_decision,
     plan_strategy,
     reconcile_ai_campaigns,
     strategy_options,
@@ -29,6 +30,7 @@ from rank42.gemini_api import (
 )
 from rank42.manage_store import create_campaign, update_campaign
 from rank42.plugins import Plugin, discover_plugins, is_enabled
+from rank42.pipeline_catalog import stage_spec
 from rank42.torsion import MAZUR_TORSION_CHOICES
 from rank42.settings_registry import setting_value
 from rank42.ui_store import enqueue_job, get_job
@@ -154,6 +156,12 @@ def _budget_controls(goal_rank):
              "each Pipeline finishes. Existing curves and certified results "
              "within 10 ranks of the local best are preserved.",
     ))
+    allow_pipeline_build = st.toggle(
+        "Let Gemini build Pipelines",
+        value=True, key="ai-search-build-pipelines",
+        help="Gemini may assemble compatible Rank Hunter modules. Every sequence "
+             "must pass Pipeline validation, and stage settings stay within this hunt's limits.",
+    )
     auto_continue = st.toggle(
         "Keep hunting after each checkpoint",
         value=False, key="ai-search-auto-continue",
@@ -204,6 +212,7 @@ def _budget_controls(goal_rank):
         "numerator_limit": numerator, "denominator_limit": denominator,
         "retention_floor": retention,
         "share_candidate_parameters": bool(share_parameters),
+        "allow_pipeline_build": bool(allow_pipeline_build),
         "auto_continue": bool(auto_continue),
         "checkpoint_minutes": total_minutes,
         "checkpoint_rounds": rounds,
@@ -460,7 +469,7 @@ def page(db, ctx):
         return
     with st.container(key="rh-ai-launch-card", border=True):
         st.markdown("### Launch the hunt")
-        st.caption(f"{len(options)} compatible Pipelines are available. Preview the first choice or start now.")
+        st.caption(f"{len(options)} compatible Pipelines are available. Gemini can also build one from validated modules when enabled.")
         fingerprint = hashlib.sha256(json.dumps(
             {"mode": mode, "target": target, "objective": objective,
              "config": config, "model": model}, sort_keys=True,
@@ -487,7 +496,14 @@ def page(db, ctx):
                 st.session_state["ai-search-preview"] = preview
         if preview:
             decision = preview["decision"]
-            chosen = next(rec for rec in options if rec["id"] == decision["recipe_id"])
+            chosen = option_for_decision(decision, options)
+            if chosen is None:
+                st.error("The previewed Pipeline is no longer available for this target.")
+                st.session_state.pop("ai-search-preview", None)
+                preview = None
+        if preview:
+            decision = preview["decision"]
+            chosen = option_for_decision(decision, options)
             model_used = decision.get("model_used", model)
             st.info(
                 f"First strategy: **{chosen['name']}** · depth {decision['depth']} "
@@ -496,6 +512,10 @@ def page(db, ctx):
                 + (f" Gemini 3.8 Flash was unavailable; {model_used} answered."
                    if model_used != model else "")
             )
+            if decision.get("stage_ids"):
+                st.caption("Built Pipeline: " + " → ".join(
+                    stage_spec(stage_id).label for stage_id in decision["stage_ids"]
+                ))
         if start_col.button("Start AI campaign", type="primary",
                             icon=":material/auto_awesome:", width="stretch",
                             disabled=not source or not objective,

@@ -2,6 +2,37 @@
 
 All notable changes to Rank Hunter are documented here.
 
+## [0.10.3] — Unreleased
+
+### Added
+
+- AI Hunt can now build a Pipeline from compatible Rank Hunter modules instead
+  of choosing only a preset or saved Pipeline. The proposed order must pass the
+  normal Pipeline validator; Gemini cannot set arbitrary stage configurations.
+- Added Torsion Fast Probe for short exact-torsion and point-search rounds, and
+  Twist Point Recovery for bounded twist searches followed by exact point and
+  independence checks.
+
+### Changed
+
+- AI Hunt now divides its candidate and parameter-scan limits across torsion
+  providers. A 100-candidate round no longer becomes hundreds of candidates
+  just because several family providers match the group. Point-height lists
+  and per-stage candidate counts also stay within the hunt's chosen limits.
+- Jobs now shows the current Pipeline stage, best certified rank, and newest
+  discovery in the raw log terminal while an AI Hunt is running.
+- Bumped the development version to 0.10.3.
+- The 0.10.x interface now follows the research workflow more closely. Search
+  brings family, torsion, pool, curve, and general targets together; Candidates
+  builds pools; Casebook keeps a curve's queue position and working notes in
+  view; and Jobs makes live work and results easier to follow.
+- AI Hunt can choose compatible Pipelines, inspect the results, and plan another
+  bounded round. It keeps useful leads and leaves point and rank claims to the
+  exact checks already used by Rank Hunter.
+- Tools gathers proof, point discovery, and geometry workbenches behind one
+  compact command bar. Twists, Isogenies, Sections, Base Change, Pencils, and
+  Family Constructor are available alongside the existing tools.
+
 ## [0.10.2] — Unreleased
 
 ### Added

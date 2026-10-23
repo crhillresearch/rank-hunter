@@ -10,7 +10,9 @@ from pathlib import Path
 from rank42.db import now
 from rank42.gemini_api import AVAILABLE_MODELS, DEFAULT_MODEL, generate_json
 from rank42.pipeline_catalog import (
+    normalize_stage,
     normalize_pipeline,
+    pipeline_stage_specs,
     pipeline_preset_options,
     stage_spec,
     template_stages,
@@ -296,13 +298,73 @@ def strategy_options(db, *, target_mode, target):
 
 _WINDOWS = {"default", "central", "positive", "negative", "wide"}
 
+_BUILDABLE_STAGE_IDS = frozenset({
+    "nagao_screen", "nagao_rescore", "exact_torsion", "select_survivors",
+    "family_baseline", "specialization_seeds", "integral_seed", "affine_search",
+    "small_point_density", "denominator_band", "independence", "pointed_quartic",
+    "mwrank_covering", "simon_covering", "covering_minimize_reduce",
+    "covering_local_height_planner", "selmer_element_fanout",
+    "padic_covering_search", "mw_growth_loop", "height_lattice_reduction",
+    "half_lattice_hole_enumeration", "lattice_chart_construction",
+    "lattice_chart_search", "quadratic_twist_sweep", "targeted_twist_search",
+    "isogeny_walk", "rank_jump_base_change", "autonomous_rank_jump",
+    "pari_upper_gate", "selmer_bound", "stop_goal",
+})
+_DISCOVERY_STAGE_IDS = frozenset({
+    "integral_seed", "affine_search", "small_point_density", "denominator_band",
+    "pointed_quartic", "mwrank_covering", "simon_covering",
+    "selmer_element_fanout", "padic_covering_search", "mw_growth_loop",
+    "lattice_chart_search", "quadratic_twist_sweep", "targeted_twist_search",
+    "isogeny_walk", "rank_jump_base_change", "autonomous_rank_jump",
+})
+
+
+def buildable_modules(target_mode):
+    """Expose executable, budgeted modules for one elliptic target mode."""
+    return [spec for spec in pipeline_stage_specs(target_mode)
+            if spec.id in _BUILDABLE_STAGE_IDS]
+
+
+def option_for_decision(decision, options):
+    """Resolve a saved/preset recipe or the exact validated AI-built sequence."""
+    if decision["recipe_id"] == "built":
+        return {
+            "id": "built", "name": "Gemini-built Pipeline",
+            "description": "Validated module sequence assembled for this round",
+            "stages": [normalize_stage(stage_id)
+                       for stage_id in decision["stage_ids"]],
+            "pipeline_id": None,
+        }
+    return next((option for option in options
+                 if option["id"] == decision["recipe_id"]), None)
+
 
 def validate_decision(raw, *, options, config, previous=(), target_mode=None):
     if not isinstance(raw, dict):
         raise ValueError("Gemini strategy must be an object")
     recipe_id = str(raw.get("recipe_id") or "")
-    if recipe_id not in {option["id"] for option in options}:
+    if recipe_id not in {option["id"] for option in options} | {"built"}:
         raise ValueError("Gemini selected a recipe unavailable for this target")
+    stage_ids = None
+    if recipe_id == "built":
+        if config.get("allow_pipeline_build", True) is False:
+            raise ValueError("Gemini-built Pipelines are disabled for this hunt")
+        allowed = {spec.id for spec in buildable_modules(target_mode)}
+        stage_ids = raw.get("stage_ids")
+        if (not isinstance(stage_ids, list) or not 3 <= len(stage_ids) <= 16
+                or any(not isinstance(item, str) or item not in allowed
+                       for item in stage_ids)):
+            raise ValueError("Gemini-built Pipeline needs 3–16 available module IDs")
+        if not any(stage_id in _DISCOVERY_STAGE_IDS for stage_id in stage_ids):
+            raise ValueError("Gemini-built Pipeline needs a discovery stage")
+        if "independence" not in stage_ids:
+            raise ValueError("Gemini-built Pipeline needs Exact Independence")
+        stages = normalize_pipeline(stage_ids)
+        errors = validate_pipeline(target_mode, stages)
+        if errors:
+            raise ValueError("Invalid Gemini-built Pipeline: " + "; ".join(errors[:3]))
+        if sum(stage_spec(stage_id).cost == "expensive" for stage_id in stage_ids) > 6:
+            raise ValueError("Gemini-built Pipeline has too many expensive modules")
     window = str(raw.get("window") or "default")
     if window not in _WINDOWS:
         raise ValueError("Gemini selected an unknown search window")
@@ -323,9 +385,14 @@ def validate_decision(raw, *, options, config, previous=(), target_mode=None):
     decision = {"recipe_id": recipe_id, "window": window, "depth": depth,
                 "candidate_limit": candidate_limit, "search_seed": search_seed,
                 "reason": str(raw.get("reason") or "").strip()[:700]}
+    if stage_ids is not None:
+        decision["stage_ids"] = stage_ids
     if raw.get("_model_used") in AVAILABLE_MODELS:
         decision["model_used"] = raw["_model_used"]
     def signature(item):
+        if item.get("recipe_id") == "built":
+            return ("built", tuple(item.get("stage_ids") or ()), item.get("window"),
+                    item.get("depth"), item.get("candidate_limit"))
         if target_mode == "curve":
             return item.get("recipe_id"), item.get("depth")
         return (item.get("recipe_id"), item.get("window"), item.get("depth"),
@@ -353,18 +420,56 @@ def _prompt(*, objective, target_mode, target_summary, goal_rank, config,
         "previous_decisions": list(previous)[-8:],
         "validation_error": error,
     }
-    return (
+    if config.get("allow_pipeline_build", True):
+        payload["buildable_modules"] = [
+            {"id": spec.id, "label": spec.label, "category": spec.category,
+             "requires": sorted(spec.requires), "provides": sorted(spec.provides),
+             "cost": spec.cost,
+             **({"condition": spec.conditional[:180]} if spec.conditional else {})}
+            for spec in buildable_modules(target_mode)
+        ]
+        payload["valid_build_example"] = (
+            ["nagao_screen", "exact_torsion", "integral_seed",
+             "independence", "stop_goal"]
+            if target_mode == "torsion" else
+            ["integral_seed", "independence", "stop_goal"]
+            if target_mode == "curve" else
+            ["nagao_screen", "integral_seed", "independence", "stop_goal"]
+        )
+        payload["build_rules"] = (
+            "Use recipe_id='built' and stage_ids with 3-16 module IDs, including "
+            "a discovery stage and independence. Use nagao_screen first for "
+            "family/torsion/general targets; put exact_torsion before all "
+            "advanced torsion stages and immediately after any torsion transform. "
+            "Order prerequisite capabilities before consumers. Stage settings "
+            "are fixed to Rank Hunter defaults and bounded by campaign limits."
+        )
+    opening = (
         "You direct a Rank Hunter elliptic-curve search campaign. Choose ONE "
-        "available recipe for the next bounded run. The app executes the recipe; "
+        "available recipe or build a bounded Pipeline from listed modules. "
+        if config.get("allow_pipeline_build", True) else
+        "You direct a Rank Hunter elliptic-curve search campaign. Choose ONE "
+        "available recipe. "
+    )
+    return (
+        opening +
+        "The app validates and executes the recipe; "
         "you cannot issue shell commands, alter proofs, or change the stated limits. "
         "Heuristic scores are not rank certificates. Prefer a different strategy "
-        "or window when prior runs made no rigorous rank progress. A certified "
+        "or window when prior runs made no rigorous rank progress. When rounds "
+        "time out before searching many candidates, choose a shorter point "
+        "discovery and independence sequence. Prioritize new independent points "
+        "over upper-bound work when the goal is a higher rigorous lower bound. "
+        "A certified "
         "strong result in another torsion group is a separate lead: mention it "
         "in your reason, but keep this campaign on its selected target. For curve "
         "and general targets, window is 'default'. For family/torsion targets, window may "
         "be default, central, positive, negative, or wide. Depth is 1, 2, or 3. "
         "Return only a JSON object with recipe_id, window, depth, "
-        "candidate_limit, search_seed, and a brief reason.\n\n"
+        "candidate_limit, search_seed, and a brief reason. "
+        + ("For a built Pipeline, also return stage_ids in execution order. "
+           if config.get("allow_pipeline_build", True) else "")
+        + "\n\n"
         + json.dumps(payload, ensure_ascii=False, sort_keys=True)
     )
 
@@ -401,6 +506,9 @@ def execution_for_decision(*, option, decision, target_mode, target, config):
         settings = stage["config"]
         if "keep" in settings:
             settings["keep"] = min(int(settings["keep"]), limit)
+        for key in ("max_candidates", "exact_candidates", "pool_size", "max_children"):
+            if key in settings and type(settings[key]) is int and settings[key] > 0:
+                settings[key] = min(int(settings[key]), limit)
         if "max_parameters" in settings:
             settings["max_parameters"] = min(
                 int(settings["max_parameters"]), int(config["max_scan_parameters"])
@@ -409,6 +517,16 @@ def execution_for_decision(*, option, decision, target_mode, target, config):
             if key in settings and type(settings[key]) is int and settings[key] > 0:
                 settings[key] = min(int(config["max_point_height"]),
                                     int(settings[key]) * (2 ** (depth - 1)))
+        for key in ("heights", "denominator_heights"):
+            values = settings.get(key)
+            if isinstance(values, list) and values and all(
+                type(value) is int and value > 0 for value in values
+            ):
+                settings[key] = sorted({
+                    min(int(config["max_point_height"]),
+                        value * (2 ** (depth - 1)))
+                    for value in values
+                })
     errors = validate_pipeline(target_mode, stages)
     if errors:
         raise ValueError("AI recipe failed Pipeline validation: " + "; ".join(errors))
@@ -436,6 +554,12 @@ def execution_for_decision(*, option, decision, target_mode, target, config):
             generation.update(a_min=-numerator, a_max=numerator,
                               b_min=1, b_max=denominator)
         execution_target["candidate_generation"] = generation
+        if target_mode == "torsion":
+            # The runner divides this cap across the discovered providers.
+            execution_target["ai_candidate_limit"] = limit
+            execution_target["ai_scan_limit"] = int(config["max_scan_parameters"])
+        else:
+            generation["top"] = limit
     elif target_mode == "general":
         execution_target["random_seed"] = int(decision["search_seed"])
         execution_target["pool_size"] = min(int(execution_target["pool_size"]), limit)

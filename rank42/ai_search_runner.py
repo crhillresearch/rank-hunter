@@ -16,6 +16,7 @@ from rank42.ai_search import (
     execution_for_decision,
     get_ai_campaign,
     list_ai_rounds,
+    option_for_decision,
     plan_strategy,
     strategy_options,
     update_ai_campaign,
@@ -261,10 +262,7 @@ def run_campaign(db, root, campaign_id):
                 raise ValueError("No compatible Pipeline recipes are available")
             if pending_round is not None and round_number == first_round:
                 decision = json.loads(pending_round["decision_json"])
-                option = next(
-                    (item for item in options if item["id"] == decision["recipe_id"]),
-                    None,
-                )
+                option = option_for_decision(decision, options)
                 if option is None:
                     raise ValueError("Interrupted Pipeline recipe is no longer available")
                 round_id = int(pending_round["id"])
@@ -287,7 +285,9 @@ def run_campaign(db, root, campaign_id):
                         observations=observations, previous=previous,
                     )
                 )
-                option = next(item for item in options if item["id"] == decision["recipe_id"])
+                option = option_for_decision(decision, options)
+                if option is None:
+                    raise ValueError("AI Pipeline recipe is no longer available")
                 stages, execution_target = execution_for_decision(
                     option=option, decision=decision, target_mode=mode,
                     target=target, config=config,

@@ -25,7 +25,7 @@ from rank42.constructive_artifact import (
 from rank42.torsion import canonical_torsion_label
 
 
-CATALOG_VERSION = 25
+CATALOG_VERSION = 26
 ELLIPTIC_TARGET_MODES = ("family", "torsion", "general", "curve")
 TARGET_MODES = (*ELLIPTIC_TARGET_MODES, "genus2_jacobian")
 EVIDENCE_LEVELS = ("heuristic", "exact", "conditional", "rigorous", "control")
@@ -4272,6 +4272,8 @@ AUTONOMOUS_RANK_JUMP_TEMPLATE = [
 ]
 
 _PRESET_DEFS = (
+    ("torsion_fast_probe", "Torsion Fast Probe", "Screen several torsion families, verify exact torsion, search small points, and certify early rank growth within a short Pipeline round."),
+    ("twist_point_recovery", "Twist Point Recovery", "Try scored quadratic twists on a short list, then search exact points and certify any new independent directions."),
     ("autonomous_rank_jump", "Autonomous Rank-Jump", "Discover quadratic multisections from a JSON formula family, certify a new generic direction where possible, and search exact derived fibers for rank growth."),
     ("c2xc8_record_hunt", "C2×C8 Record Hunt", "Channel Family search for a certified rank ≥4: wide parameter screening, exact torsion and upper-bound gates, bounded channel point searches, then coverings and selective high-height work."),
     ("rea_hunt", "REA Hunt", "Generate candidates, route them by REA relation and shell structure, find exact rational points, then attempt REA height-Gram rank certification and a rigorous upper bound. The relational certificate is diagnostic only."),
@@ -4296,6 +4298,26 @@ _PRESET_DEFS = (
 )
 
 PRESET_TEMPLATE_BY_ID = {
+    "torsion_fast_probe": [
+        {"id": "nagao_screen", "config": {"prime_bound": 257, "keep": 300}},
+        {"id": "nagao_rescore", "config": {"prime_bound": 997, "keep": 80}},
+        {"id": "exact_torsion"},
+        {"id": "select_survivors", "config": {"keep": 32, "ranking": "score"}},
+        {"id": "integral_seed", "config": {"heights": [1000, 10000], "timeout": 4}},
+        {"id": "independence"},
+        {"id": "stop_goal"},
+    ],
+    "twist_point_recovery": [
+        {"id": "nagao_screen", "config": {"prime_bound": 257, "keep": 200}},
+        {"id": "nagao_rescore", "config": {"prime_bound": 997, "keep": 40}},
+        {"id": "select_survivors", "config": {"keep": 16, "ranking": "score"}},
+        {"id": "targeted_twist_search", "config": {
+            "scan_limit": 60, "max_children": 4, "timeout": 60,
+            "include_parent": True,
+        }},
+        {"id": "integral_seed"}, {"id": "affine_search"},
+        {"id": "independence"}, {"id": "stop_goal"},
+    ],
     "autonomous_rank_jump": AUTONOMOUS_RANK_JUMP_TEMPLATE,
     "c2xc8_record_hunt": C2XC8_RECORD_HUNT_TEMPLATE,
     "rea_hunt": REA_HUNT_TEMPLATE,
@@ -4384,6 +4406,10 @@ def pipeline_preset_options(target_mode, *, plugin_id=None):
         if preset_id == "professor_hunt" and mode != "torsion":
             continue
         if preset_id == "torsion_record_hunt" and mode != "torsion":
+            continue
+        if preset_id == "torsion_fast_probe" and mode != "torsion":
+            continue
+        if preset_id == "twist_point_recovery" and mode == "torsion":
             continue
         if preset_id in {"autonomous_rank_jump", "specialization_trickster", "historical_seed_funnel", "euler_lattice_hunt"} and mode != "family":
             continue

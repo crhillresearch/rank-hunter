@@ -7,7 +7,9 @@ from pathlib import Path
 import pytest
 
 from rank42.ai_search import (
+    buildable_modules,
     execution_for_decision,
+    option_for_decision,
     strategy_options,
     validate_decision,
     verified_campaign_best,
@@ -117,6 +119,59 @@ def test_gemini_can_choose_only_validated_bounded_recipes(monkeypatch):
                           config=LIMITS)
 
 
+def test_gemini_can_build_a_valid_bounded_pipeline(monkeypatch):
+    monkeypatch.setattr("rank42.ai_search.list_pipelines", lambda db, limit: [])
+    options = strategy_options(None, target_mode="torsion",
+                               target={"torsion_group": "C8"})
+    raw = {
+        "recipe_id": "built", "window": "wide", "depth": 1,
+        "candidate_limit": 100, "search_seed": 91,
+        "stage_ids": ["nagao_screen", "exact_torsion", "integral_seed",
+                      "independence", "stop_goal"],
+        "reason": "Try a short exact point search across the providers.",
+    }
+    decision = validate_decision(raw, options=options, config=LIMITS,
+                                 target_mode="torsion")
+    option = option_for_decision(decision, options)
+    stages, target = execution_for_decision(
+        option=option, decision=decision, target_mode="torsion",
+        target={"torsion_group": "C8"}, config=LIMITS,
+    )
+    assert option["pipeline_id"] is None
+    assert validate_pipeline("torsion", stages) == []
+    assert target["ai_candidate_limit"] == 100
+    assert target["ai_scan_limit"] == LIMITS["max_scan_parameters"]
+    assert any(spec.id == "rank_jump_base_change"
+               for spec in buildable_modules("family"))
+    with pytest.raises(ValueError, match="Exact Torsion"):
+        validate_decision({**raw, "stage_ids": ["nagao_screen", "integral_seed",
+                                               "independence"]},
+                          options=options, config=LIMITS, target_mode="torsion")
+    with pytest.raises(ValueError, match="disabled"):
+        validate_decision(raw, options=options,
+                          config={**LIMITS, "allow_pipeline_build": False},
+                          target_mode="torsion")
+
+
+def test_ai_torsion_budget_is_shared_across_providers():
+    from rank42.pipeline_runner import _allocate_ai_torsion_budget
+
+    target = {"torsion_group": "C8", "ai_candidate_limit": 100,
+              "ai_scan_limit": 50000,
+              "candidate_generation": {"engine": "sampled", "sample_count": 50000}}
+    allocated = _allocate_ai_torsion_budget(target, 8)
+    assert allocated["candidate_generation"]["top"] == 12
+    assert allocated["candidate_generation"]["sample_count"] == 6250
+    assert target["candidate_generation"]["sample_count"] == 50000
+
+
+def test_new_ai_presets_have_valid_module_order():
+    from rank42.pipeline_catalog import template_stages
+
+    assert validate_pipeline("torsion", template_stages("torsion_fast_probe", "torsion")) == []
+    assert validate_pipeline("curve", template_stages("twist_point_recovery", "curve")) == []
+
+
 def test_curve_replay_cannot_repeat_the_same_recipe_at_the_same_depth(monkeypatch):
     monkeypatch.setattr("rank42.ai_search.list_pipelines", lambda db, limit: [])
     options = strategy_options(None, target_mode="curve", target={"curve_id": 1})
@@ -222,9 +277,12 @@ def test_force_stopping_ai_job_retires_campaign_round_and_pipeline(tmp_path, mon
     db.close()
 
 
-@pytest.mark.parametrize("auto_continue,expected_rounds", [(False, 2), (True, 3)])
+@pytest.mark.parametrize(
+    "auto_continue,expected_rounds,initial_built",
+    [(False, 2, False), (True, 3, False), (False, 2, True)],
+)
 def test_ai_campaign_continues_from_saved_history_without_a_live_api(
-    tmp_path, monkeypatch, auto_continue, expected_rounds,
+    tmp_path, monkeypatch, auto_continue, expected_rounds, initial_built,
 ):
     from rank42.ai_search import (
         continue_ai_campaign, create_ai_campaign, get_ai_campaign, list_ai_rounds,
@@ -270,7 +328,10 @@ def test_ai_campaign_continues_from_saved_history_without_a_live_api(
         "hard_stop_rounds": 3,
         "target_summary": {"pool_mode": "seeded"}, "db_path": str(db_path),
         "initial_decision": {
-            "recipe_id": "preset:auto", "window": "default", "depth": 1,
+            "recipe_id": "built" if initial_built else "preset:auto",
+            **({"stage_ids": ["nagao_screen", "integral_seed", "independence",
+                               "stop_goal"]} if initial_built else {}),
+            "window": "default", "depth": 1,
             "candidate_limit": 10, "search_seed": 1, "reason": "Start broad.",
         },
     }
@@ -301,6 +362,15 @@ def test_ai_campaign_continues_from_saved_history_without_a_live_api(
     assert len(rounds) == expected_rounds
     assert all(row["status"] == "completed" for row in rounds)
     assert len({row["pipeline_run_id"] for row in rounds}) == expected_rounds
+    if initial_built:
+        first_run = db.execute(
+            "SELECT pipeline_id,stages_json FROM search_pipeline_runs WHERE id=?",
+            (rounds[0]["pipeline_run_id"],),
+        ).fetchone()
+        assert first_run["pipeline_id"] is None
+        assert [stage["id"] for stage in json.loads(first_run["stages_json"])] == [
+            "nagao_screen", "integral_seed", "independence", "stop_goal",
+        ]
     assert cleaned_runs == [row["pipeline_run_id"] for row in rounds]
     assert all(
         json.loads(db.execute(
