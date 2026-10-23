@@ -100,6 +100,8 @@ def _target_controls(db, ctx, mode):
         return {"plugin_id": plugin.id, "variant_id": variant.id}, {
             "family": plugin.name, "variant": variant.name,
             "plugin_id": plugin.id,
+            "formula_family": str(variant.family_spec).startswith("json:"),
+            "plugin_capabilities": sorted(plugin.capabilities),
         }
     if mode == "torsion":
         torsion = st.selectbox("Exact torsion group", MAZUR_TORSION_CHOICES,

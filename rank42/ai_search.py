@@ -299,23 +299,45 @@ def strategy_options(db, *, target_mode, target):
 _WINDOWS = {"default", "central", "positive", "negative", "wide"}
 
 _BUILDABLE_STAGE_IDS = frozenset({
-    "nagao_screen", "nagao_rescore", "exact_torsion", "select_survivors",
-    "family_baseline", "specialization_seeds", "integral_seed", "affine_search",
-    "small_point_density", "denominator_band", "independence", "pointed_quartic",
-    "mwrank_covering", "simon_covering", "covering_minimize_reduce",
+    # Candidate construction and exact local arithmetic.
+    "nagao_screen", "nagao_rescore", "euler_parameter_scan",
+    "euler_parameter_rescore", "corpus_filter", "select_survivors",
+    "mestre_nagao_ensemble", "multi_scale_frobenius",
+    "frobenius_persistence", "torsion_mod_p_sieve",
+    "local_solubility_sieve", "root_number", "exact_torsion",
+    # Families, exact transforms, and generic-section construction.
+    "specialization_seeds", "family_baseline",
+    "specialization_injectivity_certificate", "quadratic_twist_sweep",
+    "targeted_twist_search", "isogeny_walk", "rank_jump_base_change",
+    "autonomous_rank_jump", "parameter_pullback",
+    "bounded_section_search", "section_height_shell", "trace_section_constructor",
+    "forced_bisection_constructor", "square_condition_specializer",
+    "constructive_rank_jump_loop", "surface_fibration_switch",
+    # Independent point and covering attacks.
+    "small_point_density", "integral_seed", "denominator_band",
+    "point_yield_persistence", "affine_search", "adaptive_ladder",
+    "simon_covering", "mwrank_covering", "higher_descent_ladder",
+    "covering_selmer_branch", "covering_minimize_reduce",
     "covering_local_height_planner", "selmer_element_fanout",
-    "padic_covering_search", "mw_growth_loop", "height_lattice_reduction",
+    "padic_covering_search", "pointed_quartic", "mw_growth_loop",
+    "large_height_generator_hunt", "height_lattice_reduction",
     "half_lattice_hole_enumeration", "lattice_chart_construction",
-    "lattice_chart_search", "quadratic_twist_sweep", "targeted_twist_search",
-    "isogeny_walk", "rank_jump_base_change", "autonomous_rank_jump",
-    "pari_upper_gate", "selmer_bound", "stop_goal",
+    "lattice_chart_search", "plugin_geometry", "plugin_family_search",
+    # Evidence and stopping. Upper bounds are useful for triage, not rank growth.
+    "independence", "saturation", "full_saturation_index_recovery",
+    "pari_upper_gate", "selmer_bound", "selmer_headroom",
+    "isogeny_descent", "stop_goal",
 })
 _DISCOVERY_STAGE_IDS = frozenset({
     "integral_seed", "affine_search", "small_point_density", "denominator_band",
-    "pointed_quartic", "mwrank_covering", "simon_covering",
+    "adaptive_ladder", "pointed_quartic", "mwrank_covering",
+    "simon_covering", "higher_descent_ladder", "covering_selmer_branch",
     "selmer_element_fanout", "padic_covering_search", "mw_growth_loop",
     "lattice_chart_search", "quadratic_twist_sweep", "targeted_twist_search",
     "isogeny_walk", "rank_jump_base_change", "autonomous_rank_jump",
+    "bounded_section_search", "section_height_shell", "constructive_rank_jump_loop",
+    "square_condition_specializer", "surface_fibration_switch",
+    "large_height_generator_hunt", "plugin_geometry", "plugin_family_search",
 })
 
 
@@ -339,7 +361,8 @@ def option_for_decision(decision, options):
                  if option["id"] == decision["recipe_id"]), None)
 
 
-def validate_decision(raw, *, options, config, previous=(), target_mode=None):
+def validate_decision(raw, *, options, config, previous=(), target_mode=None,
+                      target_summary=None):
     if not isinstance(raw, dict):
         raise ValueError("Gemini strategy must be an object")
     recipe_id = str(raw.get("recipe_id") or "")
@@ -359,6 +382,9 @@ def validate_decision(raw, *, options, config, previous=(), target_mode=None):
             raise ValueError("Gemini-built Pipeline needs a discovery stage")
         if "independence" not in stage_ids:
             raise ValueError("Gemini-built Pipeline needs Exact Independence")
+        if ("bounded_section_search" in stage_ids
+                and (target_summary or {}).get("formula_family") is False):
+            raise ValueError("Bounded Q(t) Section Search requires a JSON formula family")
         stages = normalize_pipeline(stage_ids)
         errors = validate_pipeline(target_mode, stages)
         if errors:
@@ -441,8 +467,12 @@ def _prompt(*, objective, target_mode, target_summary, goal_rank, config,
             "a discovery stage and independence. Use nagao_screen first for "
             "family/torsion/general targets; put exact_torsion before all "
             "advanced torsion stages and immediately after any torsion transform. "
-            "Order prerequisite capabilities before consumers. Stage settings "
-            "are fixed to Rank Hunter defaults and bounded by campaign limits."
+            "Order prerequisite capabilities before consumers. Conditional "
+            "modules need the family/model/adapter named in their condition; "
+            "do not choose one when that support is absent or unknown. "
+            "Bounded Q(t) Section Search requires formula_family=true. "
+            "Stage settings are fixed to Rank Hunter defaults and bounded by "
+            "campaign limits."
         )
     opening = (
         "You direct a Rank Hunter elliptic-curve search campaign. Choose ONE "
@@ -491,7 +521,8 @@ def plan_strategy(project_root: str | Path, *, model, objective, target_mode,
         )
         try:
             return validate_decision(raw, options=options, config=config,
-                                     previous=previous, target_mode=target_mode)
+                                     previous=previous, target_mode=target_mode,
+                                     target_summary=target_summary)
         except ValueError as exc:
             error = str(exc)
     raise ValueError(f"Gemini could not produce a valid strategy: {error}")
@@ -506,12 +537,21 @@ def execution_for_decision(*, option, decision, target_mode, target, config):
         settings = stage["config"]
         if "keep" in settings:
             settings["keep"] = min(int(settings["keep"]), limit)
-        for key in ("max_candidates", "exact_candidates", "pool_size", "max_children"):
+        for key in ("max_candidates", "exact_candidates", "pool_size", "max_children",
+                    "max_coverings", "max_sections", "max_conditions", "scan_limit"):
             if key in settings and type(settings[key]) is int and settings[key] > 0:
                 settings[key] = min(int(settings[key]), limit)
-        if "max_parameters" in settings:
-            settings["max_parameters"] = min(
-                int(settings["max_parameters"]), int(config["max_scan_parameters"])
+        for key in ("max_parameters", "max_trials", "max_tests"):
+            if key in settings and type(settings[key]) is int and settings[key] > 0:
+                settings[key] = min(int(settings[key]),
+                                    int(config["max_scan_parameters"]))
+        if "max_results" in settings:
+            settings["max_results"] = min(int(settings["max_results"]), limit)
+        if (option["id"] == "built" and "timeout" in settings
+                and type(settings["timeout"]) is int):
+            settings["timeout"] = min(
+                int(settings["timeout"]),
+                max(30, int(config["max_run_minutes"]) * 20),
             )
         for key in ("height", "covering_height", "max_height", "point_bound"):
             if key in settings and type(settings[key]) is int and settings[key] > 0:

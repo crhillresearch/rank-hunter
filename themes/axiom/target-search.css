@@ -1,0 +1,101 @@
+/* Stored-curve Target workbench. All surfaces use the Axiom tokens. */
+.st-key-rh-target-source,
+.st-key-rh-target-setup,
+.st-key-rh-target-presets {
+    border-color: var(--rh-border) !important;
+    border-radius: 13px !important;
+    background: var(--rh-card) !important;
+    box-shadow: 0 5px 16px color-mix(in srgb, var(--rh-text) 3%, transparent);
+}
+.st-key-rh-target-source { margin-bottom: .7rem; }
+.st-key-rh-target-source h3,
+.st-key-rh-target-setup h3,
+.st-key-rh-target-presets h3 { margin: 0 0 .35rem; }
+.st-key-rh-target-source [data-testid="stSelectbox"] { margin-bottom: 0; }
+.rh-target-overview {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 1.3rem;
+    min-width: 0;
+    margin-bottom: .8rem;
+    padding: .9rem 1.15rem;
+    border: 1px solid var(--rh-border);
+    border-radius: 13px;
+    background: var(--rh-card);
+    color: var(--rh-text);
+}
+.rh-target-overview-main { min-width: 0; }
+.rh-target-eyebrow,
+.rh-target-overview-rank span,
+.rh-target-overview-facts span {
+    display: block;
+    color: var(--rh-muted);
+    font-size: .65rem;
+    font-weight: 750;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+}
+.rh-target-overview-main h2 {
+    margin: .15rem 0 .05rem;
+    color: var(--rh-text);
+    font-size: clamp(1.2rem, 1.8vw, 1.5rem);
+    line-height: 1.16;
+    letter-spacing: -.025em;
+}
+.rh-target-overview-main p {
+    margin: 0;
+    color: var(--rh-text-secondary);
+    font-size: .8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rh-target-overview-rank { min-width: 7rem; }
+.rh-target-overview-rank strong {
+    display: block;
+    margin-top: .15rem;
+    color: var(--rh-primary-deep);
+    font-size: clamp(1.35rem, 2vw, 1.75rem);
+    font-weight: 780;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.rh-target-overview-facts {
+    display: flex;
+    gap: 1.15rem;
+    padding-left: 1.15rem;
+    border-left: 1px solid var(--rh-border);
+}
+.rh-target-overview-facts strong {
+    display: block;
+    margin-top: .18rem;
+    color: var(--rh-text);
+    font-size: .95rem;
+    font-variant-numeric: tabular-nums;
+}
+.st-key-rh-target-setup [data-testid="stButton"] button[kind="primary"] {
+    min-height: 2.65rem;
+    font-weight: 700;
+}
+.st-key-rh-target-presets [data-testid="stButton"] button {
+    justify-content: flex-start;
+    min-height: 2.35rem;
+}
+.st-key-rh-target-presets [data-testid="stButton"] + [data-testid="stButton"] {
+    margin-top: .15rem;
+}
+@media (max-width: 900px) {
+    .rh-target-overview { grid-template-columns: minmax(0, 1fr) auto; }
+    .rh-target-overview-facts {
+        grid-column: 1 / -1;
+        padding: .65rem 0 0;
+        border-left: 0;
+        border-top: 1px solid var(--rh-border);
+    }
+}
+@media (max-width: 620px) {
+    .rh-target-overview { gap: .7rem; padding: .8rem .9rem; }
+    .rh-target-overview-rank { min-width: 0; text-align: right; }
+    .rh-target-overview-main p { max-width: 15rem; }
+}

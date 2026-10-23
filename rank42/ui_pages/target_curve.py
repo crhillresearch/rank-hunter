@@ -1,4 +1,6 @@
 from __future__ import annotations
+from contextlib import nullcontext
+import html
 import json
 from rank42.feature_hooks import render_feature_hook
 from rank42.ui_active_curve import get_active_curve_id
@@ -10,6 +12,31 @@ from rank42.search_config import adapter_search_option_defs, pipeline_search_con
 from .common import active_curve_selector,title,curve_options,launch_with_pipeline,search_pipeline_selector,section_title,ratpoints_selector
 from rank42.ui_components import rh_key
 from .family_search import _render_option_groups, _preset_option_value
+
+
+def _target_overview(row, stored_points):
+    """Compact curve context above the attack controls."""
+    esc=lambda value: html.escape(str(value), quote=True)
+    lower=int(row['rigorous_lower'] or 0)
+    exact=row['exact_rank']
+    exact_valid=exact is not None and int(exact)>=lower
+    rank=f'= {int(exact)}' if exact_valid else f'≥ {lower}' if lower else '—'
+    rank_label='EXACT RANK' if exact_valid else 'CERTIFIED LOWER BOUND'
+    score=f"{float(row['score']):.3f}" if row['score'] is not None else '—'
+    st.html(
+        '<section class="rh-target-overview" aria-label="Selected curve">'
+        '<div class="rh-target-overview-main">'
+        '<span class="rh-target-eyebrow">SELECTED CURVE</span>'
+        f'<h2>Curve #{int(row["id"])}</h2>'
+        f'<p>{esc(row["family"] or "Unknown family")}<span aria-hidden="true"> · </span>'
+        f't={esc(row["parameter"] or "—")}</p>'
+        '</div><div class="rh-target-overview-rank">'
+        f'<span>{rank_label}</span><strong>{esc(rank)}</strong>'
+        '</div><div class="rh-target-overview-facts">'
+        f'<div><span>Stored points</span><strong>{int(stored_points):,}</strong></div>'
+        f'<div><span>Nagao score</span><strong>{esc(score)}</strong></div>'
+        '</div></section>'
+    )
 
 
 def _target_geometry_hint_for_curve(session_state, curve_id):
@@ -252,59 +279,41 @@ def _target_preset_modified(
 def page(db,ctx,*,new_search=False):
     title(
         'Target',
-        'Attack one promising specialization harder. Torsion mode preserves the exact prescribed-torsion gate even when the family has no target adapter; Plugin mode uses family-native structure; FREE treats the curve in isolation.',
+        'Search a stored curve for another independent point.',
         'Search',
     )
     render_feature_hook(db,ctx,'target.after_header')
     rows=curve_options(db)
     if not rows:
-        st.info('No curves in the database yet.')
+        st.info('Save a curve first, then return here to search it.')
         return
     wanted=get_active_curve_id(st.session_state,'target_curve_id')
-    row=active_curve_selector(
-        db,
-        rows,
-        wanted=wanted,
-        state_prefix='target',
-        widget_prefix='target-curve',
-        compatibility_keys=('target_curve_id',),
-    )
+    with st.container(key='rh-target-source',border=True):
+        st.markdown('### Choose a curve')
+        row=active_curve_selector(
+            db,
+            rows,
+            wanted=wanted,
+            state_prefix='target',
+            widget_prefix='target-curve',
+            compatibility_keys=('target_curve_id',),
+        )
     if row is None: return
 
-    c1,c2,c3,c4=st.columns(4)
-    c1.metric('Rigorous lower',f"≥ {row['rigorous_lower']}")
-    c2.metric('Exact rank',row['exact_rank'] if row['exact_rank'] is not None else '—')
     stored_points=int(db.execute('SELECT COUNT(*) n FROM points WHERE curve_id=?',(int(row['id']),)).fetchone()['n'] or 0)
     if not stored_points:
         try:
             stored_points=len(json.loads(row['generators_json'] or '[]'))
         except Exception:
             stored_points=0
-    c3.metric('Stored points',stored_points)
-    c4.metric('Nagao score',f"{row['score']:.3f}" if row['score'] is not None else '—')
-    if 'plugin_id' in row.keys() and row['plugin_id']:
-        st.caption(
-            f"Provenance: `{row['plugin_id']}` v{row['plugin_version'] or '—'} · "
-            f"family `{row['family_spec'] or '—'}`"
-        )
+    _target_overview(row,stored_points)
 
     research_handoff = research_handoff_for_curve(
         st.session_state,
         int(row["id"]),
     )
     if research_handoff is not None:
-        with st.container(border=True):
-            header_cols = st.columns([0.78, 0.22], vertical_alignment="center")
-            with header_cols[0]:
-                st.markdown("**Research selection handoff**")
-            with header_cols[1]:
-                if st.button(
-                    "Clear research context",
-                    use_container_width=True,
-                    key=f"clear-target-research-context-{int(row['id'])}",
-                ):
-                    clear_research_handoff(st.session_state)
-                    st.rerun()
+        with st.expander("Research selection", expanded=False, icon=":material/bookmark:"):
             family = str(research_handoff.get("family") or row["family"] or "—")
             kind = str(research_handoff.get("kind") or "selection")
             count = len(research_handoff.get("curve_ids") or ())
@@ -315,26 +324,21 @@ def page(db,ctx,*,new_search=False):
                 if isinstance(item_count, int) and item_count >= 0
                 else ""
             )
-            st.caption(
-                f"Source: {research_handoff['source']} · kind: {kind} · family: {family} · "
-                f"stored curves: {count:,}{item_text} · "
-                f"hash: `{research_handoff['selection_hash'][:12]}`"
-            )
-            st.caption(
-                "This context is informational only. Target Search remains the execution owner, "
-                "and no rank/search controls were changed by the Workspace handoff."
-            )
+            st.caption(f"{research_handoff['source']} · {kind} · {family} · "
+                       f"{count:,} curves{item_text}")
+            if st.button(
+                "Clear selection", icon=":material/close:",
+                key=f"clear-target-research-context-{int(row['id'])}",
+            ):
+                clear_research_handoff(st.session_state)
+                st.rerun()
 
     geometry_hint = _target_geometry_hint_for_curve(
         st.session_state,
         int(row["id"]),
     )
     if geometry_hint is not None:
-        with st.container(border=True):
-            st.markdown("**MW Geometry scheduling hint**")
-            st.caption(
-                "Numerical context only. Target controls remain unchanged until you edit them."
-            )
+        with st.expander("MW Geometry hint", expanded=False, icon=":material/grid_view:"):
             h1, h2, h3 = st.columns(3)
             h1.metric("Lattice", f"#{int(geometry_hint['lattice_id'])}")
             condition = geometry_hint.get("condition")
@@ -353,10 +357,7 @@ def page(db,ctx,*,new_search=False):
                     f"Strongest stored relationship: P{int(pair['left'])} ↔ P{int(pair['right'])} · "
                     f"|ρ|={float(pair['absolute_correlation']):.4f}"
                 )
-            st.caption(
-                "Rank Hunter does not automatically translate this numerical geometry into "
-                "search bounds or a proof claim."
-            )
+            st.caption("Numerical context for choosing a search; controls are yours to set.")
 
     plugin,variant=_plugin_for_curve(db,ctx,row)
     plugin_enabled=bool(plugin and is_enabled(db,plugin))
@@ -404,18 +405,25 @@ def page(db,ctx,*,new_search=False):
     torsion_goal=None
     torsion_group=None
 
-    if new_search and not target_presets:
-        setup_col=st.container()
-        guide_col=st.container()
+    if target_presets:
+        setup_col,guide_col=st.columns([1.55,.75],gap='medium')
     else:
-        setup_col,guide_col=st.columns([1.3,.7] if new_search else [1.08,.92])
+        setup_col=st.container()
+        guide_col=nullcontext() if new_search else st.container()
     with setup_col:
-        with st.container(border=True):
-            section_title(
-                'Search setup',
-                f"Curve #{row['id']} · {row['family']} · t={row['parameter']}",
-            )
-            mode=st.radio('Backend',modes,horizontal=True,key=mode_key)
+        with st.container(key='rh-target-setup',border=True):
+            st.markdown('### Search this curve')
+            st.caption('Choose how Rank Hunter should attack this stored curve.')
+            mode=st.segmented_control(
+                'Search method',modes,key=mode_key,default=modes[0],
+                width='content',
+            ) or modes[0]
+            method_notes={
+                'Torsion':'Verify the prescribed torsion, then search this curve for more independent points.',
+                'Plugin':'Use the family’s target adapter and its native search controls.',
+                'FREE':'Search the stored equation directly with bounded rational-point methods.',
+            }
+            st.caption(method_notes[mode])
             rp_backend,rp_exec=ratpoints_selector(
                 db,
                 key=f'target-ratpoints-{row["id"]}',
@@ -462,14 +470,6 @@ def page(db,ctx,*,new_search=False):
                 strategy_key=f'target-torsion-strategy-{row["id"]}'
                 if st.session_state.get(strategy_key) not in strategy_ids:
                     st.session_state[strategy_key]=strategy_ids[0]
-                torsion_strategy=st.selectbox(
-                    'Target strategy',
-                    strategy_ids,
-                    format_func=lambda value: strategy_labels.get(value,value.replace('_',' ').title()),
-                    key=strategy_key,
-                    help='Plugin-owned buttons select reusable exact-curve Pipeline recipes. Exact Torsion is inserted as the first proof gate.',
-                )
-
                 goal_default=(
                     int(torsion_record['goal_rank'])
                     if torsion_record is not None
@@ -479,8 +479,16 @@ def page(db,ctx,*,new_search=False):
                 goal_kwargs={}
                 if goal_key not in st.session_state:
                     goal_kwargs['value']=goal_default
+                strategy_col,goal_col=st.columns([1.4,.6])
+                torsion_strategy=strategy_col.selectbox(
+                    'Target strategy',
+                    strategy_ids,
+                    format_func=lambda value: strategy_labels.get(value,value.replace('_',' ').title()),
+                    key=strategy_key,
+                    help='Plugin-owned recipes keep Exact Torsion as the first proof gate.',
+                )
                 torsion_goal=int(
-                    st.number_input(
+                    goal_col.number_input(
                         'Rigorous rank goal',
                         min_value=1,
                         step=1,
@@ -497,12 +505,9 @@ def page(db,ctx,*,new_search=False):
                     torsion_goal,
                     label=f'{plugin.name} · {strategy_label}',
                 )
-                st.caption(
-                    'Torsion mode exact-checks the stored curve before any point/rank stage. '
-                    'A torsion mismatch terminates the target run; heuristic or mapped points never bypass this gate.'
-                )
                 if st.button(
                     'Search target curve',
+                    icon=':material/play_arrow:',
                     type='primary',
                     width='stretch',
                     key='target-torsion-launch',
@@ -600,7 +605,7 @@ def page(db,ctx,*,new_search=False):
                     builtin_label='Built-in Pipeline · Plugin geometry',
                 )
                 variant_label=f" · {variant.name}" if variant and len(plugin.variants)>1 else ''
-                st.caption(f'Using **{plugin.name}{variant_label}** target adapter.')
+                st.caption(f'Family adapter: **{plugin.name}{variant_label}**')
                 adapter=load_adapter(plugin)
                 opts={}
                 defs=adapter_search_option_defs(
@@ -624,6 +629,7 @@ def page(db,ctx,*,new_search=False):
                         opts[key]=row[key]
                 if st.button(
                     'Search target curve',
+                    icon=':material/play_arrow:',
                     type='primary',
                     width='stretch',
                     key='target-plugin-launch',
@@ -728,26 +734,28 @@ def page(db,ctx,*,new_search=False):
                     suggested_goal=max(1,int(row['rigorous_lower'] or 0)+1),
                     builtin_label='Built-in Pipeline · Current FREE controls',
                 )
-                st.caption(
-                    'FREE mode assumes no usable family/torsion structure. Exact points are stored; '
-                    'rank changes only after an exact independence certificate.'
+                stages=st.text_input(
+                    'Point-search heights','1000,10000,100000',
+                    help='Comma-separated ratpoints height limits, searched in order.',
                 )
-                a,b,c,d=st.columns(4)
-                stages=a.text_input('ratpoints stages','1000,10000,100000')
-                timeout=int(b.number_input('Seconds per stage',min_value=1,value=20,step=5))
-                exact=int(c.number_input('Exact candidates',min_value=0,value=8,step=1))
-                prep_timeout=int(
-                    d.number_input(
-                        'Model prep timeout',
-                        min_value=1,
-                        value=10,
-                        step=5,
-                        help='Hard timeout for global minimal-model preparation; FREE search falls back exactly if it expires.',
-                    )
-                )
-                cert=int(st.number_input('Certificate timeout',min_value=1,value=120,step=30))
+                timeout_col,exact_col=st.columns(2)
+                timeout=int(timeout_col.number_input(
+                    'Seconds per height',min_value=1,value=20,step=5,
+                ))
+                exact=int(exact_col.number_input(
+                    'Points to certify',min_value=0,value=8,step=1,
+                ))
+                with st.expander('Advanced search limits',expanded=False,icon=':material/tune:'):
+                    prep_timeout=int(st.number_input(
+                        'Model prep timeout',min_value=1,value=10,step=5,
+                        help='Hard timeout for global minimal-model preparation.',
+                    ))
+                    cert=int(st.number_input(
+                        'Certificate timeout',min_value=1,value=120,step=30,
+                    ))
                 if st.button(
                     'Search target curve',
+                    icon=':material/play_arrow:',
                     type='primary',
                     width='stretch',
                     key='target-free-launch',
@@ -787,17 +795,10 @@ def page(db,ctx,*,new_search=False):
 
     with guide_col:
         if target_presets:
-            with st.container(border=True):
-                if new_search:
-                    st.markdown('### :material/extension: Plugin Presets')
-                    st.caption(f'{plugin.name} · {variant.name if variant else "default"}')
-                else:
-                    section_title(
-                        'Search style',
-                        'Family-owned target presets fill the visible controls. Torsion presets can switch the backend and Pipeline recipe without requiring a target adapter.',
-                    )
-                pcols=st.columns(2)
-                for i,preset in enumerate(target_presets):
+            with st.container(key='rh-target-presets',border=True):
+                st.markdown('### :material/extension: Plugin Presets')
+                st.caption(f'{plugin.name} · {variant.name if variant else "default"}')
+                for preset in target_presets:
                     preset_target=dict(preset.get('target') or {})
                     preset_backend=str(preset_target.get('backend') or 'Plugin')
                     if preset_backend=='Torsion':
@@ -809,16 +810,16 @@ def page(db,ctx,*,new_search=False):
                             or not plugin_enabled
                             or 'target_search' not in plugin.capabilities
                         )
-                    with pcols[i%2]:
-                        st.button(
-                            str(preset.get('label') or preset.get('id') or 'Preset'),
-                            key=f'target-preset-button-{row["id"]}-{preset.get("id")}',
-                            width='stretch',
-                            disabled=disabled,
-                            on_click=_apply_target_preset,
-                            args=(plugin.id,int(row['id']),preset,defs,mode_key),
-                            help=str(preset.get('description') or '') or None,
-                        )
+                    st.button(
+                        str(preset.get('label') or preset.get('id') or 'Preset'),
+                        icon=':material/extension:',
+                        key=f'target-preset-button-{row["id"]}-{preset.get("id")}',
+                        width='stretch',
+                        disabled=disabled,
+                        on_click=_apply_target_preset,
+                        args=(plugin.id,int(row['id']),preset,defs,mode_key),
+                        help=str(preset.get('description') or '') or None,
+                    )
                 active_id=str(
                     st.session_state.get(f'target-preset-{int(row["id"])}') or ''
                 )
@@ -842,6 +843,8 @@ def page(db,ctx,*,new_search=False):
                     )
                     if active.get('description'):
                         st.caption(str(active['description']))
+                else:
+                    st.caption('Choose a preset to fill the search controls.')
 
         if new_search:
             return

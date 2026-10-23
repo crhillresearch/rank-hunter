@@ -25,7 +25,7 @@ from rank42.constructive_artifact import (
 from rank42.torsion import canonical_torsion_label
 
 
-CATALOG_VERSION = 26
+CATALOG_VERSION = 28
 ELLIPTIC_TARGET_MODES = ("family", "torsion", "general", "curve")
 TARGET_MODES = (*ELLIPTIC_TARGET_MODES, "genus2_jacobian")
 EVIDENCE_LEVELS = ("heuristic", "exact", "conditional", "rigorous", "control")
@@ -249,6 +249,20 @@ _STAGE_LIST = (
         },
         repeatable=True,
         conditional="Each branch may time out independently. Timeouts and failures are inconclusive.",
+    ),
+    PipelineStageSpec(
+        "bounded_section_search",
+        "Bounded Q(t) Section Search (Experimental)",
+        "Constructive",
+        "Search a JSON formula family's rational-function x-coordinate ansatz over Q(t), verify every resulting section identity exactly, then specialize verified sections to the current fiber. Specialized points enter the exact point ledger; only a later independence stage may raise rank. The search is bounded and does not prove that no other sections exist.",
+        frozenset({"family"}),
+        frozenset({"exact_curve"}),
+        frozenset({"point_source", "section_lead"}),
+        "exact",
+        "expensive",
+        {"degree": 1, "coefficient_bound": 2, "max_trials": 2000,
+         "max_results": 12, "rational_x": True, "timeout": 90},
+        conditional="Requires a JSON FormulaFamily. One exact Q(t) search is cached per family and Pipeline run. Identity alone does not certify independence over Q(t) or a generic rank increase.",
     ),
     PipelineStageSpec(
         "section_height_shell",
@@ -4273,6 +4287,8 @@ AUTONOMOUS_RANK_JUMP_TEMPLATE = [
 
 _PRESET_DEFS = (
     ("torsion_fast_probe", "Torsion Fast Probe", "Screen several torsion families, verify exact torsion, search small points, and certify early rank growth within a short Pipeline round."),
+    ("torsion_twist_probe", "Torsion Twist Probe", "Score bounded twists of exact-torsion survivors, recheck the torsion group on every derived curve, then look for independent points."),
+    ("torsion_covering_rescue", "Torsion Covering Rescue", "After a small point search, use exact 2-descent coverings, reduce and locally profile them, then search mapped points and certify rank growth."),
     ("twist_point_recovery", "Twist Point Recovery", "Try scored quadratic twists on a short list, then search exact points and certify any new independent directions."),
     ("autonomous_rank_jump", "Autonomous Rank-Jump", "Discover quadratic multisections from a JSON formula family, certify a new generic direction where possible, and search exact derived fibers for rank growth."),
     ("c2xc8_record_hunt", "C2×C8 Record Hunt", "Channel Family search for a certified rank ≥4: wide parameter screening, exact torsion and upper-bound gates, bounded channel point searches, then coverings and selective high-height work."),
@@ -4304,6 +4320,35 @@ PRESET_TEMPLATE_BY_ID = {
         {"id": "exact_torsion"},
         {"id": "select_survivors", "config": {"keep": 32, "ranking": "score"}},
         {"id": "integral_seed", "config": {"heights": [1000, 10000], "timeout": 4}},
+        {"id": "independence"},
+        {"id": "stop_goal"},
+    ],
+    "torsion_twist_probe": [
+        {"id": "nagao_screen", "config": {"prime_bound": 257, "keep": 180}},
+        {"id": "nagao_rescore", "config": {"prime_bound": 997, "keep": 32}},
+        {"id": "exact_torsion"},
+        {"id": "select_survivors", "config": {"keep": 8, "ranking": "score"}},
+        {"id": "targeted_twist_search", "config": {
+            "scan_limit": 48, "max_children": 3, "timeout": 45,
+            "include_parent": True,
+        }},
+        {"id": "exact_torsion"},
+        {"id": "integral_seed", "config": {"heights": [1000, 10000], "timeout": 4}},
+        {"id": "independence"},
+        {"id": "stop_goal"},
+    ],
+    "torsion_covering_rescue": [
+        {"id": "nagao_screen", "config": {"prime_bound": 257, "keep": 180}},
+        {"id": "exact_torsion"},
+        {"id": "select_survivors", "config": {"keep": 6, "ranking": "score"}},
+        {"id": "integral_seed", "config": {"heights": [1000, 10000], "timeout": 4}},
+        {"id": "independence"},
+        {"id": "mwrank_covering", "config": {"timeout": 90}},
+        {"id": "covering_minimize_reduce", "config": {"max_coverings": 8}},
+        {"id": "covering_local_height_planner", "config": {"max_coverings": 8}},
+        {"id": "selmer_element_fanout", "config": {
+            "max_coverings": 8, "timeout": 20, "use_covering_plans": True,
+        }},
         {"id": "independence"},
         {"id": "stop_goal"},
     ],
@@ -4407,7 +4452,7 @@ def pipeline_preset_options(target_mode, *, plugin_id=None):
             continue
         if preset_id == "torsion_record_hunt" and mode != "torsion":
             continue
-        if preset_id == "torsion_fast_probe" and mode != "torsion":
+        if preset_id in {"torsion_fast_probe", "torsion_twist_probe", "torsion_covering_rescue"} and mode != "torsion":
             continue
         if preset_id == "twist_point_recovery" and mode == "torsion":
             continue

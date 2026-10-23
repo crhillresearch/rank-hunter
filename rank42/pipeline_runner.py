@@ -39,6 +39,7 @@ from rank42.search_family_baseline import (
     attach_family_baseline as _attach_family_baseline,
     attach_family_specialization_seed as _attach_family_specialization_seed,
 )
+from rank42.section_pipeline import bounded_section_search
 from rank42.search_materialization import (
     discard_unpromoted_search_curve as _discard_unpromoted_auto_curve,
     materialize_family_curve as _stored_curve,
@@ -3184,6 +3185,14 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
             unknown_reduction_primes=unknown_reduction,
             bad_primes_complete=bool(cache_result.get("bad_primes_complete")),
             bad_prime_error=cache_result.get("bad_prime_error"),
+        )
+        return _safe(result), None, False
+
+    if stage_id == "bounded_section_search":
+        result = bounded_section_search(
+            db, run_id=run["id"], curve_id=curve_id, curve=E,
+            family=context.get("family"), parameter=parameter,
+            project_root=run_config["project_root"], config=config,
         )
         return _safe(result), None, False
 

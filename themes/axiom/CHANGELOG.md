@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.57 — 2026-10-23
+
+- Restyled Target Search with a compact curve summary, clearer setup card, and a narrow Plugin Presets panel.
+
 ## 1.1.56 — 2026-10-23
 
 - Reworked Casebook as a queue and notes workspace, added compact Settings cards and header power controls, and tightened the Dashboard exact-rank spacing.

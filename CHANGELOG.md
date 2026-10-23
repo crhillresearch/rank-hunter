@@ -12,6 +12,12 @@ All notable changes to Rank Hunter are documented here.
 - Added Torsion Fast Probe for short exact-torsion and point-search rounds, and
   Twist Point Recovery for bounded twist searches followed by exact point and
   independence checks.
+- Added Torsion Twist Probe, which checks the selected torsion group again
+  after each twist, and Torsion Covering Rescue, which reduces and searches
+  exact 2-descent coverings for additional points.
+- Added an experimental bounded Q(t) section-search module for JSON families.
+  Exact section identities can supply points on searched fibers; a later
+  independence check decides whether any point raises the rank.
 
 ### Changed
 
@@ -19,8 +25,14 @@ All notable changes to Rank Hunter are documented here.
   providers. A 100-candidate round no longer becomes hundreds of candidates
   just because several family providers match the group. Point-height lists
   and per-stage candidate counts also stay within the hunt's chosen limits.
+- AI Hunt can now assemble Pipelines from more of the existing research stages,
+  including higher descent, saturation, family sections, local sieves, and
+  covering reduction. Plugin-dependent stages show their requirements to Gemini.
 - Jobs now shows the current Pipeline stage, best certified rank, and newest
   discovery in the raw log terminal while an AI Hunt is running.
+- Target Search now puts the selected curve, rank state, search method, and
+  Plugin Presets into a compact Axiom workbench. Research handoffs and geometry
+  hints stay available without crowding the launch controls.
 - Bumped the development version to 0.10.3.
 - The 0.10.x interface now follows the research workflow more closely. Search
   brings family, torsion, pool, curve, and general targets together; Candidates

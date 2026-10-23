@@ -169,7 +169,26 @@ def test_new_ai_presets_have_valid_module_order():
     from rank42.pipeline_catalog import template_stages
 
     assert validate_pipeline("torsion", template_stages("torsion_fast_probe", "torsion")) == []
+    assert validate_pipeline("torsion", template_stages("torsion_twist_probe", "torsion")) == []
+    assert validate_pipeline("torsion", template_stages("torsion_covering_rescue", "torsion")) == []
     assert validate_pipeline("curve", template_stages("twist_point_recovery", "curve")) == []
+    assert validate_pipeline("family", ["nagao_screen", "select_survivors",
+                                        "bounded_section_search", "independence",
+                                        "stop_goal"]) == []
+    assert "bounded_section_search" in {spec.id for spec in buildable_modules("family")}
+    assert "bounded_section_search" not in {spec.id for spec in buildable_modules("torsion")}
+
+
+def test_ai_section_search_requires_a_formula_family():
+    recipe = {"recipe_id": "built", "window": "default", "depth": 1,
+              "candidate_limit": 10, "stage_ids": ["nagao_screen",
+              "bounded_section_search", "independence", "stop_goal"]}
+    with pytest.raises(ValueError, match="JSON formula family"):
+        validate_decision(recipe, options=[], config=LIMITS, target_mode="family",
+                          target_summary={"formula_family": False})
+    assert validate_decision(recipe, options=[], config=LIMITS,
+                             target_mode="family",
+                             target_summary={"formula_family": True})["recipe_id"] == "built"
 
 
 def test_curve_replay_cannot_repeat_the_same_recipe_at_the_same_depth(monkeypatch):

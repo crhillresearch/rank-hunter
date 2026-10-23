@@ -276,7 +276,8 @@ def run_campaign(db, root, campaign_id):
                 )
                 decision = (
                     validate_decision(initial, options=options, config=config,
-                                      previous=previous, target_mode=mode)
+                                      previous=previous, target_mode=mode,
+                                      target_summary=config.get("target_summary"))
                     if initial else plan_strategy(
                         root, model=row["model"], objective=row["objective"],
                         target_mode=mode,

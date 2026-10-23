@@ -168,9 +168,8 @@ def test_target_and_pipeline_pages_surface_handoff_without_execution():
     )
 
     assert "research_handoff_for_curve" in target
-    assert "Research selection handoff" in target
-    assert "Target Search remains the execution owner" in target
-    assert '"Clear research context"' in target
+    assert 'st.expander("Research selection"' in target
+    assert '"Clear selection"' in target
     assert "clear_research_handoff(st.session_state)" in target
 
     assert "get_research_handoff" in pipelines

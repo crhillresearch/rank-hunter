@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "axiom",
   "name": "Axiom",
-  "version": "1.1.56",
+  "version": "1.1.57",
   "description": "A clean Rank Hunter research dashboard with coordinated light and GitHub-Primer-inspired dark appearances, cobalt accents, readable typography, and restrained semantic status colors.",
   "preview_image": "assets/rank-hunter-mark.png",
   "stylesheets": [
@@ -28,6 +28,7 @@
     "ai-search.css",
     "candidates-page.css",
     "new-search.css",
+    "target-search.css",
     "casebook.css",
     "tools-page.css",
     "descent-page.css",
