@@ -4203,6 +4203,8 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
             dry_round_min_coverage=float(
                 config.get("dry_round_min_coverage") or 1.0
             ),
+            missing_generator_attack=bool(config.get("missing_generator_attack", True)),
+            missing_generator_min_rank=int(config.get("missing_generator_min_rank") or 27),
         )
         rounds = list(result.get("rounds") or [])
         stop_reason = str(result.get("stop_reason") or "unknown")

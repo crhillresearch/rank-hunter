@@ -179,6 +179,22 @@ _STAGE_LIST = (
         conditional="Requires the active family adapter to define derive_pipeline_transform(context) for transform_kind=rank_jump_base_change. In torsion-target runs, follow with Exact Torsion so only derived curves matching the selected group continue. The hook runs in a core-owned subprocess with the configured hard timeout.",
     ),
     PipelineStageSpec(
+        "autonomous_rank_jump",
+        "Autonomous Rank-Jump Constructor",
+        "Transforms",
+        "Search a JSON formula family for exact quadratic multisections, parametrize rational genus-zero covers, certify a new anti-invariant section by a non-torsion specialization, and send derived fibers downstream.",
+        frozenset({"family", "torsion"}),
+        frozenset({"exact_curve"}),
+        frozenset({"exact_curve", "derived_population"}),
+        "exact",
+        "expensive",
+        {"degree": 1, "coefficient_bound": 2, "max_trials": 1000,
+         "point_bound": 8, "cover_degree": 4, "max_results": 8,
+         "max_children": 4, "timeout": 120, "include_parent": True},
+        repeatable=True,
+        conditional="Requires a JSON formula family. Generic rank growth is claimed only when the source has a rank-lower certificate and the new anti-invariant section has an exact non-torsion witness. Genus-one covers remain research leads until they supply rational points and a valid family map.",
+    ),
+    PipelineStageSpec(
         "parameter_pullback",
         "Möbius Parameter Transform",
         "Transforms",
@@ -1168,7 +1184,7 @@ _STAGE_LIST = (
         "mw_growth_loop",
         "MW Growth Loop",
         "Geometry",
-        "Repeatedly rebuild point-centered quartic geometry from the enlarged exact point set; each successful round feeds its new points into the next round. The wrapper forwards the quartic engine's explicit stop reason, distinguishing dry completed coverage, timeout exhaustion, engine errors, rank goal, no-new-models, incomplete rounds, and max-round exhaustion.",
+        "Repeatedly rebuild reduced point-centered quartic coverings as the certified point basis grows. For rank ≥27, missing-generator planning uses a matching MW height lattice, point-height spread, and completed chart history to prioritize unexplored anchors. Every mapped point still needs exact independence certification; the planner is heuristic. The wrapper reports explicit stop reasons and coverage.",
         frozenset(ELLIPTIC_TARGET_MODES),
         frozenset({"exact_curve", "point_source"}),
         frozenset({"point_source", "rigorous_lower_possible"}),
@@ -1185,6 +1201,8 @@ _STAGE_LIST = (
             "dry_round_min_coverage": 1.0,
             "certificate_timeout": 120,
             "exact_candidates": 96,
+            "missing_generator_attack": True,
+            "missing_generator_min_rank": 27,
         },
         repeatable=True,
         conditional="Requires a complete rigorous witness basis. New points only raise rank after exact independence certification; the underlying quartic engine only calls a round dry after the configured resolved-coverage threshold is met.",
@@ -1447,6 +1465,7 @@ FANOUT_RESET_STAGE_IDS = frozenset({
     "quadratic_twist_sweep",
     "targeted_twist_search",
     "rank_jump_base_change",
+    "autonomous_rank_jump",
     "parameter_pullback",
     "isogeny_walk",
     "surface_fibration_switch",
@@ -1799,7 +1818,11 @@ def validate_pipeline(target_mode, stages):
     if mode == "genus2_jacobian":
         caps = {"source", "exact_genus2_curve"}
     else:
-        caps = {"source", "exact_curve"} if mode == "curve" else {"source"}
+        # A stored curve may already carry exact points and certified rank
+        # evidence before this recipe begins.  These are possible inputs to
+        # curve-target stages; runtime still checks the actual ledger/basis.
+        caps = ({"source", "exact_curve", "point_source", "rigorous_lower_possible"}
+                if mode == "curve" else {"source"})
     candidate_stage_seen = False
     exact_torsion_indices = []
 
@@ -2062,6 +2085,7 @@ def validate_pipeline(target_mode, stages):
         if sid in {
             "targeted_twist_search",
             "rank_jump_base_change",
+            "autonomous_rank_jump",
             "surface_fibration_switch",
             "isogeny_walk",
         }:
@@ -2313,13 +2337,13 @@ def validate_pipeline(target_mode, stages):
                     errors.append(
                         f"Step {index} · Targeted Twist Search: root sign must be any, +1, or -1"
                     )
-        elif sid == "rank_jump_base_change":
+        elif sid in {"rank_jump_base_change", "autonomous_rank_jump"}:
             try:
                 max_children = int(cfg.get("max_children") or 0)
             except Exception:
                 max_children = 0
             if max_children <= 0:
-                errors.append(f"Step {index} · Rank-Jump / Base-Change: max children must be positive")
+                errors.append(f"Step {index} · {spec.label}: max children must be positive")
         elif sid == "parameter_pullback":
             maps = cfg.get("maps") or []
             label = "Möbius Parameter Transform"
@@ -2869,10 +2893,12 @@ def validate_pipeline(target_mode, stages):
                 coverage = float(cfg.get("dry_round_min_coverage") or 0.0)
                 cert = int(cfg.get("certificate_timeout") or 0)
                 exact = int(cfg.get("exact_candidates") or 0)
+                attack_min_rank = int(cfg.get("missing_generator_min_rank", 27))
             except Exception:
                 heights, anchors, pool_size, max_rounds = [], 0, 0, 0
                 deep_keep, timeout, reduce_timeout, coverage = 0, 0, -1, 0.0
                 cert, exact = 0, 0
+                attack_min_rank = 0
             if not heights or any(x <= 0 for x in heights):
                 errors.append(f"Step {index} · MW Growth Loop: heights must be positive")
             if anchors <= 0 or pool_size < anchors:
@@ -2885,6 +2911,8 @@ def validate_pipeline(target_mode, stages):
                 )
             if cert <= 0 or exact <= 0:
                 errors.append(f"Step {index} · MW Growth Loop: certificate budgets must be positive")
+            if attack_min_rank < 1:
+                errors.append(f"Step {index} · MW Growth Loop: missing-generator rank threshold must be positive")
         elif sid == "point_yield_persistence":
             try:
                 minimum_bands = int(cfg.get("minimum_bands") or 0)
@@ -4229,7 +4257,22 @@ REA_HUNT_TEMPLATE = [
     {"id": "stop_goal"},
 ]
 
+AUTONOMOUS_RANK_JUMP_TEMPLATE = [
+    {"id": "nagao_screen", "config": {"prime_bound": 127, "keep": 32}},
+    {"id": "select_survivors", "config": {"keep": 1, "ranking": "score"}},
+    {"id": "autonomous_rank_jump", "config": {
+        "degree": 1, "coefficient_bound": 2, "max_trials": 1000,
+        "point_bound": 8, "cover_degree": 4, "max_results": 8,
+        "max_children": 4, "timeout": 120, "include_parent": True,
+    }},
+    {"id": "family_baseline"},
+    {"id": "integral_seed"},
+    {"id": "independence"},
+    {"id": "stop_goal"},
+]
+
 _PRESET_DEFS = (
+    ("autonomous_rank_jump", "Autonomous Rank-Jump", "Discover quadratic multisections from a JSON formula family, certify a new generic direction where possible, and search exact derived fibers for rank growth."),
     ("c2xc8_record_hunt", "C2×C8 Record Hunt", "Channel Family search for a certified rank ≥4: wide parameter screening, exact torsion and upper-bound gates, bounded channel point searches, then coverings and selective high-height work."),
     ("rea_hunt", "REA Hunt", "Generate candidates, route them by REA relation and shell structure, find exact rational points, then attempt REA height-Gram rank certification and a rigorous upper bound. The relational certificate is diagnostic only."),
     ("professor_hunt", "Professor Hunt", "Overnight exact-torsion hunt: reserve half the shortlist for compact parameters, check early exact point yield, then deepen the strongest curves through coverings, Mordell–Weil growth, denominator charts, lattice rebuilding, and rigorous rank evidence. Lattice work starts only after independent points exist."),
@@ -4253,6 +4296,7 @@ _PRESET_DEFS = (
 )
 
 PRESET_TEMPLATE_BY_ID = {
+    "autonomous_rank_jump": AUTONOMOUS_RANK_JUMP_TEMPLATE,
     "c2xc8_record_hunt": C2XC8_RECORD_HUNT_TEMPLATE,
     "rea_hunt": REA_HUNT_TEMPLATE,
     "professor_hunt": PROFESSOR_HUNT_TEMPLATE,
@@ -4341,7 +4385,7 @@ def pipeline_preset_options(target_mode, *, plugin_id=None):
             continue
         if preset_id == "torsion_record_hunt" and mode != "torsion":
             continue
-        if preset_id in {"specialization_trickster", "historical_seed_funnel", "euler_lattice_hunt"} and mode != "family":
+        if preset_id in {"autonomous_rank_jump", "specialization_trickster", "historical_seed_funnel", "euler_lattice_hunt"} and mode != "family":
             continue
         out.append({
             "id": preset_id,

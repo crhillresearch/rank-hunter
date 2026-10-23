@@ -50,7 +50,9 @@ def _parse_family(family, ring, variable):
             if not _identity(ainvs, x, y):
                 raise ValueError("point identity fails")
             sections.append({"label": str(rec.get("label") or f"S{index}") if isinstance(rec, dict) else f"S{index}",
-                             "x": str(x), "y": str(y), "verification": "exact_identity"})
+                             "x": str(x), "y": str(y), "verification": "exact_identity",
+                             **({"source_point_id": int(rec["source_point_id"])}
+                                if isinstance(rec, dict) and rec.get("source_point_id") is not None else {})})
         except Exception as exc:
             invalid.append({"index": index, "reason": str(exc)[:240]})
     return ainvs, sections, invalid
@@ -146,8 +148,59 @@ def _search_sections(ainvs, variable, ring, known, config):
             "rational_x": rational_x}
 
 
+def _seed_basis_certificate(anchor, ainvs, known, cover, parameter):
+    """Check that three global sections specialize into one certified basis."""
+    from sage.all import QQ, sage_eval
+
+    evidence = anchor.get("evidence") or {}
+    if (not evidence.get("rigorous") or evidence.get("status") != "completed"
+            or int(evidence.get("rigorous_lower") or 0) < 3):
+        return None
+    if cover.get("cover_degree") != 1 or not cover.get("derived_family"):
+        return None
+    seed = cover.get("seed_fiber") or {}
+    if not seed.get("source_fiber_retained") or not seed.get("derived_parameter"):
+        return None
+    t0 = QQ(anchor["parameter"])
+    u0 = QQ(seed["derived_parameter"])
+    if QQ(sage_eval(cover["parameter_map"], locals={"u": u0})) != t0:
+        return None
+    model = tuple(QQ(value) for value in evidence.get("model_a_invariants") or [])
+    if model != tuple(QQ(a(t0)) for a in ainvs):
+        return None
+    derived = cover["derived_family"]
+    if model != tuple(QQ(sage_eval(a, locals={"u": u0}))
+                      for a in derived["a_invariants"]):
+        return None
+    basis = {tuple(QQ(v) for v in pair[:2]) for pair in evidence.get("points") or []
+             if isinstance(pair, (list, tuple)) and len(pair) >= 2}
+    if len(basis) < 3:
+        return None
+    selected = []
+    for section in known:
+        x = QQ(sage_eval(section["x"], locals={parameter: t0}))
+        y = QQ(sage_eval(section["y"], locals={parameter: t0}))
+        if (x, y) in basis:
+            selected.append((x, y))
+    new_point = tuple(QQ(value) for value in anchor["point"])
+    new_section = derived["sections"][-1]
+    if new_point != (QQ(sage_eval(new_section["x"], locals={"u": u0})),
+                     QQ(sage_eval(new_section["y"], locals={"u": u0}))):
+        return None
+    if new_point not in basis or len(set(selected + [new_point])) < 3:
+        return None
+    return {"method": "three_sections_specialize_into_certified_seed_basis",
+            "curve_id": int(anchor["curve_id"]), "parameter": str(t0),
+            "derived_parameter": str(u0), "point_ids": [int(anchor["point_id"]),
+                                                *[int(s.get("source_point_id")) for s in known
+                                                  if s.get("source_point_id") is not None]],
+            "rank_evidence_id": int(evidence["id"]),
+            "source_rigorous_lower": int(evidence["rigorous_lower"]),
+            "generic_rank_lower_bound": 3}
+
+
 def main():
-    from sage.all import QQ, PolynomialRing, sage_eval
+    from sage.all import QQ, Integer, PolynomialRing, sage_eval
 
     request = json.load(sys.stdin)
     if request.get("schema") != SCHEMA:
@@ -171,6 +224,47 @@ def main():
                   "known_sections_verified": known, "known_sections_invalid": invalid,
                   "manual_candidate": manual,
                   **search}
+    elif mode == "rank_jump_constructor":
+        from rank_jump_constructor import discover
+
+        parameter = str(family.get("parameter") or "t")
+        polynomial = PolynomialRing(QQ, parameter)
+        field = polynomial.fraction_field()
+        variable = field.gen()
+        ainvs, known, invalid = _parse_family(family, field, variable)
+        search = discover(ainvs, variable, field, known, config)
+        certified_source = bool(family.get("rank_lower_certificate")) and not invalid
+        source_lower = int(family.get("generic_rank") or 0) if certified_source else None
+        for cover in search["covers"]:
+            seed_certificate = (_seed_basis_certificate(config["seed_anchor"], ainvs, known, cover, parameter)
+                                if isinstance(config.get("seed_anchor"), dict) else None)
+            if seed_certificate:
+                cover["seed_fiber_rank_certificate"] = seed_certificate
+            if cover.get("independence") == "certified_over_quadratic_cover" and cover.get("derived_family"):
+                cover["derived_family"]["name"] = f"{family.get('name') or 'Research family'} · quadratic rank jump"
+                if source_lower is not None:
+                    cover["rank_lower_bound_growth_certified"] = True
+                    cover["derived_family"]["generic_rank"] = source_lower + 1
+                    cover["derived_family"]["rank_lower_certificate"] = {
+                        "method": "source_certificate_plus_anti_invariant_non_torsion_section",
+                        "source_certificate": family["rank_lower_certificate"],
+                        "new_section_witness": cover["non_torsion_witness"],
+                    }
+                else:
+                    cover["rank_lower_bound_growth_certified"] = False
+                    cover["derived_family"]["generic_rank"] = 1
+                    cover["derived_family"]["rank_lower_certificate"] = {
+                        "method": "anti_invariant_non_torsion_section_only",
+                        "new_section_witness": cover["non_torsion_witness"],
+                    }
+            if seed_certificate and cover.get("derived_family"):
+                cover["derived_family"]["name"] = f"{family.get('name') or 'Research family'} · seed-anchored rank jump"
+                cover["derived_family"]["generic_rank"] = max(
+                    int(cover["derived_family"].get("generic_rank") or 0), 3)
+                cover["derived_family"]["rank_lower_certificate"] = seed_certificate
+        result = {"parameter": parameter, "a_invariants": [str(a) for a in ainvs],
+                  "known_sections_verified": known, "known_sections_invalid": invalid,
+                  "source_rank_lower_certified": source_lower, **search}
     elif mode == "base_change":
         polynomial = PolynomialRing(QQ, "u")
         field = polynomial.fraction_field()
@@ -192,10 +286,23 @@ def main():
     else:
         raise ValueError("unsupported geometry research mode")
 
+    certified_covers = ([row for row in result.get("covers", [])
+                         if row.get("independence") == "certified_over_quadratic_cover"]
+                        if mode == "rank_jump_constructor" else [])
+    anchored_covers = ([row for row in result.get("covers", [])
+                        if row.get("seed_fiber_rank_certificate")]
+                       if mode == "rank_jump_constructor" else [])
+    def json_scalar(value):
+        if isinstance(value, Integer):
+            return int(value)
+        raise TypeError(f"unsupported geometry result value {type(value).__name__}")
+
     json.dump({"schema": SCHEMA, "mode": mode, "family_name": str(family.get("name") or "Unnamed family"),
-               "source_sha256": source_hash, "rank_claim": False,
-               "independence_certified": False, "result": result},
-              sys.stdout, sort_keys=True, separators=(",", ":"))
+               "source_sha256": source_hash,
+               "rank_claim": bool(anchored_covers or
+                                  (certified_covers and result.get("source_rank_lower_certified") is not None)),
+               "independence_certified": bool(certified_covers or anchored_covers), "result": result},
+              sys.stdout, sort_keys=True, separators=(",", ":"), default=json_scalar)
 
 
 if __name__ == "__main__":

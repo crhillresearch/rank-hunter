@@ -76,7 +76,11 @@ class FormulaFamily:
     def curve_mod_p(self, r, p):
         try:
             F = GF(int(p))
-            tr = F(int(r))
+            # Evaluate rational coefficients over Q first.  Sage cannot
+            # multiply a QQ literal by a finite-field parameter directly;
+            # reducing the specialized coefficients afterwards also rejects
+            # precisely the residues with a denominator divisible by p.
+            tr = QQ(int(r) % int(p))
             ainvs = [F(x) for x in self._ainvs_at(tr)]
             E = EllipticCurve(F, ainvs)
             if E.discriminant() == 0:

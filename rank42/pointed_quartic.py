@@ -426,6 +426,7 @@ def build_anchor_pool(
     lattice_rows = [row for row in rows if row["source"] == "lattice_hole"]
     lattice_rows.sort(
         key=lambda rec: (
+            int(rec.get("metadata", {}).get("attack_priority", 1000000)),
             -float(rec.get("metadata", {}).get("half_lattice_norm") or 0.0),
             rec["complexity"],
             rec["support"],
@@ -666,6 +667,8 @@ def run_pointed_quartic_escalation(
     local_sieve_primes=(),
     preferred_anchor_vectors=(),
     dry_round_min_coverage=1.0,
+    missing_generator_attack=False,
+    missing_generator_min_rank=27,
 ):
     """Search a feedback portfolio of exact point-centred quartics."""
     from rank42.auto_point_search import certify_ledger_growth
@@ -739,6 +742,7 @@ def run_pointed_quartic_escalation(
     map_back_failure_samples = []
     total_models = 0
     round_summaries = []
+    attack_plans = []
     searched_models = set()
     stop_reason = "max_rounds"
 
@@ -762,18 +766,56 @@ def run_pointed_quartic_escalation(
 
     for round_index in range(1, rounds + 1):
         observations = _load_exact_observations(db, curve_id, E)
+        attack_plan = None
+        attack_error = None
+        attack_active = bool(
+            missing_generator_attack
+            and current_rigorous_lower() >= int(missing_generator_min_rank)
+        )
+        if attack_active:
+            try:
+                from rank42.missing_generator_attack import plan_missing_generator_attack
+                attack_plan = plan_missing_generator_attack(
+                    db, curve_id=curve_id, E=E, basis=basis,
+                    observations=observations, anchor_budget=anchors,
+                    pool_size=pool_size, heights=heights,
+                )
+                observations = attack_plan["observations"]
+                attack_plans.append(attack_plan["receipt"])
+                print(
+                    f"[auto:missing-generator] round={round_index} "
+                    f"basis={len(basis)} gram={attack_plan['receipt']['stored_lattice_id']} "
+                    f"preferred={len(attack_plan['preferred_vectors'])} "
+                    f"observations={len(observations)}",
+                    flush=True,
+                )
+            except Exception as exc:
+                attack_error = repr(exc)
+                print(f"[auto:missing-generator] planning failed: {attack_error}", flush=True)
+        preferred = tuple(preferred_anchor_vectors) + tuple(
+            attack_plan["preferred_vectors"] if attack_plan else ()
+        )
         portfolio = build_anchor_pool(
             E,
             basis,
             observations,
-            limit=anchors,
+            limit=min(pool_size, anchors * 3) if attack_plan else anchors,
             pool_size=pool_size,
-            preferred_vectors=preferred_anchor_vectors,
+            preferred_vectors=preferred,
         )
         portfolio = [
             model for model in portfolio
             if model["anchor_key"] not in searched_models
         ]
+        if attack_plan:
+            prior = attack_plan["coverage"]
+            top_height = max(heights)
+            portfolio.sort(key=lambda model: (
+                int(prior.get(model["anchor_key"], {}).get("max_completed_height", 0)) >= top_height,
+                int(prior.get(model["anchor_key"], {}).get("completed", 0)),
+                model["complexity"], model["anchor_key"],
+            ))
+            portfolio = portfolio[:anchors]
         if not portfolio:
             stop_reason = "no_new_models"
             break
@@ -1268,6 +1310,8 @@ def run_pointed_quartic_escalation(
             "new_exact_points": round_new,
             "reduced_models": reduced_count,
             "map_back_failures": round_map_back_failures,
+            "missing_generator_plan": attack_plan["receipt"] if attack_plan else None,
+            "missing_generator_plan_error": attack_error,
         })
         round_summaries.append(round_summary)
 
@@ -1275,6 +1319,13 @@ def run_pointed_quartic_escalation(
             stop_reason = "rank_goal"
             break
         if round_summary["dry_completed"]:
+            if attack_plan and round_index < rounds:
+                print(
+                    f"[auto:missing-generator] dry batch {round_index}/{rounds} "
+                    "completed; advancing to the next unsearched anchor region",
+                    flush=True,
+                )
+                continue
             stop_reason = "dry_completed_round"
             break
         if round_new == 0:
@@ -1347,10 +1398,13 @@ def run_pointed_quartic_escalation(
         "rank_growth": growth,
         "rigorous_lower": after_lower,
         "rounds": round_summaries,
+        "missing_generator_plans": attack_plans,
         "heights": list(heights),
         "anchors": anchors,
         "pool_size": pool_size,
         "deep_keep": deep_keep,
         "reduce_timeout": reduce_timeout,
         "backend": exe,
+        "missing_generator_attack": bool(missing_generator_attack),
+        "missing_generator_min_rank": int(missing_generator_min_rank),
     }

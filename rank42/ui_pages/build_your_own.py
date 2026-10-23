@@ -1178,6 +1178,29 @@ def _config_editor(rec, index):
         st.caption(
             "The twist and root number are exact. Ranking uses Rank Hunter's historical log-cardinality Nagao-style heuristic (cached-nagao-log-cardinality-v1), not a published Mestre–Nagao formula. Each trial is process-isolated; the stage stops at its wall budget and retains already-ranked children."
         )
+    elif stage_id == "autonomous_rank_jump":
+        c1, c2, c3 = st.columns(3)
+        cfg["degree"] = int(c1.number_input("x degree", min_value=0, max_value=3,
+                                            value=int(cfg.get("degree", 1)), key=f"{key}-degree"))
+        cfg["coefficient_bound"] = int(c2.number_input(
+            "Coefficient bound", min_value=1, max_value=6,
+            value=int(cfg.get("coefficient_bound", 2)), key=f"{key}-coeff"))
+        cfg["max_trials"] = int(c3.number_input(
+            "Candidate budget", min_value=1, max_value=20000,
+            value=int(cfg.get("max_trials", 1000)), key=f"{key}-trials"))
+        c4, c5, c6 = st.columns(3)
+        cfg["point_bound"] = int(c4.number_input(
+            "Rational point bound", min_value=1, max_value=32,
+            value=int(cfg.get("point_bound", 8)), key=f"{key}-point-bound"))
+        cfg["max_children"] = int(c5.number_input(
+            "Max derived fibers", min_value=1, max_value=32,
+            value=int(cfg.get("max_children", 4)), key=f"{key}-children"))
+        cfg["timeout"] = int(c6.number_input(
+            "Hard timeout (s)", min_value=5, max_value=300,
+            value=int(cfg.get("timeout", 120)), key=f"{key}-timeout"))
+        cfg["include_parent"] = bool(st.toggle(
+            "Keep parent", value=bool(cfg.get("include_parent", True)), key=f"{key}-parent"))
+        st.caption("Exact quadratic covers are discovered from the family equation. Only non-torsion witnessed sections become derived search fibers; rank claims require a certified source basis.")
     elif stage_id == "rank_jump_base_change":
         c1, c2 = st.columns(2)
         cfg["max_children"] = int(c1.number_input(
@@ -2819,9 +2842,23 @@ def _config_editor(rec, index):
             value=int(cfg.get("exact_candidates") or 96),
             key=f"{key}-exact",
         ))
+        attack_left, attack_right = st.columns([2, 1])
+        cfg["missing_generator_attack"] = attack_left.checkbox(
+            "Plan missing-generator attacks at high rank",
+            value=bool(cfg.get("missing_generator_attack", True)),
+            key=f"{key}-missing-generator-attack",
+            help="Use the certified basis, a matching stored height Gram, exact point observations, and completed covering-chart searches to choose the next MW Growth Loop anchors.",
+        )
+        cfg["missing_generator_min_rank"] = int(attack_right.number_input(
+            "Start at rank ≥", min_value=1,
+            value=int(cfg.get("missing_generator_min_rank") or 27),
+            key=f"{key}-missing-generator-min-rank",
+            disabled=not cfg["missing_generator_attack"],
+        ))
         st.caption(
             "Each successful round adds exact points to the ledger, re-certifies rank growth, "
-            "then rebuilds the next point-centered quartic portfolio from the enlarged point set. "
+            "then rebuilds the next reduced quartic portfolio from the enlarged point set. "
+            "High-rank attack planning changes search order only. "
             "The loop stops at the first dry round, the configured round cap, or the rigorous rank goal."
         )
     elif stage_id == "specialization_seeds":

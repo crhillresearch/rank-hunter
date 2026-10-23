@@ -21,7 +21,6 @@ from rank42.classical_descent import (
 from rank42.coverings import SCHEMA as COVERING_SCHEMA, map_quartic_point, validate_covering
 from rank42.covering_search import search_stored_covering
 from rank42.curve_research_state import get_curve_research_state
-from rank42.independence_check import certify_stored_independence
 from rank42.lattice import LatticeFailure, LatticeTimeout, run_lattice_build
 from rank42.lattice_store import (
     completed_covering_search_attempt,
@@ -1171,6 +1170,31 @@ def height_lattice_reduction(
             "numerical_lattice_screen_is_not_rank_proof": True,
         }
 
+    # LLL changes generators inside the already certified subgroup.  Check
+    # the exact integer change of basis instead of sending its combinations
+    # back through the new-generator certification queue.
+    from sage.all import ZZ, matrix
+
+    transform_verified = False
+    transform = result.get("lll_transform")
+    if len(input_points) == len(basis) == len(reduced) and input_points == basis:
+        if transform is None:
+            transform_verified = reduced == input_points
+        else:
+            try:
+                U = matrix(ZZ, transform)
+                transform_verified = (
+                    U.nrows() == len(basis) and U.ncols() == len(basis)
+                    and abs(U.det()) == 1
+                    and all(
+                        sum((U[i, j] * input_points[i] for i in range(len(basis))
+                             if U[i, j]), E(0)) == reduced[j]
+                        for j in range(len(reduced))
+                    )
+                )
+            except (ArithmeticError, TypeError, ValueError):
+                transform_verified = False
+
     stored = store_lattice(
         db,
         curve_id=curve_id,
@@ -1198,53 +1222,27 @@ def height_lattice_reduction(
             "engine_version": result.get("engine_version"),
             "lll_reduced": bool(result.get("lll_transform")),
             "lll_transform": result.get("lll_transform"),
+            "exact_unimodular_transform_verified": transform_verified,
             "input_basis": [_point_json(P) for P in input_points],
             "input_gram": result["input_gram"],
             "input_determinant": result["input_determinant"],
             "eigenvalues": result["eigenvalues"],
         },
     )
-    for index, P in enumerate(reduced, 1):
-        upsert_point(
-            db,
-            curve_id=curve_id,
-            x=P[0],
-            y=P[1],
-            source="pipeline_height_lattice_reduction",
-            role="candidate_witness",
-            exact_verified=True,
-            independence_status="unknown",
-            rigorous_independent=False,
-            search_ref=f"pipeline:{run_id}:height-lll:{stage_index}",
-            metadata={
-                "lattice_id": int(stored["id"]),
-                "basis_position": index,
-                "lll_reduced": bool(result.get("lll_transform")),
-                "basis_fingerprint": result.get("basis_fingerprint"),
-            },
-        )
-
-    cert = certify_stored_independence(
-        db,
-        curve_id=curve_id,
-        E=E,
-        source="pipeline_height_lattice_reduction",
-        search_ref=f"pipeline:{run_id}:height-lll:{stage_index}:exact",
-        certificate_timeout=max(1, int(certificate_timeout)),
-        max_candidates=max(1, int(exact_candidates)),
-    )
-    cert_status = str(cert.get("status") or "inconclusive")
-    overall_status = "completed" if cert_status == "completed" else "partial"
+    overall_status = "completed" if transform_verified else "partial"
 
     return {
         "status": overall_status,
         "reason": (
             None
             if overall_status == "completed"
-            else "lattice_completed_recertification_incomplete"
+            else "lattice_completed_transform_verification_failed"
         ),
         "lattice_status": "completed",
-        "certification_status": cert_status,
+        "certification_status": (
+            "exact_unimodular_transform_verified" if transform_verified
+            else "transform_verification_failed"
+        ),
         "lattice_id": int(stored["id"]),
         "basis_count": len(reduced),
         "basis_required": int(required),
@@ -1258,11 +1256,11 @@ def height_lattice_reduction(
         "positive_definite_screen": bool(
             result.get("positive_definite_screen")
         ),
-        "rigorous_lower": cert.get("rigorous_lower"),
-        "rank_growth": cert.get("rank_growth", 0),
-        "certificate_attempts": cert.get("exact_attempts", 0),
-        "certificate_outcomes": cert.get("attempt_outcomes", []),
-        "certificate_reason": cert.get("reason"),
+        "rigorous_lower": _rigorous_lower(db, curve_id),
+        "rank_growth": 0,
+        "certificate_attempts": 0,
+        "certificate_outcomes": [],
+        "certificate_reason": "known_subgroup_change_of_basis",
         "attempt_number": attempt_number,
         "attempt_timeout": timeout,
         "retry_policy": retry_policy,

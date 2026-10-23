@@ -172,10 +172,16 @@ def _load_cache_candidates(cache_dir, key, bound, family, family_spec, *, checkp
 
 def get_tables(family, family_spec, bound, current, args):
     key = family_cache_key(family_spec, family)
+    # Older JSON-family tables could be all None: rational coefficients were
+    # evaluated with a finite-field parameter before coercion to GF(p).
+    # Keep those cached tables out of the corrected scoring path.
+    formula_family = family.__class__.__module__ == "rank42.formula_family"
+    if formula_family:
+        key = f"{key}-formula-modp-v2"
     score_method = str(getattr(args, "score_method", "nagao") or "nagao")
     if score_method == "mestre_nagao":
         key = f"{key}-mestre-nagao"
-    compatible_keys = (key,) if score_method == "mestre_nagao" else (key,) + tuple(
+    compatible_keys = (key,) if score_method == "mestre_nagao" or formula_family else (key,) + tuple(
         candidate for candidate in family_cache_keys(family_spec, family)
         if candidate != key
     )

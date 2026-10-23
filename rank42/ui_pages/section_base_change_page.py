@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+from fractions import Fraction
 
 import streamlit as st
 
-from rank42.geometry_research import recent_experiments, run_experiment, save_experiment
+from rank42.geometry_research import (
+    recent_experiments, register_rank_jump_family, run_experiment, save_experiment,
+)
+from rank42.pipeline_catalog import template_stages
 from rank42.plugins import Plugin, discover_plugins, variant_family_definition
 from .common import setting
 
@@ -310,4 +314,210 @@ def sections_page(db, ctx):
 
 
 def base_change_page(db, ctx):
-    _page(db, ctx, "base_change")
+    automatic, manual = st.tabs(["Autonomous rank jumps", "Manual base change"])
+    with automatic:
+        _rank_jump_constructor_page(db, ctx)
+    with manual:
+        _page(db, ctx, "base_change")
+
+
+def _rank_jump_constructor_page(db, ctx):
+    mode = "rank_jump_constructor"
+    st.markdown("#### Discover rank raising base changes")
+    st.caption("Build quadratic covers from bounded x(t) searches or an additional certified seed point. Exact equations and rank evidence stay with each result.")
+    source_kind = st.segmented_control(
+        "Start from", ["Family", "Custom Formula"], default="Family",
+        key=f"rh-geometry-{mode}-source-kind",
+    ) or "Family"
+    family, source = _family_selector(ctx, mode, source_kind)
+    if family is None:
+        return
+    prefix = f"rh-geometry-{mode}"
+    seed_sections = family.get("sections") or []
+    seed_ids = {section.get("source_curve_id") for section in seed_sections
+                if isinstance(section, dict) and section.get("source_curve_id") is not None}
+    anchor_options = []
+    anchor_evidence = None
+    if (len(seed_ids) == 1 and len(seed_sections) == 2
+            and family.get("parameter") == "T"
+            and all(isinstance(section, dict) and section.get("source_curve_id") is not None
+                    for section in seed_sections)):
+        curve_id = int(next(iter(seed_ids)))
+        used_ids = {int(section["source_point_id"]) for section in seed_sections
+                    if isinstance(section, dict) and section.get("source_point_id") is not None}
+        evidence_rows = db.execute(
+            "SELECT id,rigorous,rigorous_lower,status,model_a_invariants_json,points_json "
+            "FROM rank_evidence WHERE curve_id=? AND rigorous=1 AND rigorous_lower>=3 "
+            "AND status='completed' ORDER BY rigorous_lower DESC,id DESC LIMIT 10",
+            (curve_id,),
+        ).fetchall()
+        for evidence_row in evidence_rows:
+            model = json.loads(evidence_row["model_a_invariants_json"])
+            if len(model) != 5 or any("T" in str(value) for value in model):
+                continue
+            basis = json.loads(evidence_row["points_json"])
+            basis_keys = {(Fraction(pair[0]), Fraction(pair[1])) for pair in basis
+                          if isinstance(pair, (list, tuple)) and len(pair) >= 2}
+            if not all((Fraction(section["x"]), Fraction(section["y"])) in basis_keys
+                       for section in seed_sections if isinstance(section, dict)):
+                continue
+            rows = db.execute(
+                "SELECT id,x,y FROM points WHERE curve_id=? AND exact_verified=1 "
+                "AND rigorous_independent=1 ORDER BY id", (curve_id,),
+            ).fetchall()
+            anchor_options = [row for row in rows if int(row["id"]) not in used_ids
+                              and (Fraction(row["x"]), Fraction(row["y"])) in basis_keys]
+            if anchor_options:
+                anchor_evidence = {"id": int(evidence_row["id"]), "rigorous": True,
+                                   "rigorous_lower": int(evidence_row["rigorous_lower"]),
+                                   "status": "completed", "model_a_invariants": model,
+                                   "points": basis}
+                break
+    source_hash = hashlib.sha256(json.dumps(family, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    history = []
+    for candidate in recent_experiments(ctx.project_root, limit=30):
+        if not candidate.name.startswith(f"{mode}-"):
+            continue
+        try:
+            archived = json.loads(candidate.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if archived.get("source_sha256") == source_hash:
+            history.append((candidate, archived))
+    if history:
+        with st.expander("Saved constructor runs", expanded=False):
+            selected = st.selectbox(
+                "Run", range(len(history)),
+                format_func=lambda index: (
+                    f"{history[index][0].name} · "
+                    f"{len((history[index][1].get('result') or {}).get('covers') or [])} covers"
+                ), key=f"{prefix}-saved-run")
+            if st.button("Open saved result", key=f"{prefix}-open-saved"):
+                chosen, archived = history[selected]
+                st.session_state[f"{prefix}-result"] = (archived, str(chosen))
+    with st.container(border=True):
+        search, timeout = _search_controls(prefix)
+        if anchor_options:
+            use_anchor = st.checkbox(
+                f"Keep seed curve #{curve_id} in the new family", value=True,
+                key=f"{prefix}-use-seed",
+                help="Try a certified point outside the pencil's two sections before small x formulas.",
+            )
+            if use_anchor:
+                chosen = st.selectbox(
+                    "Additional certified seed point", anchor_options,
+                    format_func=lambda row: f"Point #{row['id']} · x={str(row['x'])[:42]}…",
+                    key=f"{prefix}-seed-point",
+                )
+                search["seed_anchor"] = {
+                    "curve_id": curve_id, "parameter": "0", "point_id": int(chosen["id"]),
+                    "point": [chosen["x"], chosen["y"]], "evidence": anchor_evidence,
+                }
+        elif seed_ids and family.get("parameter") == "T":
+            st.caption("No third point from a certified seed basis is available for an anchored cover.")
+        first, second, third = st.columns(3)
+        search["cover_degree"] = first.selectbox(
+            "Cover degree", [2, 4], index=1, key=f"{prefix}-cover-degree",
+            help="Degree 1–2 covers may be parametrized; degree 3–4 covers have genus one.",
+        )
+        search["point_bound"] = second.number_input(
+            "Rational point bound", min_value=1, max_value=32, value=8,
+            key=f"{prefix}-point-bound",
+        )
+        search["max_results"] = third.number_input(
+            "Max covers", min_value=1, max_value=32, value=8,
+            key=f"{prefix}-max-results",
+        )
+    if st.button("Find rank raising transformations", type="primary",
+                 icon=":material/auto_awesome:", key=f"{prefix}-run", width="stretch"):
+        science_python = setting(db, "science_python", ctx.detected_science_python())
+        try:
+            with st.spinner("Searching exact quadratic covers…"):
+                result = run_experiment(science_python=science_python, family=family,
+                                        mode=mode, config=search, timeout=timeout)
+                path = save_experiment(ctx.project_root, result)
+            st.session_state[f"{prefix}-result"] = (result, str(path))
+        except Exception as exc:
+            st.error(f"Constructor did not complete: {exc}")
+    saved = st.session_state.get(f"{prefix}-result")
+    if not saved or saved[0].get("source_sha256") != source_hash:
+        return
+    result, path = saved
+    body = result.get("result") or {}
+    covers = body.get("covers") or []
+    certified = [cover for cover in covers if cover.get("independence") == "certified_over_quadratic_cover"
+                 or cover.get("seed_fiber_rank_certificate")]
+    metrics = st.columns(3)
+    metrics[0].metric("x candidates", body.get("x_candidates_checked", 0))
+    metrics[1].metric("Exact covers", len(covers))
+    metrics[2].metric("Covers with a certified new section", len(certified))
+    st.caption(f"Bounded {body.get('coverage')} search · artifact `{path}`")
+    if len(certified) > 1:
+        st.caption("Each section is independent of the original family. Independence between the new sections has not been proved.")
+    if body.get("known_sections_invalid"):
+        st.warning("Some declared source sections failed their exact identities; no inherited rank claim is made.")
+    if not covers:
+        st.info("No quadratic cover appeared within these bounds. Increase the x degree, coefficient range, or trial budget.")
+    for index, cover in enumerate(covers, 1):
+        label = f"Cover {index} · genus {cover['cover_genus']} · {cover['independence'].replace('_', ' ')}"
+        with st.expander(label, expanded=index == 1):
+            st.code(f"x(t) = {cover['x']}\n{cover['cover_equation']}\nsquare multiplier = {cover['square_multiplier']}", language="text")
+            if cover.get("parameter_map"):
+                st.markdown(f"**Rational base change:** `{body['parameter']} = {cover['parameter_map']}`")
+            if cover.get("rational_cover_point"):
+                st.caption(f"Rational cover point: {cover['rational_cover_point']}")
+            if cover.get("seed_fiber_rank_certificate"):
+                seed = cover["seed_fiber_rank_certificate"]
+                st.success(f"Seed curve #{seed['curve_id']} remains a rational fiber at u={seed['derived_parameter']}. "
+                           f"Three sections specialize into its certified basis; generic rank ≥3.")
+            elif cover.get("seed_fiber"):
+                st.info("This cover retains the seed fiber; a three-section rank certificate is still open.")
+            if cover.get("non_torsion_witness"):
+                st.success("New section certified independent of every inherited Q(t) section by an exact non-torsion specialization.")
+                if cover.get("rank_lower_bound_growth_certified"):
+                    st.caption(f"Generic rank lower bound: ≥{body['source_rank_lower_certified']} → ≥{cover['derived_family']['generic_rank']}")
+                elif cover.get("seed_fiber_rank_certificate"):
+                    st.caption("Generic rank lower bound: ≥3 from the certified seed basis.")
+                else:
+                    st.caption("The new section gives a generic lower bound of at least 1; a certified source basis is needed to state a larger inherited bound.")
+                st.json(cover["non_torsion_witness"])
+            elif cover["cover_genus"] == 1:
+                st.info("Genus-one cover found. A rational point or non-torsion witness was not certified within this bounded search.")
+            else:
+                st.info("Exact construction found; generic independence is still open.")
+            if cover.get("derived_family"):
+                if cover.get("independence") == "certified_over_quadratic_cover" or cover.get("seed_fiber_rank_certificate"):
+                    if st.button("Prepare Pipeline search", icon=":material/arrow_forward:",
+                                 key=f"{prefix}-pipeline-{result['source_sha256'][:12]}-{index}"):
+                        try:
+                            plugin_id, _ = register_rank_jump_family(ctx.project_root, result, index - 1)
+                            _handoff_rank_jump_family(plugin_id, index)
+                        except Exception as exc:
+                            st.error(f"Could not prepare the derived family: {exc}")
+                    st.caption("Registers this exact family and opens an Auto Pipeline draft for review and launch.")
+                st.download_button("Download derived family", json.dumps(cover["derived_family"], indent=2),
+                                   file_name=f"rank-jump-family-{index}.json", mime="application/json",
+                                   key=f"{prefix}-family-{index}")
+    st.download_button("Download full experiment", json.dumps(result, indent=2),
+                       file_name=__import__("pathlib").Path(path).name,
+                       mime="application/json", key=f"{prefix}-download")
+
+
+def _handoff_rank_jump_family(plugin_id, cover_number):
+    st.session_state["byo_builder_state_version"] = 2
+    st.session_state["byo-target-mode"] = "Family"
+    st.session_state["byo_target_mode_revision"] = int(
+        st.session_state.get("byo_target_mode_revision") or 0) + 1
+    st.session_state["byo-family"] = f"{plugin_id}:derived"
+    st.session_state["byo-family-source"] = "Generated candidates"
+    st.session_state["byo_stage_mode"] = "family"
+    st.session_state["byo_stages"] = template_stages("auto", "family")
+    st.session_state["byo_loaded_pipeline_id"] = None
+    st.session_state["byo_stage_revision"] = int(
+        st.session_state.get("byo_stage_revision") or 0) + 1
+    st.session_state["byo_pipeline_name_input"] = f"Rank-Jump Cover {cover_number}"
+    st.session_state["builder_main_view"] = "Editor"
+    st.session_state["builder_view_revision"] = int(
+        st.session_state.get("builder_view_revision") or 0) + 1
+    st.session_state["rh_page"] = "Pipelines"
+    st.rerun()

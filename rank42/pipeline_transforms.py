@@ -9,6 +9,9 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+import sys
+from functools import lru_cache
+from pathlib import Path
 
 from sage.all import QQ, ZZ, EllipticCurve
 
@@ -22,6 +25,7 @@ from rank42.constructive_family import (
     trace_section_constructor,
 )
 from rank42.curve_identity import get_or_create_canonical_curve
+from rank42.db import get_curve
 from rank42.isogeny_discovery import run_isogeny_degree_discovery
 from rank42.plugin_hook_runner import run_isolated_plugin_hook
 from rank42.pipeline_state import (
@@ -38,6 +42,7 @@ FANOUT_STAGE_IDS = frozenset({
     "quadratic_twist_sweep",
     "targeted_twist_search",
     "rank_jump_base_change",
+    "autonomous_rank_jump",
     "parameter_pullback",
     "isogeny_walk",
     "surface_fibration_switch",
@@ -708,6 +713,8 @@ def plugin_base_change_children(db, *, context, config):
         "a_invariants": [str(x) for x in context["E"].a_invariants()],
         "config": dict(config or {}),
     }
+
+
     raw = run_isolated_plugin_hook(
         plugin,
         "derive_pipeline_transform",
@@ -768,6 +775,91 @@ def plugin_base_change_children(db, *, context, config):
         "hard_isolated": True,
         "heuristic_only": False,
     }
+
+@lru_cache(maxsize=16)
+def _cached_rank_jump_search(source_path, source_mtime, config_json):
+    from rank42.geometry_research import run_experiment
+
+    family = json.loads(Path(source_path).read_text(encoding="utf-8"))
+    config = json.loads(config_json)
+    return run_experiment(science_python=sys.executable, family=family,
+                          mode="rank_jump_constructor", config=config,
+                          timeout=int(config.get("timeout", 120)))
+
+
+def autonomous_rank_jump_children(db, *, context, config):
+    variant = context.get("variant")
+    spec = str(getattr(variant, "family_spec", "") or "")
+    if not spec.startswith("json:"):
+        return {"status": "skipped", "reason": "requires a JSON formula family",
+                "transform_kind": "autonomous_rank_jump", "children": []}
+    source = Path(spec[5:])
+    search_config = {key: config.get(key) for key in
+                     ("degree", "coefficient_bound", "max_trials", "point_bound",
+                      "cover_degree", "max_results", "timeout", "rational_x")
+                     if config.get(key) is not None}
+    result = _cached_rank_jump_search(str(source), source.stat().st_mtime_ns,
+                                      json.dumps(search_config, sort_keys=True))
+    from rank42.geometry_research import save_experiment
+    project_root = next((parent.parent for parent in source.parents if parent.name == "plugins"),
+                        source.parent)
+    artifact = save_experiment(project_root, result)
+    children = []
+    from sage.all import sage_eval
+    for index, cover in enumerate(result["result"].get("covers") or [], 1):
+        if cover.get("independence") != "certified_over_quadratic_cover":
+            continue
+        derived = cover.get("derived_family") or {}
+        if not derived:
+            continue
+        for u in (QQ(0), QQ(1), QQ(-1), QQ(2), QQ(-2), QQ(1)/2, QQ(-1)/2, QQ(3)):
+            try:
+                def evaluate(expression):
+                    return QQ(sage_eval(str(expression).replace("^", "**"), locals={"u": u}))
+                tp = evaluate(cover["parameter_map"])
+                E = EllipticCurve(QQ, [evaluate(a) for a in derived["a_invariants"]])
+                new = derived["sections"][-1]
+                P = E(evaluate(new["x"]), evaluate(new["y"]))
+                if P.is_zero():
+                    continue
+                child = _store_direct_child(
+                    db, parent_curve_id=int(context["curve_id"]),
+                    kind="autonomous_rank_jump", token=f"cover-{index}-u-{u}", E=E)
+                stored = get_curve(db, int(child["curve_id"]))
+                stored_curve = EllipticCurve(
+                    QQ, [QQ(v) for v in json.loads(stored["a_invariants_json"])])
+                mapped = E.isomorphism_to(stored_curve)(P)
+                child["metadata"].update({
+                    "source_family_sha256": result["source_sha256"],
+                    "cover_equation": cover["cover_equation"],
+                    "parameter_map": cover["parameter_map"],
+                    "base_parameter": str(u), "source_parameter": str(tp),
+                    "independence": cover["independence"],
+                    "derived_generic_rank_lower": derived.get("generic_rank"),
+                    "proof_witness": cover["non_torsion_witness"],
+                })
+                upsert_point(db, curve_id=int(child["curve_id"]), x=mapped[0], y=mapped[1],
+                             source="pipeline_autonomous_rank_jump", role="candidate_witness",
+                             exact_verified=True, independence_status="unknown",
+                             rigorous_independent=False,
+                             search_ref=f"pipeline:rank_jump:{context['pipeline_run_id']}:{index}:{u}",
+                             metadata={"cover": cover["cover_equation"], "source_parameter": str(tp)})
+                children.append(child)
+                if len(children) >= max(1, int(config.get("max_children", 4))):
+                    break
+            except (ValueError, ArithmeticError, ZeroDivisionError):
+                continue
+        if len(children) >= max(1, int(config.get("max_children", 4))):
+            break
+    return {"status": "completed" if children else "inconclusive",
+            "reason": None if children else "no certified derived fibers within the constructor bounds",
+            "transform_kind": "autonomous_rank_jump",
+            "children": children, "covers_found": len(result["result"].get("covers") or []),
+            "covers_with_independent_new_section": sum(
+                c.get("independence") == "certified_over_quadratic_cover"
+                for c in result["result"].get("covers") or []),
+            "source_sha256": result["source_sha256"], "artifact": str(artifact),
+            "heuristic_only": False}
 
 def _constructive_loop_round_status(*statuses):
     normalized = [str(status or "inconclusive") for status in statuses]
@@ -1927,6 +2019,8 @@ def derive_transform_children(stage_id, db, *, context, config):
         return parameter_pullback_children(context=context, config=config)
     if stage_id == "rank_jump_base_change":
         return plugin_base_change_children(db, context=context, config=config)
+    if stage_id == "autonomous_rank_jump":
+        return autonomous_rank_jump_children(db, context=context, config=config)
     if stage_id == "isogeny_walk":
         return isogeny_walk_children(db, context=context, config=config)
     if stage_id == "surface_fibration_switch":

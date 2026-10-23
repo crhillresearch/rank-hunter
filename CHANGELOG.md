@@ -26,6 +26,18 @@ All notable changes to Rank Hunter are documented here.
   sections forward, and register the result for Pipeline searches. A generic
   rank lower bound of one requires an exact infinite-order specialization.
   The search can try nearby rational x-values and wider conic bounds.
+- Added automatic fibration discovery to **X1152 Neighbor Hunt**. It searches
+  candidate isotropic classes from known sections, tries exact 2-neighbor
+  constructions, and saves the resulting equations and proof records.
+- Added **Autonomous Rank-Jump** for JSON formula families. It searches for
+  quadratic multisections, parametrizes genus-zero covers when it finds a
+  rational point, and feeds derived fibers into Pipeline. It also records
+  genus-one covers as leads. A higher generic rank lower bound requires a
+  certified source bound and an exact non-torsion witness for the new section.
+- Curve-seeded pencils can now use a third point from the seed curve's
+  certified basis to build a quadratic cover that keeps the seed at `u=0`.
+  The constructor checks all three sections against the stored rank evidence
+  before claiming a generic rank lower bound of three.
 
 ### Changed
 
@@ -46,6 +58,9 @@ All notable changes to Rank Hunter are documented here.
   certification before they affect a curve's proven rank.
 - Made Sections and Base Change easier to start from a saved family or a custom
   formula. Verified sections can be passed directly into Base Change.
+- Certified rank-jump covers can now be registered and opened as a ready-to-run
+  Family Pipeline draft from the Base Change results, without handling the
+  family JSON by hand.
 - Reworked the Pencils registry so a curve-seeded pencil is easier to inspect
   and send into a search.
 - Put elapsed time, the current Pipeline stage, and recent chart progress in
@@ -59,9 +74,39 @@ All notable changes to Rank Hunter are documented here.
   2- and 3-isogeny neighbors. For degree 3, the descent module verifies the
   isogeny and transfers a PARI rank bound from the neighboring curve; it does
   not claim a 3-isogeny Selmer calculation.
+- Made **X1152 Neighbor Hunt** easier to use, with clearer construction,
+  discovery, and saved-model views.
+- Let resumed X1152 neighbor searches set a certified rank goal for point
+  growth. The new #3900 neighbor 028 campaign is searching a larger parameter
+  box with a goal of rank 28.
+- Made the **MW Growth Loop** spend its quartic searches more deliberately on
+  curves with a certified rank of at least 27. It uses the known point lattice,
+  point heights, and past chart searches to choose fresh search anchors. New
+  points still need the usual exact independence check.
 
 ### Fixed
 
+- Fixed Autonomous Rank-Jump stopping while saving a result when Sage returned
+  an integer value for a cover's genus.
+- Fixed the constructor overlooking rational points on linear covers with
+  large coefficients. It now parametrizes those covers directly and uses
+  finite-field reduction to check new sections without enormous point multiples.
+- Kept the parent candidate in Autonomous Rank-Jump searches when the bounded
+  constructor finds no certified child. A fruitless transform now reports an
+  inconclusive result and lets the later search stages run.
+- Fixed Mestre–Nagao scoring for JSON families with rational coefficients.
+  Their prime tables were coming back empty, leaving every candidate tied at
+  zero; corrected tables use a new cache key so old empty scores are skipped.
+- When a seed-anchored family reaches its exact source parameter, Pipeline now
+  uses the existing curve and its rank evidence. It no longer creates a second
+  curve that only sees the family's three generic sections.
+- Let target-curve Pipelines start with lattice and point-growth modules when
+  the selected curve already has certified rank evidence and stored points.
+  The modules still check the actual basis when they run.
+- Height-Lattice Reduction now checks its exact unimodular change of basis
+  instead of sending known LLL combinations back as possible new generators.
+  Missing-Generator planning can use the saved height pairing on the original
+  certified basis even when the stored lattice uses an LLL-reduced basis.
 - Stopped the Pipeline's quartic rank-growth loop from starting on a curve
   whose rigorous lower and upper bounds already prove its exact rank. New
   quartic coordinates on such a curve cannot increase its rank.
