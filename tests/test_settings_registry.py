@@ -21,6 +21,10 @@ from rank42.settings_registry import (
 
 
 EXPECTED_KEYS = {
+    "agent_enabled",
+    "default_ai_service",
+    "gemini_default_model",
+    "openai_default_model",
     "deep_cert_timeout",
     "mwrank_rank_timeout",
     "pari_rank_timeout",
@@ -85,6 +89,10 @@ def test_setting_scopes_cover_user_and_runtime_configuration_only():
     }
     assert setting_spec("ui_theme").scope == USER_SETTING
     assert setting_spec("ui_appearance").scope == USER_SETTING
+    assert setting_spec("agent_enabled").scope == USER_SETTING
+    assert setting_spec("default_ai_service").scope == USER_SETTING
+    assert setting_spec("gemini_default_model").scope == USER_SETTING
+    assert setting_spec("openai_default_model").scope == USER_SETTING
 
     for key in {
         "science_python",
@@ -331,11 +339,10 @@ def test_settings_page_shows_runtime_status_without_eager_health_probe():
     assert "def _runtime_resolution(values):" in source
     assert "probe_runtime_setting(" in source
     assert "run_probe=False" in source
-    assert 'st.markdown("#### Runtime status")' in source
+    assert 'rh-settings-runtime-status' in source
     assert '"Default point engine"' in source
-    assert '"Required runtimes"' in source
-    assert '"Optional GPU"' in source
-    assert '"Active point engine"' in source
+    assert 'required_ready = all(' in source
+    assert '"ratpoints_gpu"' in source
     assert '"Configured"' not in source[source.index("def _render_effective_runtime_summary"):source.index("def _runtime_settings")]
     assert '"Resolved executable"' not in source[source.index("def _render_effective_runtime_summary"):source.index("def _runtime_settings")]
     assert '"Test runtimes"' in source

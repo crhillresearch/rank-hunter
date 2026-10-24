@@ -1,4 +1,4 @@
-"""Run a bounded Gemini-directed sequence of ordinary Rank Hunter Pipelines."""
+"""Run a bounded AI-directed sequence of ordinary Rank Hunter Pipelines."""
 
 from __future__ import annotations
 
@@ -24,9 +24,11 @@ from rank42.ai_search import (
     validate_decision,
     verified_campaign_best,
 )
+from rank42.ai_provider import default_model, selected_service, service_for_model
 from rank42.db import connect_existing, now
 from rank42.curve_research_state import get_curve_research_state
 from rank42.gemini_api import GeminiAPIError
+from rank42.openai_api import OpenAIAPIError
 from rank42.manage_store import update_campaign as update_research_campaign
 from rank42.pipeline_state import (
     create_pipeline_run,
@@ -41,6 +43,16 @@ from rank42.settings_registry import science_python_bootstrap_value, setting_val
 
 class CampaignStopped(Exception):
     pass
+
+
+def _active_model(db, campaign_model):
+    service = selected_service(db)
+    try:
+        if service_for_model(str(campaign_model)) == service:
+            return str(campaign_model), True
+    except ValueError:
+        pass
+    return default_model(service, db=db), False
 
 
 _CHILD = None
@@ -195,7 +207,7 @@ def run_campaign(db, root, campaign_id):
     elapsed = lambda: prior_elapsed + (time.monotonic() - started)
     goal_rank = int(config["goal_rank"])
     print(f"AI HUNT · #{campaign_id} · {row['name']}", flush=True)
-    print(f"target={mode} · rigorous goal ≥{goal_rank} · model={row['model']}", flush=True)
+    print(f"target={mode} · rigorous goal ≥{goal_rank} · AI service={selected_service(db)}", flush=True)
     print(f"budget={config['max_total_minutes']} min · rounds={config['max_rounds']} "
           f"· run≤{config['max_run_minutes']} min", flush=True)
 
@@ -269,17 +281,24 @@ def run_campaign(db, root, campaign_id):
                 run_id = int(pending_round["pipeline_run_id"])
                 print(f"RESUMING round {round_number} · Pipeline #{run_id}", flush=True)
             else:
+                active_model, same_service = _active_model(db, row["model"])
                 initial = (
                     json.loads(current["next_decision_json"])
-                    if round_number == first_round and current["next_decision_json"]
+                    if same_service and round_number == first_round and current["next_decision_json"]
                     else config.get("initial_decision") if round_number == 1 else None
-                )
+                ) if same_service else None
+                if initial and initial.get("model_used"):
+                    try:
+                        if service_for_model(str(initial["model_used"])) != selected_service(db):
+                            initial = None
+                    except ValueError:
+                        initial = None
                 decision = (
                     validate_decision(initial, options=options, config=config,
                                       previous=previous, target_mode=mode,
                                       target_summary=config.get("target_summary"))
                     if initial else plan_strategy(
-                        root, model=row["model"], objective=row["objective"],
+                        root, model=active_model, objective=row["objective"],
                         target_mode=mode,
                         target_summary=config["target_summary"],
                         goal_rank=goal_rank, config=config, options=options,
@@ -321,7 +340,7 @@ def run_campaign(db, root, campaign_id):
             print(f"\nROUND {round_number}/{config['max_rounds']} · Pipeline #{run_id}", flush=True)
             print(f"strategy={option['name']} · depth={decision['depth']} "
                   f"· window={decision['window']} · keep≤{decision['candidate_limit']}", flush=True)
-            print(f"Gemini reason: {decision['reason']}", flush=True)
+            print(f"AI strategy reason: {decision['reason']}", flush=True)
             remaining = float(config["max_total_minutes"]) * 60 - elapsed()
             seconds = min(float(config["max_run_minutes"]) * 60, remaining)
             command = [science, "-u", "-m", "rank42.pipeline_runner",
@@ -378,12 +397,12 @@ def run_campaign(db, root, campaign_id):
                 share_parameters=bool(config.get("share_candidate_parameters")),
             )
             next_decision = plan_strategy(
-                root, model=row["model"], objective=row["objective"],
+                root, model=_active_model(db, row["model"])[0], objective=row["objective"],
                 target_mode=mode, target_summary=config["target_summary"],
                 goal_rank=goal_rank, config=config, options=options,
                 observations=observations, previous=previous,
             )
-        except (GeminiAPIError, ValueError) as exc:
+        except (GeminiAPIError, OpenAIAPIError, ValueError) as exc:
             print(f"NEXT_MOVE_UNAVAILABLE {exc}", flush=True)
         if next_decision:
             print(f"NEXT_MOVE {next_decision['recipe_id']} · "

@@ -38,6 +38,7 @@ from rank42.ui_components import rh_key
 from rank42.ui_extensions import enabled_extension_pages, render_extension
 from rank42.ui_pages.common import PAGE_ICONS, UIContext, active_campaign_pin, configure, fa_css_mask_uri, job_strip
 from rank42.ui_store import ensure_dispatcher_running
+from rank42.ui_research_agent import render as render_research_agent
 from rank42.ui_pages import (
     dashboard,
     search_page,
@@ -810,6 +811,7 @@ def main():
             )
 
         _render_route(db)
+        render_research_agent(db, ctx, page)
         _page_end_runway()
 
         if st.session_state.pop("_rh_job_just_started", None) is not None:

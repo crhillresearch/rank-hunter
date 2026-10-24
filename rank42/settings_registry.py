@@ -66,6 +66,26 @@ SETTING_SPECS = {
         "enum:light,dark", USER_SETTING, False, False,
         "Selected Rank Hunter light/dark appearance.",
     ),
+    "agent_enabled": SettingSpec(
+        "agent_enabled", (bool,), "literal", True,
+        "boolean", USER_SETTING, False, False,
+        "Show the floating Rank Hunter Agent when the selected AI service is configured.",
+    ),
+    "default_ai_service": SettingSpec(
+        "default_ai_service", (str,), "literal", "Gemini",
+        "enum:Gemini,OpenAI", USER_SETTING, False, False,
+        "AI service used by Agent and AI Hunt.",
+    ),
+    "gemini_default_model": SettingSpec(
+        "gemini_default_model", (str,), "literal", "gemini-3.5-flash-lite",
+        "enum:gemini-3.5-flash-lite,gemini-3.8-flash", USER_SETTING, False, False,
+        "Default Gemini model for Agent and new AI Hunts.",
+    ),
+    "openai_default_model": SettingSpec(
+        "openai_default_model", (str,), "literal", "gpt-6.1-sol",
+        "enum:gpt-6.1-sol,gpt-6-luna,gpt-6-astra", USER_SETTING, False, False,
+        "Default OpenAI model for Agent and new AI Hunts.",
+    ),
     "science_python": SettingSpec(
         "science_python", (str,), "ui_context.detected_science_python", None,
         "runtime_probe_required", RUNTIME_DEFAULT, False, False,
@@ -159,6 +179,15 @@ def validate_setting_value(key, value):
         value = str(value).lower()
         if value not in {"light", "dark"}:
             raise ValueError("ui_appearance must be light or dark")
+    elif policy == "enum:Gemini,OpenAI":
+        if value not in {"Gemini", "OpenAI"}:
+            raise ValueError("default_ai_service must be Gemini or OpenAI")
+    elif policy == "enum:gemini-3.5-flash-lite,gemini-3.8-flash":
+        if value not in {"gemini-3.5-flash-lite", "gemini-3.8-flash"}:
+            raise ValueError("unsupported default Gemini model")
+    elif policy == "enum:gpt-6.1-sol,gpt-6-luna,gpt-6-astra":
+        if value not in {"gpt-6.1-sol", "gpt-6-luna", "gpt-6-astra"}:
+            raise ValueError("unsupported default OpenAI model")
     elif policy == "enum:CPU,GPU":
         value = str(value).upper()
         if value not in {"CPU", "GPU"}:

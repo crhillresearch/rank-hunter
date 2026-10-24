@@ -1,4 +1,4 @@
-"""Set a research goal and let Gemini direct bounded Rank Hunter Pipelines."""
+"""Set a research goal and let the selected AI service direct bounded Pipelines."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import sys
 
 import streamlit as st
 
+from rank42.ai_provider import (default_model, key_source, models_for_service,
+                                selected_service)
 from rank42.ai_search import (
     continue_ai_campaign,
     create_ai_campaign,
@@ -22,12 +24,8 @@ from rank42.ai_search import (
     update_ai_campaign,
 )
 from rank42.db import connect_existing
-from rank42.gemini_api import (
-    AVAILABLE_MODELS,
-    DEFAULT_MODEL,
-    GeminiAPIError,
-    key_source,
-)
+from rank42.gemini_api import GeminiAPIError
+from rank42.openai_api import OpenAIAPIError
 from rank42.manage_store import create_campaign, update_campaign
 from rank42.plugins import Plugin, discover_plugins, is_enabled
 from rank42.pipeline_catalog import stage_spec
@@ -159,9 +157,9 @@ def _budget_controls(goal_rank):
              "within 10 ranks of the local best are preserved.",
     ))
     allow_pipeline_build = st.toggle(
-        "Let Gemini build Pipelines",
+        "Let the AI service build Pipelines",
         value=True, key="ai-search-build-pipelines",
-        help="Gemini may assemble compatible Rank Hunter modules. Every sequence "
+        help="The selected AI service may assemble compatible Rank Hunter modules. Every sequence "
              "must pass Pipeline validation, and stage settings stay within this hunt's limits.",
     )
     auto_continue = st.toggle(
@@ -203,7 +201,7 @@ def _budget_controls(goal_rank):
             "Denominator limit", min_value=10, max_value=100000,
             value=300, step=50, key="ai-search-denominator"))
         share_parameters = st.toggle(
-            "Send candidate parameter values to Gemini when replanning",
+            "Send candidate parameter values to the AI service when replanning",
             value=False, key="ai-search-share-parameters",
         )
     return {
@@ -244,7 +242,7 @@ def _overview(db, campaigns, source):
     esc = html.escape
     if featured is None:
         heading = "Set a goal. Let the search adapt."
-        detail = "Gemini chooses the next Pipeline from real search results. Rank Hunter verifies every rank claim."
+        detail = "The selected AI service chooses the next Pipeline from real search results. Rank Hunter verifies every rank claim."
         badge = "READY" if source else "SETUP NEEDED"
         best = "—"
         goal = "Choose a target"
@@ -385,7 +383,8 @@ def _recent_campaigns(ctx):
 def page(db, ctx):
     ensure_ai_schema(db)
     reconcile_ai_campaigns(db)
-    source = key_source(ctx.project_root)
+    service = selected_service(db)
+    source = key_source(ctx.project_root, service)
     campaigns = list_ai_campaigns(db, limit=8)
     st.session_state.setdefault(
         "ai-search-view-v2", "Campaigns" if campaigns else "New hunt"
@@ -404,7 +403,7 @@ def page(db, ctx):
 
     if not source:
         with st.container(key="rh-ai-setup", border=True):
-            st.warning("Add a Gemini API key in Settings → Services to launch a hunt.")
+            st.warning(f"Add a {service} API key in Settings → Services to launch a hunt.")
             if st.button("Open Services", icon=":material/settings:",
                          key="ai-search-open-services"):
                 st.session_state["rh_page"] = "Settings"
@@ -442,7 +441,7 @@ def page(db, ctx):
                 st.session_state["ai-search-objective"] = prompt_presets[preset]
             st.session_state["ai-search-last-prompt-preset"] = preset
         objective = st.text_area(
-            "What should Gemini try to discover?",
+            f"What should {service} try to discover?",
             value="Find a curve with a higher rigorously certified rank. Change "
                   "strategies when searches stop finding independent points.",
             height=84, key="ai-search-objective",
@@ -452,12 +451,13 @@ def page(db, ctx):
             "Rigorous rank goal", min_value=1, max_value=100, value=28,
             key="ai-search-rank-goal",
         ))
+        models = models_for_service(service)
         model = model_col.selectbox(
-            "Gemini model", AVAILABLE_MODELS,
-            index=AVAILABLE_MODELS.index(DEFAULT_MODEL),
-            key="ai-search-model-v2",
+            f"{service} model", models,
+            index=models.index(default_model(service, db=db)),
+            key=f"ai-search-model-{service.lower()}",
         )
-        st.caption("Gemini chooses a strategy. Rank Hunter checks points and rank with exact evidence.")
+        st.caption(f"{service} chooses a strategy. Rank Hunter checks points and rank with exact evidence.")
 
     with st.container(key="rh-ai-limits-card", border=True):
         st.markdown("### Set the limits")
@@ -471,7 +471,7 @@ def page(db, ctx):
         return
     with st.container(key="rh-ai-launch-card", border=True):
         st.markdown("### Launch the hunt")
-        st.caption(f"{len(options)} compatible Pipelines are available. Gemini can also build one from validated modules when enabled.")
+        st.caption(f"{len(options)} compatible Pipelines are available. {service} can also build one from validated modules when enabled.")
         fingerprint = hashlib.sha256(json.dumps(
             {"mode": mode, "target": target, "objective": objective,
              "config": config, "model": model}, sort_keys=True,
@@ -481,17 +481,17 @@ def page(db, ctx):
             preview = None
             st.session_state.pop("ai-search-preview", None)
         preview_col, start_col = st.columns([1, 2], vertical_alignment="bottom")
-        if preview_col.button("Preview Gemini strategy", icon=":material/auto_awesome:",
+        if preview_col.button(f"Preview {service} strategy", icon=":material/auto_awesome:",
                               width="stretch", disabled=not source or not objective,
                               key="ai-search-preview-button"):
             try:
-                with st.spinner("Asking Gemini to choose the first Pipeline…"):
+                with st.spinner(f"Asking {service} to choose the first Pipeline…"):
                     decision = plan_strategy(
                         ctx.project_root, model=model, objective=objective,
                         target_mode=mode, target_summary=summary,
                         goal_rank=goal_rank, config=config, options=options,
                     )
-            except (GeminiAPIError, ValueError) as exc:
+            except (GeminiAPIError, OpenAIAPIError, ValueError) as exc:
                 st.error(str(exc))
             else:
                 preview = {"fingerprint": fingerprint, "decision": decision}

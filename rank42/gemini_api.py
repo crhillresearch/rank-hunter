@@ -171,3 +171,45 @@ def generate_json(project_root: str | os.PathLike, prompt: str, *, model=DEFAULT
         raise GeminiAPIError("Gemini strategy must be a JSON object")
     decoded["_model_used"] = chosen
     return decoded
+
+
+def stream_text(project_root: str | os.PathLike, prompt: str, *, system_instruction: str,
+                model=DEFAULT_MODEL, timeout=60):
+    """Yield text chunks from Gemini's SSE endpoint without exposing the key."""
+    key = read_key(project_root)
+    if not key:
+        raise GeminiAPIError("Add a Gemini API key in Settings → Services first")
+    chosen = _model(model)
+    payload = {
+        "systemInstruction": {"parts": [{"text": str(system_instruction)}]},
+        "contents": [{"role": "user", "parts": [{"text": str(prompt)}]}],
+        "generationConfig": {"temperature": 0.25, "maxOutputTokens": 900},
+    }
+    request = urllib.request.Request(
+        f"{_API_ROOT}/{chosen}:streamGenerateContent?alt=sse",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=max(1, min(int(timeout), 90))) as response:
+            for raw_line in response:
+                if not raw_line.startswith(b"data:"):
+                    continue
+                try:
+                    item = json.loads(raw_line[5:].strip())
+                except (ValueError, UnicodeDecodeError):
+                    raise GeminiAPIError("Gemini returned an invalid chat stream") from None
+                candidates = item.get("candidates") or []
+                if not candidates:
+                    continue
+                parts = ((candidates[0].get("content") or {}).get("parts") or [])
+                for part in parts:
+                    if isinstance(part, dict) and part.get("text"):
+                        yield str(part["text"])
+    except urllib.error.HTTPError as exc:
+        raise GeminiAPIError(f"Gemini API returned HTTP {exc.code}", status_code=exc.code) from None
+    except TimeoutError:
+        raise GeminiAPIError("Gemini chat timed out", status_code=408) from None
+    except (urllib.error.URLError, OSError) as exc:
+        raise GeminiAPIError(f"Gemini API connection failed: {type(exc).__name__}") from None

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 from rank42 import __description__, __repository_url__, __title__, __version__
+from rank42.ai_provider import (SERVICES, default_model, key_source as ai_key_source,
+                                models_for_service, selected_service)
 from rank42.feature_hooks import render_feature_hook
 from rank42.gemini_api import (
     GeminiAPIError,
@@ -17,6 +21,13 @@ from rank42.icarm_api import (
     read_token,
     token_source,
     write_token,
+)
+from rank42.openai_api import (
+    OpenAIAPIError,
+    check_connection as check_openai_connection,
+    delete_local_key as delete_openai_key,
+    key_source as openai_key_source,
+    write_key as write_openai_key,
 )
 from rank42.ratpoints import vendored_executable
 from rank42.plugins import Plugin, discover_plugins
@@ -69,49 +80,31 @@ def _runtime_resolution(values):
 
 def _render_effective_runtime_summary(values, backend):
     resolved = _runtime_resolution(values)
-    active_key = "ratpoints_gpu" if str(backend).upper() == "GPU" else "ratpoints"
-
-    with st.container(border=True):
-        st.markdown("#### Runtime status")
-        engine_col, required_col, optional_col = st.columns(3)
-        engine_col.metric("Default point engine", str(backend).upper())
-        required_ready = all(
-            resolved[key].resolved
-            for key in ("science_python", "ratpoints")
+    required_ready = all(resolved[key].resolved for key in ("science_python", "ratpoints"))
+    rows = []
+    for key in ("science_python", "ratpoints", "ratpoints_gpu"):
+        probe = resolved[key]
+        status = "Found" if probe.resolved else "Missing"
+        tone = "ready" if probe.resolved else "missing"
+        path = html.escape(str(probe.resolved or probe.configured or "No executable set"))
+        rows.append(
+            f'<div class="rh-settings-runtime-row"><span class="rh-settings-runtime-label">'
+            f'{html.escape(_RUNTIME_LABELS[key])}</span>'
+            f'<span class="rh-settings-runtime-path" title="{path}">{path}</span>'
+            f'<span class="rh-settings-status rh-settings-status--{tone}">{status}</span></div>'
         )
-        required_col.metric(
-            "Required runtimes",
-            "Ready" if required_ready else "Needs attention",
-        )
-        optional_col.metric(
-            "Optional GPU",
-            "Ready" if resolved["ratpoints_gpu"].resolved else "Unavailable",
-        )
-
-        rows = []
-        for key in ("science_python", "ratpoints", "ratpoints_gpu"):
-            probe = resolved[key]
-            if key == active_key:
-                usage = "Active point engine"
-            elif key == "science_python":
-                usage = "Scientific runtime"
-            elif probe.required:
-                usage = "Required point engine"
-            else:
-                usage = "Optional accelerator"
-            rows.append(
-                {
-                    "Runtime": _RUNTIME_LABELS[key],
-                    "Requirement": "Required" if probe.required else "Optional",
-                    "Status": "Ready" if probe.resolved else "Missing",
-                    "Use": usage,
-                }
-            )
-        st.dataframe(rows, width="stretch", hide_index=True)
-        st.caption(
-            "Status above checks executable resolution only. Use Test runtimes "
-            "for actual Sage/ratpoints health probes."
-        )
+    state = "Paths found" if required_ready else "Needs attention"
+    tone = "ready" if required_ready else "missing"
+    st.html(
+        '<section class="rh-settings-runtime-status" aria-label="Runtime status">'
+        '<div class="rh-settings-runtime-heading"><div>'
+        '<span class="rh-settings-eyebrow">RUNTIME STATUS</span>'
+        f'<h3>{state}</h3><p>Executable paths are checked here. Run the health test below to verify Sage and ratpoints.</p>'
+        '</div>'
+        f'<span class="rh-settings-status rh-settings-status--{tone}">'
+        f'{html.escape(str(backend).upper())} point engine</span></div>'
+        '<div class="rh-settings-runtime-list">' + "".join(rows) + '</div></section>'
+    )
 
 
 def _runtime_settings(db, ctx):
@@ -146,12 +139,16 @@ def _runtime_settings(db, ctx):
 
     _render_effective_runtime_summary(stored_values, stored_backend)
 
-    with st.container(border=True):
-        st.markdown("#### Runtime executables")
-        st.caption(
-            "Science Python / Sage and CPU ratpoints are required. GPU ratpoints "
-            "is optional; selecting GPU makes it the default point engine when available."
-        )
+    with st.container(key="rh-settings-runtime-controls", border=True):
+        heading, engine = st.columns([3, 1], vertical_alignment="bottom")
+        heading.markdown("#### Runtime executables")
+        with engine:
+            backend = selectbox(
+                "Default point engine", ["CPU", "GPU"],
+                index=1 if stored_backend == "GPU" else 0,
+                semantic="settings-point-engine",
+            )
+        st.caption("Set the executables used by searches. Sage and CPU ratpoints are required; GPU ratpoints is optional.")
 
         science = text_input(
             "Science Python / Sage · Required",
@@ -168,74 +165,46 @@ def _runtime_settings(db, ctx):
             value=stored_values["ratpoints_gpu"],
             semantic="settings-ratpoints-gpu",
         )
-        backend = selectbox(
-            "Default point engine",
-            ["CPU", "GPU"],
-            index=1 if stored_backend == "GPU" else 0,
-            semantic="settings-point-engine",
-        )
-
         runtime_values = {
             "science_python": science.strip(),
             "ratpoints": ratpoints.strip(),
             "ratpoints_gpu": ratpoints_gpu.strip(),
         }
 
-        st.markdown("##### Test runtimes")
-        st.caption(
-            "Run the actual Sage and ratpoints health probes before saving changes."
-        )
-        if button(
-            "Test runtimes",
-            semantic="settings-test-runtimes",
-            width="stretch",
-        ):
-            _render_runtime_probes(
-                probe_runtime_bundle(
-                    runtime_values["science_python"],
-                    runtime_values["ratpoints"],
-                    runtime_values["ratpoints_gpu"],
-                )
-            )
+        with st.expander("Default time budgets", expanded=False, icon=":material/timer:"):
+            st.caption("Global defaults; individual searches can override these limits.")
+            t1, t2, t3 = st.columns(3)
+            pari_timeout = int(t1.number_input(
+                "PARI rank · seconds", min_value=10,
+                value=int(setting_value(db, "pari_rank_timeout", 300)), step=30,
+            ))
+            mwrank_timeout = int(t2.number_input(
+                "mwrank rank · seconds", min_value=10,
+                value=int(setting_value(db, "mwrank_rank_timeout", 300)), step=30,
+            ))
+            deep_timeout = int(t3.number_input(
+                "Deep cert · seconds", min_value=10,
+                value=int(setting_value(db, "deep_cert_timeout", 900)), step=60,
+            ))
 
-    with st.container(border=True):
-        st.markdown("#### Default time budgets")
-        st.caption(
-            "Global defaults only. Family Search, Pipeline stages, and Analysis "
-            "actions may override these values for a specific workflow."
-        )
-        t1, t2, t3 = st.columns(3)
-        pari_timeout = int(
-            t1.number_input(
-                "PARI rank",
-                min_value=10,
-                value=int(setting_value(db, "pari_rank_timeout", 300)),
-                step=30,
+        test_col, save_col = st.columns([1, 1], vertical_alignment="bottom")
+        with test_col:
+            test_clicked = button(
+                "Test runtimes", semantic="settings-test-runtimes",
+                icon=":material/health_and_safety:", width="stretch",
             )
-        )
-        mwrank_timeout = int(
-            t2.number_input(
-                "mwrank rank",
-                min_value=10,
-                value=int(setting_value(db, "mwrank_rank_timeout", 300)),
-                step=30,
+        with save_col:
+            save_clicked = button(
+                "Save runtime defaults", semantic="settings-save-runtimes",
+                type="primary", icon=":material/save:", width="stretch",
             )
-        )
-        deep_timeout = int(
-            t3.number_input(
-                "Deep cert",
-                min_value=10,
-                value=int(setting_value(db, "deep_cert_timeout", 900)),
-                step=60,
-            )
-        )
+        if test_clicked:
+            _render_runtime_probes(probe_runtime_bundle(
+                runtime_values["science_python"], runtime_values["ratpoints"],
+                runtime_values["ratpoints_gpu"],
+            ))
 
-    if button(
-        "Save runtime defaults",
-        semantic="settings-save-runtimes",
-        type="primary",
-        width="stretch",
-    ):
+    if save_clicked:
         probes = probe_runtime_bundle(
             runtime_values["science_python"],
             runtime_values["ratpoints"],
@@ -280,104 +249,138 @@ def _runtime_settings(db, ctx):
 
 
 def _icarm_settings(ctx):
-    st.subheader("ICARM")
-    st.caption(
-        "Submission credential only. The token is stored outside rank42.db."
-    )
-    ready = bool(read_token(ctx.project_root))
-    st.write(
-        f"Status: **{'configured' if ready else 'not configured'}**"
-        + (f" via {token_source(ctx.project_root)}" if ready else "")
-    )
-    if ready:
-        st.caption(f"Credential preview: {masked_token(ctx.project_root)}")
-        if token_source(ctx.project_root) == "local file":
-            if button(
-                "Clear local token",
-                semantic="settings-icarm-clear",
-                width="stretch",
-            ):
-                delete_local_token(ctx.project_root)
-                st.rerun()
-        else:
-            st.caption(
-                "Token is provided by the environment and cannot be cleared here."
-            )
-        return
-
-    token = text_input(
-        "ICARM token",
-        type="password",
-        value="",
-        semantic="settings-icarm-token",
-    )
-    if button(
-        "Save token",
-        semantic="settings-icarm-save",
-        width="stretch",
-        type="primary",
-        disabled=not token.strip(),
-    ):
-        write_token(ctx.project_root, token)
-        st.success("ICARM token saved locally.")
-        st.rerun()
+    with st.container(key="rh-settings-service-icarm", border=True):
+        ready = bool(read_token(ctx.project_root))
+        source = token_source(ctx.project_root) if ready else None
+        _service_heading("ICARM", source, detail="Submission token")
+        st.caption("Used for ICARM submissions. Stored outside rank42.db.")
+        if ready:
+            st.caption(f"Token: {masked_token(ctx.project_root)}")
+            if source == "local file":
+                if button("Clear local token", semantic="settings-icarm-clear",
+                          icon=":material/delete_outline:"):
+                    delete_local_token(ctx.project_root)
+                    st.rerun()
+            else:
+                st.caption("Set in the environment; clear it there to remove access.")
+            return
+        token = text_input("ICARM token", type="password", value="",
+                           semantic="settings-icarm-token")
+        if button("Save token", semantic="settings-icarm-save", type="primary",
+                  icon=":material/save:", disabled=not token.strip()):
+            write_token(ctx.project_root, token)
+            st.success("ICARM token saved locally.")
+            st.rerun()
 
 
-def _services_settings(ctx):
+def _service_heading(name, source, *, detail=None, selected=False):
+    status = "Key set" if source else "Not configured"
+    tone = "ready" if source else "missing"
+    source_text = "Environment" if source == "environment" else "Local key" if source else "Add a key"
+    selected_text = '<span class="rh-settings-service-selected">DEFAULT</span>' if selected else ""
+    st.html(
+        '<div class="rh-settings-service-heading"><div>'
+        f'<span class="rh-settings-eyebrow">{html.escape(detail or "AI SERVICE")}</span>'
+        f'<h3>{html.escape(name)} {selected_text}</h3></div>'
+        f'<span class="rh-settings-status rh-settings-status--{tone}">'
+        f'{status} · {source_text}</span></div>'
+    )
+
+
+def _services_settings(db, ctx):
+    st.caption("Manage the credentials used by Agent, AI Hunt, and ICARM submissions.")
+    openai_col, gemini_col = st.columns(2, gap="medium")
+    with openai_col:
+        _openai_settings(db, ctx)
+    with gemini_col:
+        _gemini_settings(db, ctx)
     _icarm_settings(ctx)
-    st.divider()
-    _gemini_settings(ctx)
 
 
-def _gemini_settings(ctx):
-    st.subheader("Google Gemini · AI Hunt")
-    st.caption(
-        "The key stays in your environment or a private local file outside "
-        "rank42.db. AI Hunt sends the chosen target, your objective, available "
-        "Pipeline recipes, and search summaries to Gemini."
-    )
-    source = gemini_key_source(ctx.project_root)
-    st.write(f"Status: **{'configured' if source else 'not configured'}**"
-             + (f" via {source}" if source else ""))
-    if source is None:
-        candidate = text_input(
-            "Gemini API key",
-            type="password",
-            value="",
-            semantic="settings-gemini-key",
-            placeholder="Paste your Gemini API key",
-        )
-        if button("Save key", semantic="settings-gemini-save",
-                  type="primary", disabled=not candidate.strip()):
+def _gemini_settings(db, ctx):
+    with st.container(key="rh-settings-service-gemini", border=True):
+        source = gemini_key_source(ctx.project_root)
+        _service_heading("Google Gemini", source, selected=selected_service(db) == "Gemini")
+        st.caption("Agent chat and AI Hunt planning when Gemini is selected.")
+        if source is None:
+            candidate = text_input("Gemini API key", type="password", value="",
+                                   semantic="settings-gemini-key",
+                                   placeholder="Paste your Gemini API key")
+            if button("Save key", semantic="settings-gemini-save", type="primary",
+                      icon=":material/save:", disabled=not candidate.strip()):
+                try:
+                    write_gemini_key(ctx.project_root, candidate)
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.success("Gemini key saved locally.")
+                    st.rerun()
+            return
+        if source == "local file":
+            test_col, clear_col = st.columns(2, gap="small")
+            with test_col:
+                test_clicked = button("Test connection", semantic="settings-gemini-test",
+                                      icon=":material/cable:", width="stretch")
+            with clear_col:
+                if button("Clear key", semantic="settings-gemini-clear",
+                          icon=":material/delete_outline:", width="stretch"):
+                    delete_gemini_key(ctx.project_root)
+                    st.rerun()
+        else:
+            st.caption("GEMINI_API_KEY takes precedence; change it in the environment.")
+            test_clicked = button("Test connection", semantic="settings-gemini-test-env",
+                                  icon=":material/cable:")
+        if test_clicked:
             try:
-                write_gemini_key(ctx.project_root, candidate)
-            except ValueError as exc:
+                model_name = check_gemini_connection(
+                    ctx.project_root, model=default_model("Gemini", db=db))
+            except (GeminiAPIError, ValueError) as exc:
                 st.error(str(exc))
             else:
-                st.success("Gemini key saved locally.")
-                st.rerun()
-        return
-    if source == "local file":
-        test_col, clear_col = st.columns(2)
-        with test_col:
-            test_clicked = button("Test connection", semantic="settings-gemini-test",
-                                  width="stretch")
-        with clear_col:
-            if button("Clear local key", semantic="settings-gemini-clear",
-                      width="stretch"):
-                delete_gemini_key(ctx.project_root)
-                st.rerun()
-    else:
-        st.caption("GEMINI_API_KEY is set in the environment and takes precedence here.")
-        test_clicked = button("Test connection", semantic="settings-gemini-test-env",
-                              width="stretch")
-    if test_clicked:
-        try:
-            model_name = check_gemini_connection(ctx.project_root)
-        except (GeminiAPIError, ValueError) as exc:
-            st.error(str(exc))
+                st.success(f"Gemini connection ready · {model_name}")
+
+
+def _openai_settings(db, ctx):
+    with st.container(key="rh-settings-service-openai", border=True):
+        source = openai_key_source(ctx.project_root)
+        _service_heading("OpenAI API", source, selected=selected_service(db) == "OpenAI")
+        st.caption("Agent chat and AI Hunt planning when OpenAI is selected.")
+        if source is None:
+            candidate = text_input("OpenAI API key", type="password", value="",
+                                   semantic="settings-openai-key",
+                                   placeholder="Paste your OpenAI API key")
+            if button("Save key", semantic="settings-openai-save", type="primary",
+                      icon=":material/save:", disabled=not candidate.strip()):
+                try:
+                    write_openai_key(ctx.project_root, candidate)
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.success("OpenAI key saved locally.")
+                    st.rerun()
+            return
+        if source == "local file":
+            test_col, clear_col = st.columns(2, gap="small")
+            with test_col:
+                test_clicked = button("Test connection", semantic="settings-openai-test",
+                                      icon=":material/cable:", width="stretch")
+            with clear_col:
+                if button("Clear key", semantic="settings-openai-clear",
+                          icon=":material/delete_outline:", width="stretch"):
+                    delete_openai_key(ctx.project_root)
+                    st.rerun()
         else:
-            st.success(f"Gemini connection ready · {model_name}")
+            st.caption("OPENAI_API_KEY takes precedence; change it in the environment.")
+            test_clicked = button("Test connection", semantic="settings-openai-test-env",
+                                  icon=":material/cable:")
+        if test_clicked:
+            try:
+                model_name = check_openai_connection(
+                    ctx.project_root, model=default_model("OpenAI", db=db))
+            except (OpenAIAPIError, ValueError) as exc:
+                st.error(str(exc))
+            else:
+                st.success(f"OpenAI connection ready · {model_name}")
 
 
 _PLUGIN_TYPE_LABELS = {
@@ -458,11 +461,43 @@ def _general_settings(db, ctx):
             save_setting_value(db, "ui_appearance", selected.lower())
             st.rerun()
 
-    with st.container(key="rh-settings-general-installation", border=True):
-        st.subheader("This installation")
-        st.caption(f"Rank Hunter v{__version__} · Axiom theme")
-        st.text_input("Project folder", value=str(ctx.project_root), disabled=True)
-        st.text_input("Database", value=str(ctx.db_path), disabled=True)
+    with st.container(key="rh-settings-general-ai", border=True):
+        st.subheader("AI")
+        service = selected_service(db)
+        service_col, model_col, agent_col = st.columns(
+            [0.95, 1.1, 1.45], gap="small", vertical_alignment="bottom"
+        )
+        with service_col:
+            chosen = st.segmented_control(
+                "Default AI service", SERVICES, default=service,
+                key=f"settings-ai-service-{service}",
+                help="The selected service handles Agent chat and the next AI Hunt planning round, including active hunts.",
+            ) or service
+        if chosen != service:
+            save_setting_value(db, "default_ai_service", chosen)
+            st.rerun()
+        models = models_for_service(service)
+        selected_model = default_model(service, db=db)
+        with model_col:
+            chosen_model = st.selectbox(
+                "Default model", models, index=models.index(selected_model),
+                key=f"settings-default-model-{service}-{selected_model}",
+            )
+        if chosen_model != selected_model:
+            if service == "Gemini":
+                save_setting_value(db, "gemini_default_model", chosen_model)
+            else:
+                save_setting_value(db, "openai_default_model", chosen_model)
+            st.rerun()
+        enabled = bool(setting_value(db, "agent_enabled", True))
+        with agent_col:
+            shown = st.toggle("Show Rank Hunter Agent", value=enabled,
+                              key=f"settings-agent-enabled-{int(enabled)}")
+        if shown != enabled:
+            save_setting_value(db, "agent_enabled", bool(shown))
+            st.rerun()
+        if not ai_key_source(ctx.project_root, service):
+            st.caption(f"Add a {service} API key under Services to use AI features.")
 
 
 def page(db, ctx):
@@ -497,6 +532,6 @@ def page(db, ctx):
     elif choice == "Runtimes":
         _runtime_settings(db, ctx)
     elif choice == "Services":
-        _services_settings(ctx)
+        _services_settings(db, ctx)
     else:
         _about_settings(ctx)

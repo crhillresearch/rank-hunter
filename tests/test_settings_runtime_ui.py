@@ -23,16 +23,13 @@ def test_runtime_status_overview_is_compact_and_role_explicit():
         "def _runtime_settings",
     )
 
-    assert 'st.markdown("#### Runtime status")' in summary
-    assert 'metric("Default point engine"' in summary
-    assert '"Required runtimes"' in summary
-    assert '"Optional GPU"' in summary
-    assert '"Requirement": "Required" if probe.required else "Optional"' in summary
-    assert '"Status": "Ready" if probe.resolved else "Missing"' in summary
-    assert '"Use": usage' in summary
-    assert '"Active point engine"' in summary
-    assert '"Configured"' not in summary
-    assert '"Resolved executable"' not in summary
+    assert 'rh-settings-runtime-status' in summary
+    assert 'required_ready = all(' in summary
+    assert 'for key in ("science_python", "ratpoints", "ratpoints_gpu")' in summary
+    assert '"Found" if probe.resolved else "Missing"' in summary
+    assert 'rh-settings-runtime-path' in summary
+    assert 'str(backend).upper()' in summary
+    assert 'st.dataframe(' not in summary
 
 
 def test_runtime_page_groups_executables_testing_budgets_and_save():
@@ -40,12 +37,12 @@ def test_runtime_page_groups_executables_testing_budgets_and_save():
     runtime = block(text, "def _runtime_settings", "def _icarm_settings")
 
     status_pos = runtime.index("_render_effective_runtime_summary")
-    executable_pos = runtime.index('st.markdown("#### Runtime executables")')
-    test_pos = runtime.index('st.markdown("##### Test runtimes")')
-    budget_pos = runtime.index('st.markdown("#### Default time budgets")')
+    executable_pos = runtime.index('heading.markdown("#### Runtime executables")')
+    budget_pos = runtime.index('st.expander("Default time budgets"')
+    test_pos = runtime.index('"Test runtimes"')
     save_pos = runtime.index('"Save runtime defaults"')
 
-    assert status_pos < executable_pos < test_pos < budget_pos < save_pos
+    assert status_pos < executable_pos < budget_pos < test_pos < save_pos
     assert '"Science Python / Sage · Required"' in runtime
     assert '"CPU ratpoints · Required"' in runtime
     assert '"GPU ratpoints · Optional"' in runtime

@@ -2,10 +2,60 @@
 
 All notable changes to Rank Hunter are documented here.
 
+## [0.10.4] — Unreleased
+
+### Changed
+
+- General settings now has an Agent switch and a default AI service. The
+  selected service handles Agent chat, read-only lookups, action planning, and
+  AI Hunt strategy rounds. Each service keeps its own default model. Existing
+  hunts follow the selected service when planning their next round. The service,
+  model, and Agent switch now sit together on one compact row in General
+  settings. Removed the redundant installation card from that page.
+- Added OpenAI API keys under Services and OpenAI models for Agent and AI Hunt.
+  Keys stay outside rank42.db, and OpenAI requests use the Responses API.
+- OpenAI 429 errors now distinguish temporary rate limits from exhausted API
+  credits and project usage limits. The credit message now points to the
+  organization behind the API key and distinguishes API credits from ChatGPT
+  credits.
+- Agent answers torsion rank-breakthrough questions from confirmed local
+  curves and available Pipeline searches, even when the selected AI service
+  cannot answer.
+- Runtimes now shows a compact executable status view and keeps paths, point
+  engine, health checks, and time budgets together. Services now shows OpenAI,
+  Gemini, and ICARM as credential cards with their current status and actions.
+- Agent chat can now create research campaigns, queue bounded AI Hunts, and
+  enable or disable installed plugins after showing the exact change for
+  confirmation. Plugin activation uses the existing validation job; every
+  confirmed management action is logged locally.
+- Agent chat can also edit campaign goals and status, restore archived plugins,
+  archive plugins, continue budget-exhausted AI Hunts, and pause, resume, stop,
+  hold, release, or cancel jobs after confirmation.
+- “Sync ICARM” now queues the same catalog job used by the dashboard and
+  Catalogs page, with a confirmation card and a check for an existing sync.
+- The Agent composer now gives the message field more room and uses a compact
+  arrow-only send button.
+- The floating Agent launcher is now icon-only and changes color while open.
+- Reworked Rank Hunter Agent as a compact chat with a fixed message area and
+  a message box that stays visible at the bottom. Messages scroll inside the
+  chat, including review cards for database actions.
+- The Agent can now read bounded local curve, rank, point, job, Pipeline,
+  candidate, and campaign facts to answer research questions. Read queries
+  use a separate read-only connection and exclude settings, commands, and logs.
+  Torsion-group comparisons use confirmed local torsion and rank evidence.
+- The Agent now answers ICARM torsion-group leaderboard questions from the
+  synced catalog, including the top rank and size metrics, and checks the
+  previous question when asked to look again.
+- Bumped the development version to 0.10.4.
+
 ## [0.10.3] — Unreleased
 
 ### Added
 
+- Added Rank Hunter Agent, a floating Gemini chat on every page when a key is
+  configured. It can use the current page and stored curve facts, and offers a
+  reviewed, single-curve conductor/log N calculation through the existing
+  bounded worker. Agent actions are recorded in a local audit log.
 - AI Hunt can now build a Pipeline from compatible Rank Hunter modules instead
   of choosing only a preset or saved Pipeline. The proposed order must pass the
   normal Pipeline validator; Gemini cannot set arbitrary stage configurations.
@@ -21,6 +71,10 @@ All notable changes to Rank Hunter are documented here.
 
 ### Changed
 
+- Rank Hunter Agent now answers best-curve ICARM placement and latest-discovery
+  questions from local data. ICARM comparisons use the synced top-10 size
+  thresholds. Open-ended replies now stream into a fixed-size chat panel without
+  rebuilding the page.
 - AI Hunt now divides its candidate and parameter-scan limits across torsion
   providers. A 100-candidate round no longer becomes hundreds of candidates
   just because several family providers match the group. Point-height lists

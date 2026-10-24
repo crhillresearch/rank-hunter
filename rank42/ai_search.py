@@ -1,4 +1,4 @@
-"""Gemini-directed campaigns built from Rank Hunter's validated Pipelines."""
+"""AI-directed campaigns built from Rank Hunter's validated Pipelines."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ from datetime import datetime
 from pathlib import Path
 
 from rank42.db import now
-from rank42.gemini_api import AVAILABLE_MODELS, DEFAULT_MODEL, generate_json
+from rank42.ai_provider import AVAILABLE_MODELS, generate_json
+from rank42.gemini_api import DEFAULT_MODEL
 from rank42.pipeline_catalog import (
     normalize_stage,
     normalize_pipeline,
@@ -351,7 +352,7 @@ def option_for_decision(decision, options):
     """Resolve a saved/preset recipe or the exact validated AI-built sequence."""
     if decision["recipe_id"] == "built":
         return {
-            "id": "built", "name": "Gemini-built Pipeline",
+            "id": "built", "name": "AI-built Pipeline",
             "description": "Validated module sequence assembled for this round",
             "stages": [normalize_stage(stage_id)
                        for stage_id in decision["stage_ids"]],
@@ -364,36 +365,36 @@ def option_for_decision(decision, options):
 def validate_decision(raw, *, options, config, previous=(), target_mode=None,
                       target_summary=None):
     if not isinstance(raw, dict):
-        raise ValueError("Gemini strategy must be an object")
+        raise ValueError("AI strategy must be an object")
     recipe_id = str(raw.get("recipe_id") or "")
     if recipe_id not in {option["id"] for option in options} | {"built"}:
-        raise ValueError("Gemini selected a recipe unavailable for this target")
+        raise ValueError("AI selected a recipe unavailable for this target")
     stage_ids = None
     if recipe_id == "built":
         if config.get("allow_pipeline_build", True) is False:
-            raise ValueError("Gemini-built Pipelines are disabled for this hunt")
+            raise ValueError("AI-built Pipelines are disabled for this hunt")
         allowed = {spec.id for spec in buildable_modules(target_mode)}
         stage_ids = raw.get("stage_ids")
         if (not isinstance(stage_ids, list) or not 3 <= len(stage_ids) <= 16
                 or any(not isinstance(item, str) or item not in allowed
                        for item in stage_ids)):
-            raise ValueError("Gemini-built Pipeline needs 3–16 available module IDs")
+            raise ValueError("AI-built Pipeline needs 3–16 available module IDs")
         if not any(stage_id in _DISCOVERY_STAGE_IDS for stage_id in stage_ids):
-            raise ValueError("Gemini-built Pipeline needs a discovery stage")
+            raise ValueError("AI-built Pipeline needs a discovery stage")
         if "independence" not in stage_ids:
-            raise ValueError("Gemini-built Pipeline needs Exact Independence")
+            raise ValueError("AI-built Pipeline needs Exact Independence")
         if ("bounded_section_search" in stage_ids
                 and (target_summary or {}).get("formula_family") is False):
             raise ValueError("Bounded Q(t) Section Search requires a JSON formula family")
         stages = normalize_pipeline(stage_ids)
         errors = validate_pipeline(target_mode, stages)
         if errors:
-            raise ValueError("Invalid Gemini-built Pipeline: " + "; ".join(errors[:3]))
+            raise ValueError("Invalid AI-built Pipeline: " + "; ".join(errors[:3]))
         if sum(stage_spec(stage_id).cost == "expensive" for stage_id in stage_ids) > 6:
-            raise ValueError("Gemini-built Pipeline has too many expensive modules")
+            raise ValueError("AI-built Pipeline has too many expensive modules")
     window = str(raw.get("window") or "default")
     if window not in _WINDOWS:
-        raise ValueError("Gemini selected an unknown search window")
+        raise ValueError("AI selected an unknown search window")
     if target_mode in {"curve", "general"} and window != "default":
         raise ValueError("This target uses the default search window")
     try:
@@ -401,7 +402,7 @@ def validate_decision(raw, *, options, config, previous=(), target_mode=None,
         candidate_limit = int(raw.get("candidate_limit") or config["max_candidates"])
         search_seed = int(raw.get("search_seed") or 1729)
     except (TypeError, ValueError):
-        raise ValueError("Gemini strategy has an invalid numeric setting") from None
+        raise ValueError("AI strategy has an invalid numeric setting") from None
     if not 1 <= depth <= 3:
         raise ValueError("Search depth must be 1, 2, or 3")
     if not 1 <= candidate_limit <= int(config["max_candidates"]):
@@ -424,7 +425,7 @@ def validate_decision(raw, *, options, config, previous=(), target_mode=None,
         return (item.get("recipe_id"), item.get("window"), item.get("depth"),
                 item.get("candidate_limit"), item.get("search_seed"))
     if any(signature(item) == signature(decision) for item in previous):
-        raise ValueError("Gemini repeated an identical search strategy")
+        raise ValueError("AI repeated an identical search strategy")
     return decision
 
 
@@ -525,7 +526,7 @@ def plan_strategy(project_root: str | Path, *, model, objective, target_mode,
                                      target_summary=target_summary)
         except ValueError as exc:
             error = str(exc)
-    raise ValueError(f"Gemini could not produce a valid strategy: {error}")
+    raise ValueError(f"AI service could not produce a valid strategy: {error}")
 
 
 def execution_for_decision(*, option, decision, target_mode, target, config):
