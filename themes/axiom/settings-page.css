@@ -3,6 +3,7 @@
 .st-key-rh-settings-runtime-controls,
 .st-key-rh-settings-service-openai,
 .st-key-rh-settings-service-gemini,
+.st-key-rh-settings-service-groq,
 .st-key-rh-settings-service-icarm {
     margin-top: .75rem;
     border-color: var(--rh-border) !important;
@@ -99,9 +100,11 @@
     letter-spacing: .07em;
 }
 .st-key-rh-settings-service-openai,
-.st-key-rh-settings-service-gemini { min-height: 11rem; }
+.st-key-rh-settings-service-gemini,
+.st-key-rh-settings-service-groq { min-height: 11rem; }
 .st-key-rh-settings-service-openai [data-testid="stCaptionContainer"],
-.st-key-rh-settings-service-gemini [data-testid="stCaptionContainer"] { margin-top: .2rem; }
+.st-key-rh-settings-service-gemini [data-testid="stCaptionContainer"],
+.st-key-rh-settings-service-groq [data-testid="stCaptionContainer"] { margin-top: .2rem; }
 @media (max-width: 640px) {
     .st-key-rh-settings-general-ai [data-testid="stHorizontalBlock"] {
         flex-wrap: wrap;

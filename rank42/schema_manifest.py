@@ -272,6 +272,10 @@ UI_SCHEMA_MANIFEST = _manifest(
             "id", "curve_id", "campaign_id", "priority", "workflow_status",
             "research_goal", "reason", "note", "created_at", "updated_at",
         },
+        "analysis_case_entries": {
+            "id", "curve_id", "entry_type", "title", "body", "outcome",
+            "artifact_ref", "created_at", "updated_at",
+        },
         "research_campaign_artifacts": {
             "id", "campaign_id", "artifact_kind", "artifact_id", "relation",
             "created_at",
@@ -285,6 +289,7 @@ UI_SCHEMA_MANIFEST = _manifest(
         "idx_ui_job_queue_job",
         "idx_analysis_cases_status_priority",
         "idx_analysis_cases_campaign",
+        "idx_analysis_case_entries_curve",
         "idx_campaign_artifacts_campaign",
         "idx_campaign_artifacts_artifact",
     },

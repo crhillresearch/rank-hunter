@@ -15,6 +15,13 @@ from rank42.gemini_api import (
     key_source as gemini_key_source,
     write_key as write_gemini_key,
 )
+from rank42.groq_api import (
+    GroqAPIError,
+    check_connection as check_groq_connection,
+    delete_local_key as delete_groq_key,
+    key_source as groq_key_source,
+    write_key as write_groq_key,
+)
 from rank42.icarm_api import (
     delete_local_token,
     masked_token,
@@ -294,7 +301,11 @@ def _services_settings(db, ctx):
         _openai_settings(db, ctx)
     with gemini_col:
         _gemini_settings(db, ctx)
-    _icarm_settings(ctx)
+    groq_col, icarm_col = st.columns(2, gap="medium")
+    with groq_col:
+        _groq_settings(db, ctx)
+    with icarm_col:
+        _icarm_settings(ctx)
 
 
 def _gemini_settings(db, ctx):
@@ -383,6 +394,49 @@ def _openai_settings(db, ctx):
                 st.success(f"OpenAI connection ready · {model_name}")
 
 
+def _groq_settings(db, ctx):
+    with st.container(key="rh-settings-service-groq", border=True):
+        source = groq_key_source(ctx.project_root)
+        _service_heading("Groq", source, selected=selected_service(db) == "Groq")
+        st.caption("Agent chat and AI Hunt planning when Groq is selected.")
+        if source is None:
+            candidate = text_input("Groq API key", type="password", value="",
+                                   semantic="settings-groq-key",
+                                   placeholder="Paste your Groq API key")
+            if button("Save key", semantic="settings-groq-save", type="primary",
+                      icon=":material/save:", disabled=not candidate.strip()):
+                try:
+                    write_groq_key(ctx.project_root, candidate)
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.success("Groq key saved locally.")
+                    st.rerun()
+            return
+        if source == "local file":
+            test_col, clear_col = st.columns(2, gap="small")
+            with test_col:
+                test_clicked = button("Test connection", semantic="settings-groq-test",
+                                      icon=":material/cable:", width="stretch")
+            with clear_col:
+                if button("Clear key", semantic="settings-groq-clear",
+                          icon=":material/delete_outline:", width="stretch"):
+                    delete_groq_key(ctx.project_root)
+                    st.rerun()
+        else:
+            st.caption("GROQ_API_KEY takes precedence; change it in the environment.")
+            test_clicked = button("Test connection", semantic="settings-groq-test-env",
+                                  icon=":material/cable:")
+        if test_clicked:
+            try:
+                model_name = check_groq_connection(
+                    ctx.project_root, model=default_model("Groq", db=db))
+            except (GroqAPIError, ValueError) as exc:
+                st.error(str(exc))
+            else:
+                st.success(f"Groq connection ready · {model_name}")
+
+
 _PLUGIN_TYPE_LABELS = {
     "family": "Family",
     "feature": "Feature",
@@ -464,35 +518,33 @@ def _general_settings(db, ctx):
     with st.container(key="rh-settings-general-ai", border=True):
         st.subheader("AI")
         service = selected_service(db)
-        service_col, model_col, agent_col = st.columns(
-            [0.95, 1.1, 1.45], gap="small", vertical_alignment="bottom"
-        )
-        with service_col:
+        with st.container(horizontal=True, vertical_alignment="bottom", gap="small"):
             chosen = st.segmented_control(
                 "Default AI service", SERVICES, default=service,
                 key=f"settings-ai-service-{service}",
                 help="The selected service handles Agent chat and the next AI Hunt planning round, including active hunts.",
             ) or service
-        if chosen != service:
-            save_setting_value(db, "default_ai_service", chosen)
-            st.rerun()
-        models = models_for_service(service)
-        selected_model = default_model(service, db=db)
-        with model_col:
+            models = models_for_service(service)
+            selected_model = default_model(service, db=db)
             chosen_model = st.selectbox(
                 "Default model", models, index=models.index(selected_model),
                 key=f"settings-default-model-{service}-{selected_model}",
+                width=250,
             )
+            enabled = bool(setting_value(db, "agent_enabled", True))
+            shown = st.toggle("Show Rank Hunter Agent", value=enabled,
+                              key=f"settings-agent-enabled-{int(enabled)}")
+        if chosen != service:
+            save_setting_value(db, "default_ai_service", chosen)
+            st.rerun()
         if chosen_model != selected_model:
             if service == "Gemini":
                 save_setting_value(db, "gemini_default_model", chosen_model)
-            else:
+            elif service == "OpenAI":
                 save_setting_value(db, "openai_default_model", chosen_model)
+            else:
+                save_setting_value(db, "groq_default_model", chosen_model)
             st.rerun()
-        enabled = bool(setting_value(db, "agent_enabled", True))
-        with agent_col:
-            shown = st.toggle("Show Rank Hunter Agent", value=enabled,
-                              key=f"settings-agent-enabled-{int(enabled)}")
         if shown != enabled:
             save_setting_value(db, "agent_enabled", bool(shown))
             st.rerun()

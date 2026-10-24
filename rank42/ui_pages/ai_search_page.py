@@ -25,6 +25,7 @@ from rank42.ai_search import (
 )
 from rank42.db import connect_existing
 from rank42.gemini_api import GeminiAPIError
+from rank42.groq_api import GroqAPIError
 from rank42.openai_api import OpenAIAPIError
 from rank42.manage_store import create_campaign, update_campaign
 from rank42.plugins import Plugin, discover_plugins, is_enabled
@@ -491,7 +492,7 @@ def page(db, ctx):
                         target_mode=mode, target_summary=summary,
                         goal_rank=goal_rank, config=config, options=options,
                     )
-            except (GeminiAPIError, OpenAIAPIError, ValueError) as exc:
+            except (GeminiAPIError, OpenAIAPIError, GroqAPIError, ValueError) as exc:
                 st.error(str(exc))
             else:
                 preview = {"fingerprint": fingerprint, "decision": decision}
@@ -511,7 +512,7 @@ def page(db, ctx):
                 f"First strategy: **{chosen['name']}** · depth {decision['depth']} "
                 f"· {decision['window']} window · up to {decision['candidate_limit']} candidates. "
                 f"{decision['reason']}"
-                + (f" Gemini 3.8 Flash was unavailable; {model_used} answered."
+                + (f" {model} was unavailable; {model_used} answered."
                    if model_used != model else "")
             )
             if decision.get("stage_ids"):

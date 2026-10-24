@@ -28,6 +28,7 @@ from rank42.ai_provider import default_model, selected_service, service_for_mode
 from rank42.db import connect_existing, now
 from rank42.curve_research_state import get_curve_research_state
 from rank42.gemini_api import GeminiAPIError
+from rank42.groq_api import GroqAPIError
 from rank42.openai_api import OpenAIAPIError
 from rank42.manage_store import update_campaign as update_research_campaign
 from rank42.pipeline_state import (
@@ -402,7 +403,7 @@ def run_campaign(db, root, campaign_id):
                 goal_rank=goal_rank, config=config, options=options,
                 observations=observations, previous=previous,
             )
-        except (GeminiAPIError, OpenAIAPIError, ValueError) as exc:
+        except (GeminiAPIError, OpenAIAPIError, GroqAPIError, ValueError) as exc:
             print(f"NEXT_MOVE_UNAVAILABLE {exc}", flush=True)
         if next_decision:
             print(f"NEXT_MOVE {next_decision['recipe_id']} · "

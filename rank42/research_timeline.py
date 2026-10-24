@@ -619,6 +619,25 @@ def research_timeline(db, curve_id, *, limit=500):
                 route=None,
             )
 
+    if _table_exists(db, "analysis_case_entries"):
+        for row in db.execute(
+            """SELECT * FROM analysis_case_entries
+               WHERE curve_id=? ORDER BY id DESC LIMIT ?""",
+            (curve_id, limit),
+        ).fetchall():
+            _append(
+                items,
+                timestamp=_timestamp(row["updated_at"], row["created_at"]),
+                source="Casebook",
+                kind="journal_entry",
+                artifact_type="case_entry",
+                artifact_id=int(row["id"]),
+                status=row["outcome"],
+                summary=f"{row['entry_type']} · {row['title']}",
+                detail={"artifact_ref": row["artifact_ref"]},
+                route="Casebook",
+            )
+
     items.sort(
         key=lambda rec: (
             str(rec["timestamp"]),

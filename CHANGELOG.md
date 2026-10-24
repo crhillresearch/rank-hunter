@@ -6,6 +6,12 @@ All notable changes to Rank Hunter are documented here.
 
 ### Changed
 
+- Added Groq as an AI service for Agent and AI Hunt. Settings can store or test
+  a Groq key and choose GPT-OSS 120B, GPT-OSS 20B, or Qwen 3.8 27B as the
+  default model. The selected service also applies to an active hunt's next
+  planning round. Groq requests now identify Rank Hunter to avoid Cloudflare's
+  HTTP-client block, and connection errors distinguish that block from model
+  permissions.
 - General settings now has an Agent switch and a default AI service. The
   selected service handles Agent chat, read-only lookups, action planning, and
   AI Hunt strategy rounds. Each service keeps its own default model. Existing
@@ -24,6 +30,15 @@ All notable changes to Rank Hunter are documented here.
 - Runtimes now shows a compact executable status view and keeps paths, point
   engine, health checks, and time budgets together. Services now shows OpenAI,
   Gemini, and ICARM as credential cards with their current status and actions.
+- Casebook now opens a full research file for a curve: a brief, open lines of
+  inquiry, recent work, a dated journal, rank evidence, family context, and
+  history. Researchers can record hypotheses and experiments, update their
+  outcomes, and download the case with witness and evidence references.
+- Casebook uses the standard page navigation for Case File, Journal, Evidence,
+  Family, and History. Its case picker sits above the research file, and the
+  case form leads the default view with the research brief and next step below.
+  Case File has its own document icon. Fixed a History crash when one point
+  produced multiple timeline events.
 - Agent chat can now create research campaigns, queue bounded AI Hunts, and
   enable or disable installed plugins after showing the exact change for
   confirmation. Plugin activation uses the existing validation job; every

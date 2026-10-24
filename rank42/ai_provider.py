@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from rank42 import gemini_api, openai_api
+from rank42 import gemini_api, groq_api, openai_api
 from rank42.settings_registry import setting_value
 
 
-SERVICES = ("Gemini", "OpenAI")
-AVAILABLE_MODELS = gemini_api.AVAILABLE_MODELS + openai_api.AVAILABLE_MODELS
+SERVICES = ("Gemini", "OpenAI", "Groq")
+AVAILABLE_MODELS = gemini_api.AVAILABLE_MODELS + openai_api.AVAILABLE_MODELS + groq_api.AVAILABLE_MODELS
 DEFAULT_SERVICE = "Gemini"
 
 
@@ -29,6 +29,10 @@ def default_model(service: str, *, db=None) -> str:
         fallback = openai_api.DEFAULT_MODEL
         key = "openai_default_model"
         options = openai_api.AVAILABLE_MODELS
+    elif service == "Groq":
+        fallback = groq_api.DEFAULT_MODEL
+        key = "groq_default_model"
+        options = groq_api.AVAILABLE_MODELS
     else:
         raise ValueError("unsupported AI service")
     if db is None or db.execute(
@@ -44,6 +48,8 @@ def models_for_service(service: str) -> tuple[str, ...]:
         return gemini_api.AVAILABLE_MODELS
     if service == "OpenAI":
         return openai_api.AVAILABLE_MODELS
+    if service == "Groq":
+        return groq_api.AVAILABLE_MODELS
     raise ValueError("unsupported AI service")
 
 
@@ -52,6 +58,8 @@ def service_for_model(model: str) -> str:
         return "Gemini"
     if model in openai_api.AVAILABLE_MODELS:
         return "OpenAI"
+    if model in groq_api.AVAILABLE_MODELS:
+        return "Groq"
     raise ValueError("unsupported AI model")
 
 
@@ -60,17 +68,19 @@ def key_source(project_root, service: str) -> str | None:
         return gemini_api.key_source(project_root)
     if service == "OpenAI":
         return openai_api.key_source(project_root)
+    if service == "Groq":
+        return groq_api.key_source(project_root)
     raise ValueError("unsupported AI service")
 
 
 def generate_json(project_root, prompt, *, db=None, model=None, timeout=90):
     chosen = str(model or default_model(selected_service(db), db=db))
-    provider = gemini_api if service_for_model(chosen) == "Gemini" else openai_api
+    provider = {"Gemini": gemini_api, "OpenAI": openai_api, "Groq": groq_api}[service_for_model(chosen)]
     return provider.generate_json(project_root, prompt, model=chosen, timeout=timeout)
 
 
 def stream_text(project_root, prompt, *, system_instruction, db=None, model=None, timeout=60):
     chosen = str(model or default_model(selected_service(db), db=db))
-    provider = gemini_api if service_for_model(chosen) == "Gemini" else openai_api
+    provider = {"Gemini": gemini_api, "OpenAI": openai_api, "Groq": groq_api}[service_for_model(chosen)]
     return provider.stream_text(project_root, prompt, system_instruction=system_instruction,
                                 model=chosen, timeout=timeout)

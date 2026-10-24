@@ -10,6 +10,7 @@ import streamlit as st
 from rank42.db import connect_existing
 from rank42.ai_provider import key_source, selected_service
 from rank42.gemini_api import GeminiAPIError
+from rank42.groq_api import GroqAPIError
 from rank42.openai_api import OpenAIAPIError
 from rank42.research_agent import calculate_log_n, quick_response, stream_answer
 from rank42.research_agent_actions import audit_action, execute_action, plan_action
@@ -260,7 +261,7 @@ def _render_panel(db, ctx, page: str) -> None:
                             "kind": "calculate_log_n", "curve_id": response["curve_id"]}
                     elif action_plan:
                         st.session_state["rh_agent_pending"] = action_plan
-                except (GeminiAPIError, OpenAIAPIError, ValueError) as exc:
+                except (GeminiAPIError, OpenAIAPIError, GroqAPIError, ValueError) as exc:
                     messages.append({"role": "assistant", "text": str(exc)})
                     with chat_box:
                         with st.chat_message("assistant"):

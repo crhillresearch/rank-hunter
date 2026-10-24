@@ -29,6 +29,8 @@ CASE_RESEARCH_GOALS = (
     "Compare related fibers",
     "Other",
 )
+CASE_ENTRY_TYPES = ("Hypothesis", "Experiment", "Observation", "Decision", "Next step")
+CASE_ENTRY_OUTCOMES = ("open", "in progress", "supported", "ruled out", "inconclusive", "complete")
 
 
 def _table_exists(db, name):
@@ -192,3 +194,54 @@ def case_priority_label(priority):
     if value <= 75:
         return "Low"
     return "Normal"
+
+
+def list_case_entries(db, curve_id, *, limit=10000):
+    """Read researcher-authored journal entries, newest first."""
+    if not _table_exists(db, "analysis_case_entries"):
+        return []
+    return db.execute(
+        """SELECT * FROM analysis_case_entries WHERE curve_id=?
+           ORDER BY created_at DESC,id DESC LIMIT ?""",
+        (int(curve_id), max(1, min(int(limit), 10000))),
+    ).fetchall()
+
+
+def add_case_entry(db, *, curve_id, entry_type, title, body="", outcome="open", artifact_ref=""):
+    """Append a human research note; never modify mathematical evidence."""
+    if not _table_exists(db, "analysis_case_entries"):
+        raise RuntimeError("Casebook journal schema is not ready")
+    if db.execute("SELECT 1 FROM curves WHERE id=?", (int(curve_id),)).fetchone() is None:
+        raise ValueError(f"curve #{int(curve_id)} not found")
+    if entry_type not in CASE_ENTRY_TYPES:
+        raise ValueError("unsupported Casebook entry type")
+    if outcome not in CASE_ENTRY_OUTCOMES:
+        raise ValueError("unsupported Casebook outcome")
+    clean_title = _clean_text(title, limit=160)
+    if not clean_title:
+        raise ValueError("A journal title is required")
+    clean_body = _clean_text(body, limit=8000)
+    clean_ref = _clean_text(artifact_ref, limit=160)
+    ts = now()
+    cursor = db.execute(
+        """INSERT INTO analysis_case_entries(
+               curve_id,entry_type,title,body,outcome,artifact_ref,created_at,updated_at
+           ) VALUES(?,?,?,?,?,?,?,?)""",
+        (int(curve_id), entry_type, clean_title, clean_body, outcome, clean_ref, ts, ts),
+    )
+    db.commit()
+    return db.execute("SELECT * FROM analysis_case_entries WHERE id=?", (cursor.lastrowid,)).fetchone()
+
+
+def set_case_entry_outcome(db, entry_id, *, curve_id, outcome):
+    """Update only a human journal status; the original entry remains intact."""
+    if outcome not in CASE_ENTRY_OUTCOMES:
+        raise ValueError("unsupported Casebook outcome")
+    cursor = db.execute(
+        """UPDATE analysis_case_entries SET outcome=?,updated_at=?
+           WHERE id=? AND curve_id=?""",
+        (outcome, now(), int(entry_id), int(curve_id)),
+    )
+    if cursor.rowcount != 1:
+        raise ValueError("Casebook entry not found for this curve")
+    db.commit()

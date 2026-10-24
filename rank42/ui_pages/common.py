@@ -880,6 +880,7 @@ _PAGE_BAR_GROUPS = (
 _PAGE_BAR_LABELS = {"Corpora": "Libraries", "External Catalog": "Catalogs"}
 _PAGE_LOCAL_ICONS = {
     "Rank Lab": {"Certify points": "verified", "Prove rank": "rule", "Search rank": "search"},
+    "Casebook": {"Case file": "description", "Journal": "edit_note", "Evidence": "verified", "Family": "account_tree", "History": "history"},
     "AI Hunt": {"Campaigns": "bookmark", "New hunt": "auto_awesome"},
     "Pipelines": {"Editor": "tune", "Saved": "inventory_2", "Runs": "history"},
     "Candidates": {"Generate": "add_circle", "Pools": "stacks"},
@@ -895,6 +896,7 @@ _PAGE_LOCAL_ICONS = {
 }
 _PAGE_LOCAL_VIEWS = {
     "Rank Lab": (("Certify points", "Prove rank", "Search rank"), "analysis-hub-lane", None, True),
+    "Casebook": (("Case file", "Journal", "Evidence", "Family", "History"), "casebook-section", None, False),
     "AI Hunt": (("Campaigns", "New hunt"), "ai-search-view-v2", None, True),
     "Pipelines": (("Editor", "Saved", "Runs"), "builder-main-tabs", "builder_main_view", False),
     "Candidates": (("Generate", "Pools"), "candidates-main-tabs", "candidates_tab", False),

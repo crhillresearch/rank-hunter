@@ -74,6 +74,7 @@ MIGRATION_COMPONENTS = (
         migration_ids=(
             "ui.ensure_ui_schema",
             "ui.analysis_cases",
+            "ui.analysis_case_entries",
             "ui.campaign_lineage",
         ),
         prerequisites=("core",),

@@ -24,6 +24,7 @@ EXPECTED_KEYS = {
     "agent_enabled",
     "default_ai_service",
     "gemini_default_model",
+    "groq_default_model",
     "openai_default_model",
     "deep_cert_timeout",
     "mwrank_rank_timeout",
@@ -92,6 +93,7 @@ def test_setting_scopes_cover_user_and_runtime_configuration_only():
     assert setting_spec("agent_enabled").scope == USER_SETTING
     assert setting_spec("default_ai_service").scope == USER_SETTING
     assert setting_spec("gemini_default_model").scope == USER_SETTING
+    assert setting_spec("groq_default_model").scope == USER_SETTING
     assert setting_spec("openai_default_model").scope == USER_SETTING
 
     for key in {

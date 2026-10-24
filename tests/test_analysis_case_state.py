@@ -6,15 +6,18 @@ from rank42.analysis_case_store import (
     CASE_PRIORITY_PRESETS,
     CASE_RESEARCH_GOALS,
     CASE_WORKFLOW_STATUSES,
+    add_case_entry,
     analysis_case_map_readonly,
     get_analysis_case,
+    list_case_entries,
     save_analysis_case,
+    set_case_entry_outcome,
 )
 from rank42.analyze_workspace import research_inbox
 from rank42.db import CURRENT_SCHEMA_VERSION, connect, upsert_curve
 from rank42.research_timeline import research_timeline
 from rank42.schema_manifest import UI_SCHEMA_MANIFEST, inspect_schema
-from rank42.ui_pages import analyze_page
+from rank42.ui_pages import analysis_workcenter, analyze_page
 from rank42.ui_store import ensure_ui_schema
 
 
@@ -235,3 +238,95 @@ def test_case_board_editor_writes_only_after_explicit_form_submit():
     assert "save_analysis_case(" in after_submit
     assert "Human workflow only" in source
     assert "never changes rank bounds" in source
+
+
+def test_casebook_journal_is_durable_and_never_promotes_rank(tmp_path):
+    db = connect(tmp_path / "case-journal.db")
+    try:
+        ensure_ui_schema(db)
+        curve_id = _curve(db, "journal")
+        before_evidence = db.execute(
+            "SELECT COUNT(*) FROM rank_evidence WHERE curve_id=?", (curve_id,)
+        ).fetchone()[0]
+        entry = add_case_entry(
+            db, curve_id=curve_id, entry_type="Experiment", title="Try a covering",
+            body="Search H=1000, then map any point back.", artifact_ref="job:94",
+        )
+        assert entry["outcome"] == "open"
+        set_case_entry_outcome(db, entry["id"], curve_id=curve_id, outcome="inconclusive")
+        rows = list_case_entries(db, curve_id)
+        assert len(rows) == 1
+        assert rows[0]["outcome"] == "inconclusive"
+        assert rows[0]["artifact_ref"] == "job:94"
+        assert db.execute(
+            "SELECT COUNT(*) FROM rank_evidence WHERE curve_id=?", (curve_id,)
+        ).fetchone()[0] == before_evidence
+        assert any(row["source"] == "Casebook" for row in research_timeline(db, curve_id))
+    finally:
+        db.close()
+
+
+def test_casebook_journal_migrates_existing_ui_database(tmp_path):
+    db = connect(tmp_path / "case-journal-migration.db")
+    try:
+        ensure_ui_schema(db)
+        db.execute("DROP INDEX idx_analysis_case_entries_curve")
+        db.execute("DROP TABLE analysis_case_entries")
+        db.commit()
+        assert not inspect_schema(db, UI_SCHEMA_MANIFEST)["ready"]
+        ensure_ui_schema(db)
+        assert inspect_schema(db, UI_SCHEMA_MANIFEST)["ready"]
+    finally:
+        db.close()
+
+
+def test_casebook_export_keeps_research_notes_distinct_from_evidence(tmp_path):
+    db = connect(tmp_path / "case-export.db")
+    try:
+        ensure_ui_schema(db)
+        curve_id = _curve(db, "export")
+        case = save_analysis_case(db, curve_id=curve_id, reason="Can this rank grow?")
+        add_case_entry(db, curve_id=curve_id, entry_type="Hypothesis",
+                       title="A second section may exist", body="Check low-degree ansatz.")
+        from rank42.analyze_workspace import curve_analysis_snapshot
+        output = analysis_workcenter._casebook_markdown(
+            curve_analysis_snapshot(db, curve_id), case, list_case_entries(db, curve_id)
+        )
+        assert "Can this rank grow?" in output
+        assert "A second section may exist" in output
+        assert "only Rank Hunter's evidence ledger certifies" in output
+    finally:
+        db.close()
+
+
+def test_casebook_history_renders_multiple_events_for_same_point(tmp_path):
+    from streamlit.testing.v1 import AppTest
+    from rank42.points import upsert_point
+
+    path = tmp_path / "case-history.db"
+    db = connect(path)
+    try:
+        ensure_ui_schema(db)
+        curve_id = _curve(db, "history")
+        point = upsert_point(db, curve_id=curve_id, x="0", y="0", source="test",
+                             enrich_torsion=False)
+        db.execute("UPDATE points SET updated_at='2099-01-01T00:00:00+00:00' WHERE id=?",
+                   (point["id"],))
+        db.commit()
+        events = [row for row in research_timeline(db, curve_id)
+                  if row["artifact_ref"] == f"point:{point['id']}"]
+        assert len(events) == 2
+    finally:
+        db.close()
+
+    app = AppTest.from_string(
+        "from rank42.db import connect\n"
+        "from rank42.ui_pages.analysis_workcenter import page\n"
+        "class Context: pass\n"
+        f"page(connect({str(path)!r}), Context())\n",
+        default_timeout=10,
+    )
+    app.session_state["analysis_workcenter_curve_id"] = curve_id
+    app.session_state["casebook-section"] = "History"
+    app.run()
+    assert not app.exception

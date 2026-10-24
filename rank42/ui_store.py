@@ -113,6 +113,20 @@ CREATE INDEX IF NOT EXISTS idx_analysis_cases_status_priority
     ON analysis_cases(workflow_status, priority DESC, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_analysis_cases_campaign
     ON analysis_cases(campaign_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS analysis_case_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    curve_id INTEGER NOT NULL REFERENCES curves(id) ON DELETE CASCADE,
+    entry_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    outcome TEXT NOT NULL DEFAULT 'open',
+    artifact_ref TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_analysis_case_entries_curve
+    ON analysis_case_entries(curve_id, created_at DESC, id DESC);
 """
 
 
@@ -147,7 +161,7 @@ def ensure_ui_schema(db, *, commit=True):
                WHERE (type='table' AND name IN (
                       'research_campaigns','ui_jobs','ui_job_queue','ui_settings',
                       'ui_service_heartbeats','ui_application_state',
-                      'analysis_cases'
+                      'analysis_cases','analysis_case_entries'
                     ))
                   OR (
                       type='index'
@@ -157,7 +171,8 @@ def ensure_ui_schema(db, *, commit=True):
                           'idx_ui_job_queue_dispatch',
                           'idx_ui_job_queue_job',
                           'idx_analysis_cases_status_priority',
-                          'idx_analysis_cases_campaign'
+                          'idx_analysis_cases_campaign',
+                          'idx_analysis_case_entries_curve'
                       )
                   )"""
         ).fetchall()
@@ -170,6 +185,7 @@ def ensure_ui_schema(db, *, commit=True):
         ("table", "ui_service_heartbeats"),
         ("table", "ui_application_state"),
         ("table", "analysis_cases"),
+        ("table", "analysis_case_entries"),
     }
     required_indexes = {
         ("index", "idx_ui_jobs_status_created"),
@@ -178,6 +194,7 @@ def ensure_ui_schema(db, *, commit=True):
         ("index", "idx_ui_job_queue_job"),
         ("index", "idx_analysis_cases_status_priority"),
         ("index", "idx_analysis_cases_campaign"),
+        ("index", "idx_analysis_case_entries_curve"),
     }
     changed = False
 
