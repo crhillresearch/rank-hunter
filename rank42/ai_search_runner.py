@@ -378,7 +378,7 @@ def run_campaign(db, root, campaign_id):
                            JOIN search_pipeline_candidates pc ON pc.run_id=ar.pipeline_run_id
                            WHERE ar.ai_campaign_id=? AND ar.round_number<?
                              AND pc.parameter IS NOT NULL
-                             AND pc.status IN ('completed','running','failed')
+                             AND pc.status IN ('completed','running','failed','inconclusive')
                            ORDER BY pc.parameter""",
                         (int(campaign_id), int(round_number)),
                     ).fetchall()

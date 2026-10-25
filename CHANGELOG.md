@@ -26,6 +26,11 @@ All notable changes to Rank Hunter are documented here.
 
 ### Changed
 
+- Pipelines now skip a fiber when a Weierstrass coefficient exceeds 500,000
+  digits, before running any expensive per-curve stages. Hill Rank-19 K3's
+  search adapter uses the same limit. The active Hill AI Hunt now stays with
+  manageable auxiliary multiples and can retry the fibers missed during the
+  temporary-storage failure.
 - Plugin family searches now keep their SQLite sandbox on the database drive
   instead of filling `/tmp`. AI Hunt can retry family parameters whose plugin
   search failed because that temporary filesystem ran out of space.

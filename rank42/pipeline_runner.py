@@ -204,6 +204,7 @@ from rank42.torsion_auto_search import discover_providers
 
 
 MARKER = "RANK42_PIPELINE_RESULT="
+MAX_PIPELINE_FIBER_COEFFICIENT_DIGITS = 500_000
 POPULATION_STAGE_IDS = frozenset({"select_survivors", "adaptive_ladder", "rea_sort"}) | FANOUT_STAGE_IDS
 TERMINAL_CANDIDATE_STATES = frozenset({
     "completed", "filtered", "constraint_filtered", "torsion_mismatch",
@@ -6948,8 +6949,29 @@ def _process_candidate(
     if pipeline_row is not None:
         context["pipeline_candidate_id"] = int(pipeline_row["id"])
 
+    model_digits = max(len(str(a)) for a in E.a_invariants())
+    oversized_model = model_digits > MAX_PIPELINE_FIBER_COEFFICIENT_DIGITS
+
     for stage_index, rec in _per_curve_stage_records(stages):
         stage_id = rec["id"]
+        if oversized_model:
+            print(
+                f"[pipeline candidate] {parameter} skipped: model coefficient "
+                f"has {model_digits} digits "
+                f"(limit {MAX_PIPELINE_FIBER_COEFFICIENT_DIGITS})",
+                flush=True,
+            )
+            results[str(stage_index)] = {
+                "stage_id": stage_id,
+                "result": {
+                    "status": "skipped",
+                    "reason": "model_size_limit",
+                    "model_coefficient_digits": model_digits,
+                    "limit_digits": MAX_PIPELINE_FIBER_COEFFICIENT_DIGITS,
+                },
+            }
+            status = "inconclusive"
+            break
         prior = results.get(str(stage_index))
         prior_status = (
             str((prior or {}).get("result", {}).get("status") or "")
