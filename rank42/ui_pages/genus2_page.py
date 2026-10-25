@@ -9,6 +9,8 @@ import streamlit as st
 from rank42.genus2_pipeline import audit_model, double_cover_from_elliptic
 from rank42.genus2_many_points import model_point_counts, point_census
 from rank42.genus2_registry import (
+    active_genus2_model_work,
+    delete_genus2_model,
     list_genus2_models,
     register_double_cover_from_curve,
     register_genus2_model,
@@ -246,9 +248,42 @@ def _render_model_detail(db, model, runs, point_count):
         )
 
     detail_view = tabs(
-        ["Overview", "Research history"], value="Overview",
+        ["Overview", "Research history", "Danger Zone"], value="Overview",
         key=f"models-detail-{selected_id}", variant="line",
     )
+    if detail_view == "Danger Zone":
+        with st.container(border=True):
+            st.subheader("Delete this model")
+            st.warning(
+                "This removes the saved model from Models. Exact points, search bands, "
+                "and past pipeline runs remain in the database because they may be "
+                "shared with another model of the same equation."
+            )
+            active = active_genus2_model_work(db, selected_id)
+            if active:
+                st.info("Finish or stop this work before deleting: " + ", ".join(active))
+            confirmation = st.text_input(
+                f"Type the model name to confirm: {model['label']}",
+                key=f"models-delete-confirm-{selected_id}",
+            )
+            if st.button(
+                "Delete model", icon=":material/delete:",
+                disabled=confirmation != str(model["label"]) or bool(active),
+                key=f"models-delete-{selected_id}",
+            ):
+                try:
+                    deleted = delete_genus2_model(
+                        db, selected_id, expected_label=confirmation,
+                    )
+                except ValueError as exc:
+                    st.error(str(exc))
+                else:
+                    st.session_state.pop("models-detail-id", None)
+                    st.session_state.pop(f"models-delete-confirm-{selected_id}", None)
+                    if deleted:
+                        st.toast(f"Deleted model #{selected_id}.")
+                    st.rerun()
+        return
     if detail_view == "Overview":
         section_title("Equation", "Exact smooth genus 2 model over Q.")
         st.code(_equation(coefficients), language="text")

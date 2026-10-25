@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import time
 from contextlib import closing
 
 import streamlit as st
 
 from rank42.db import connect_existing
+from rank42.agent_math import renderable_agent_math
 from rank42.ai_provider import key_source, selected_service
 from rank42.gemini_api import GeminiAPIError
 from rank42.groq_api import GroqAPIError
@@ -26,6 +28,63 @@ _PAGE_SELECTION_KEYS = {
     "Candidates": "candidates_view",
     "Settings": "settings_view",
 }
+
+
+def _bind_copy(text: str, *, key: str, title: str) -> None:
+    """Refresh clipboard text without registering a second Streamlit button."""
+    button_key = f"rh-agent-copy-{key}"
+    selector = f"div.st-key-{button_key} button"
+    payload = json.dumps(str(text), ensure_ascii=True).replace("<", "\\u003c")
+    st.html(
+        '<script>(()=>{'
+        f'const selector={json.dumps(selector)},value={payload};'
+        'const bind=()=>{const button=document.querySelector(selector);if(!button)return;'
+        'button._rhCopyText=value;if(button._rhCopyBound)return;button._rhCopyBound=true;'
+        'button.addEventListener("click",async()=>{'
+        'try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(button._rhCopyText);}'
+        'else{const area=document.createElement("textarea");area.value=button._rhCopyText;'
+        'area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);'
+        'area.select();if(!document.execCommand("copy"))throw Error("copy failed");area.remove();}'
+        'button.title="Copied";button.setAttribute("aria-label","Copied");'
+        f'setTimeout(()=>{{button.title={json.dumps(title)};'
+        f'button.setAttribute("aria-label",{json.dumps(title)});}},1400);'
+        '}catch(_){button.title="Copy failed";}});};bind();requestAnimationFrame(bind);'
+        '})();</script>',
+        unsafe_allow_javascript=True, width="content",
+    )
+
+
+def _bind_collapse() -> None:
+    st.html(
+        '<script>(()=>{const bind=()=>{'
+        'const button=document.querySelector("div.st-key-rh-agent-collapse button");'
+        'if(!button||button._rhCollapseBound)return;button._rhCollapseBound=true;'
+        'button.addEventListener("click",()=>document.querySelector('
+        '"div.st-key-rh-agent-launch button[data-testid=stPopoverButton]"'
+        ')?.click());};bind();requestAnimationFrame(bind);})();</script>',
+        unsafe_allow_javascript=True, width="content",
+    )
+
+
+def _transcript(messages: list[dict]) -> str:
+    return "\n\n".join(
+        f"{'You' if item.get('role') == 'user' else 'Agent'}: {item.get('text', '')}"
+        for item in messages
+    )
+
+
+def _response_actions(entry: dict, index: int, prompt: str | None) -> bool:
+    with st.container(horizontal=True, width="content", gap=None):
+        retry = st.button(
+            "Retry", icon=":material/refresh:", type="tertiary",
+            key=f"rh-agent-retry-{index}", help="Retry this question",
+            disabled=not bool(prompt),
+        )
+        st.button("Copy response", icon=":material/content_copy:",
+                  type="tertiary", key=f"rh-agent-copy-reply-{index}",
+                  help="Copy response")
+    _bind_copy(entry.get("text", ""), key=f"reply-{index}", title="Copy response")
+    return retry
 
 
 def render(db, ctx, page: str) -> None:
@@ -99,6 +158,51 @@ def render(db, ctx, page: str) -> None:
             padding-bottom: .35rem;
             border-bottom: 1px solid var(--rh-border);
         }
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div.st-key-rh-agent-header button,
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-retry-"] button,
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-copy-"] button {
+            width: 1.8rem !important; min-width: 1.8rem !important;
+            height: 1.8rem !important; min-height: 1.8rem !important;
+            padding: 0 !important; border: 0 !important;
+            border-radius: 7px !important;
+            background: transparent !important;
+            color: var(--rh-text-secondary) !important;
+            box-shadow: none !important;
+            position: relative !important;
+            display: flex !important; align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer;
+        }
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div.st-key-rh-agent-header button:hover,
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-retry-"] button:hover,
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-copy-"] button:hover {
+            background: var(--rh-card-2) !important;
+            color: var(--rh-primary) !important;
+        }
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div.st-key-rh-agent-header button:focus-visible,
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-retry-"] button:focus-visible,
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-copy-"] button:focus-visible {
+            outline: 2px solid var(--rh-primary);
+            outline-offset: 1px;
+        }
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div.st-key-rh-agent-header button p,
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-retry-"] button p,
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-copy-"] button p {
+            position: absolute !important; width: 1px !important; height: 1px !important;
+            padding: 0 !important; overflow: hidden !important;
+            clip-path: inset(50%) !important; white-space: nowrap !important;
+        }
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div.st-key-rh-agent-header button [data-testid="stIconMaterial"],
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-retry-"] button [data-testid="stIconMaterial"],
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-copy-"] button [data-testid="stIconMaterial"] {
+            position: absolute !important; left: 50% !important; top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 1rem !important; height: 1rem !important;
+            font-size: 1rem !important; margin: 0 !important;
+        }
+        div[data-testid="stPopoverBody"][aria-label="Agent"] div[class*="st-key-rh-agent-retry-"] {
+            margin-top: .12rem;
+        }
         div[data-testid="stPopoverBody"][aria-label="Agent"] div.st-key-rh-agent-messages {
             height: min(365px, calc(100dvh - 215px)) !important;
             min-height: 60px;
@@ -163,25 +267,57 @@ def _render_panel(db, ctx, page: str) -> None:
             "Agent", icon=":material/auto_awesome:", key="rh-agent-popover",
             help="Rank Hunter Agent. App changes require confirmation.",
         ):
+            messages = st.session_state.setdefault("rh_agent_messages", [])
             with st.container(key="rh-agent-header", border=False):
-                heading, clear = st.columns([4, 1], vertical_alignment="center")
+                heading, controls = st.columns(
+                    [7, 3], gap="small", vertical_alignment="center")
                 with heading:
                     st.markdown("**Rank Hunter Agent**")
                     active = get_active_curve_id(st.session_state)
                     st.caption(f"{page} · {selected_service(db)}"
                                + (f" · curve #{active}" if active else ""))
-                if clear.button("Clear", key="rh-agent-clear", type="tertiary"):
+                with controls:
+                    with st.container(horizontal=True, wrap=False, gap=None,
+                                      horizontal_alignment="right",
+                                      vertical_alignment="center",
+                                      key="rh-agent-header-actions"):
+                        st.button("Copy chat", icon=":material/content_copy:",
+                                  type="tertiary", key="rh-agent-copy-all",
+                                  help="Copy chat")
+                        clear_clicked = st.button(
+                            "Clear chat", icon=":material/delete_outline:",
+                            key="rh-agent-clear", help="Clear chat", type="tertiary")
+                        st.button("Collapse chat", icon=":material/keyboard_arrow_down:",
+                                  type="tertiary", key="rh-agent-collapse",
+                                  help="Collapse chat")
+                    copy_slot = st.empty()
+                    with copy_slot:
+                        _bind_copy(_transcript(messages), key="all", title="Copy chat")
+                    _bind_collapse()
+                if clear_clicked:
                     st.session_state["rh_agent_messages"] = []
                     st.session_state["rh_agent_pending"] = None
-            messages = st.session_state.setdefault("rh_agent_messages", [])
+                    messages = st.session_state["rh_agent_messages"]
+                    with copy_slot:
+                        _bind_copy("", key="all", title="Copy chat")
             chat_box = st.container(height=365, border=False, autoscroll=True, key="rh-agent-messages")
+            retry_question = None
             with chat_box:
                 if not messages:
                     st.markdown("**What can I help you find?**")
                     st.caption("Ask about your research, or tell me to create a campaign, start an AI Hunt, manage a plugin, or control a job.")
-                for entry in messages[-16:]:
+                visible_start = max(0, len(messages) - 16)
+                for index in range(visible_start, len(messages)):
+                    entry = messages[index]
                     with st.chat_message(entry["role"]):
-                        st.markdown(entry["text"], unsafe_allow_html=False)
+                        st.markdown(renderable_agent_math(entry["text"]), unsafe_allow_html=False)
+                        if entry["role"] == "assistant":
+                            prior_user = next(
+                                (item["text"] for item in reversed(messages[:index])
+                                 if item["role"] == "user"), None,
+                            )
+                            if _response_actions(entry, index, prior_user):
+                                retry_question = prior_user
                 pending_slot = st.empty()
             with st.container(key="rh-agent-composer", border=False):
                 with st.form("rh-agent-form", clear_on_submit=True, border=False):
@@ -196,7 +332,8 @@ def _render_panel(db, ctx, page: str) -> None:
                             "Send", icon=":material/arrow_upward:", type="primary",
                             key="rh-agent-send", help="Send message",
                         )
-            if submitted and question.strip():
+            question = retry_question or question.strip()
+            if (submitted or retry_question) and question:
                 recent_requests = [t for t in st.session_state.get("rh_agent_request_times", [])
                                    if time.monotonic() - t < 600]
                 if len(recent_requests) >= 12:
@@ -205,11 +342,11 @@ def _render_panel(db, ctx, page: str) -> None:
                 recent_requests.append(time.monotonic())
                 st.session_state["rh_agent_request_times"] = recent_requests
                 prior = list(messages[-6:])
-                messages.append({"role": "user", "text": question.strip()})
+                messages.append({"role": "user", "text": question})
                 st.session_state["rh_agent_pending"] = None
                 with chat_box:
                     with st.chat_message("user"):
-                        st.write(question.strip())
+                        st.write(question)
                 try:
                     selected_view = (st.session_state.get(_PAGE_SELECTION_KEYS[page])
                                      if page in _PAGE_SELECTION_KEYS else None)
@@ -240,7 +377,7 @@ def _render_panel(db, ctx, page: str) -> None:
                                 try:
                                     for chunk in chunks:
                                         reply += str(chunk)
-                                        output.write(reply[:2000])
+                                        output.markdown(renderable_agent_math(reply[:2000]))
                                         if len(reply) >= 2000:
                                             break
                                 finally:
@@ -249,13 +386,17 @@ def _render_panel(db, ctx, page: str) -> None:
                                         close()
                                 if not reply:
                                     reply = "The AI service returned no answer. Try a more specific question."
-                                output.write(reply[:2000])
+                                output.markdown(renderable_agent_math(reply[:2000]))
+                                _response_actions({"text": reply[:2000]}, len(messages), question)
                         response = {"reply": reply[:2000], "action": "none", "curve_id": None}
                     else:
                         with chat_box:
                             with st.chat_message("assistant"):
-                                st.write(response["reply"])
+                                st.markdown(renderable_agent_math(response["reply"]))
+                                _response_actions(response, len(messages), question)
                     messages.append({"role": "assistant", "text": response["reply"]})
+                    with copy_slot:
+                        _bind_copy(_transcript(messages), key="all", title="Copy chat")
                     if response["action"] == "calculate_log_n":
                         st.session_state["rh_agent_pending"] = {
                             "kind": "calculate_log_n", "curve_id": response["curve_id"]}
@@ -266,6 +407,9 @@ def _render_panel(db, ctx, page: str) -> None:
                     with chat_box:
                         with st.chat_message("assistant"):
                             st.write(str(exc))
+                            _response_actions(messages[-1], len(messages) - 1, question)
+                    with copy_slot:
+                        _bind_copy(_transcript(messages), key="all", title="Copy chat")
                 del messages[:-24]
             pending = st.session_state.get("rh_agent_pending")
             if pending:
@@ -297,6 +441,13 @@ def _render_panel(db, ctx, page: str) -> None:
                         with chat_box:
                             with st.chat_message("assistant"):
                                 st.write(result)
+                                prior_user = next(
+                                    (item["text"] for item in reversed(messages[:-1])
+                                     if item["role"] == "user"), None,
+                                )
+                                _response_actions(messages[-1], len(messages) - 1, prior_user)
+                        with copy_slot:
+                            _bind_copy(_transcript(messages), key="all", title="Copy chat")
                     elif cancel.button("Cancel", key="rh-agent-cancel"):
                         st.session_state["rh_agent_pending"] = None
                         pending_slot.empty()

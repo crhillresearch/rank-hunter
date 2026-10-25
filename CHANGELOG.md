@@ -26,20 +26,29 @@ All notable changes to Rank Hunter are documented here.
 
 ### Changed
 
+- Tooltips now dismiss after pointer clicks instead of lingering while a
+  control keeps focus. Keyboard focus and Help icons still work normally.
+- Agent now answers family and rank curve lookups from the local database,
+  including curve IDs and stored rational-point counts. The chat also has
+  clear, copy-chat, and compact retry and copy-response controls.
+- Agent can identify the stored curve with the most verified rational points.
+  The chat copy controls now use visible icon buttons, and the header has a
+  collapse button.
+- Models now has a Danger Zone for deleting a saved genus-2 model. It blocks
+  deletion during active work and keeps shared exact points and run history.
+- Agent chat now renders mathematical notation such as torsion groups and
+  rational numbers correctly, including older replies already in the chat.
+- Agent can now read installed family-plugin equations directly. Asking for
+  Elkies Rank-18 shows its exact cover, parameterization, and Weierstrass
+  coefficients, including after a clarifying follow-up.
 - Pipelines now skip a fiber when a Weierstrass coefficient exceeds 500,000
-  digits, before running any expensive per-curve stages. Hill Rank-19 K3's
-  search adapter uses the same limit. The active Hill AI Hunt now stays with
-  manageable auxiliary multiples and can retry the fibers missed during the
-  temporary-storage failure.
+  digits, before running any expensive per-curve stages.
 - Plugin family searches now keep their SQLite sandbox on the database drive
   instead of filling `/tmp`. AI Hunt can retry family parameters whose plugin
   search failed because that temporary filesystem ran out of space.
-- Large Hill K3 specializations no longer stall the generator hunt while
+- Large specializations no longer stall the generator hunt while
   building point-centred quartics from enormous coefficients. Rank Hunter
   records why that stage was skipped and continues the remaining candidates.
-- Hill Rank-19 K3 AI Hunts now widen their integer-index window and exclude
-  fibers already searched, including indices identified by the family's exact
-  symmetry.
 - Ratpoints can read very large exact polynomial coefficients from standard
   input. This avoids OS argument-size failures on large family specializations.
 

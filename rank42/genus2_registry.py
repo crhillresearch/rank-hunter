@@ -23,6 +23,56 @@ def get_genus2_model(db, model_id):
     ).fetchone()
 
 
+def active_genus2_model_work(db, model_id):
+    """Return active jobs and pipeline runs that target a saved model ID."""
+    ensure_pipeline_schema(db)
+    wanted = int(model_id)
+    active = []
+    runs = db.execute(
+        """SELECT id,target_json FROM search_pipeline_runs
+           WHERE target_mode='genus2_jacobian'
+             AND status IN ('queued','starting','running','stopping','paused')"""
+    ).fetchall()
+    for run in runs:
+        try:
+            target = json.loads(run["target_json"] or "{}")
+            if int(target.get("genus2_model_id")) == wanted:
+                active.append(f"Pipeline run #{int(run['id'])}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+    has_jobs = db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='ui_jobs'"
+    ).fetchone()
+    if has_jobs:
+        jobs = db.execute(
+            """SELECT id,metadata_json FROM ui_jobs
+               WHERE status IN ('queued','starting','running','stopping','paused')"""
+        ).fetchall()
+        for job in jobs:
+            try:
+                metadata = json.loads(job["metadata_json"] or "{}")
+                if int(metadata.get("model_id")) == wanted:
+                    active.append(f"Job #{int(job['id'])}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+    return active
+
+
+def delete_genus2_model(db, model_id, *, expected_label):
+    """Delete one saved model without deleting evidence shared by its equation."""
+    row = get_genus2_model(db, model_id)
+    if row is None:
+        return False
+    if str(row["label"]) != str(expected_label):
+        raise ValueError("The model name changed. Reload and confirm the current name.")
+    active = active_genus2_model_work(db, model_id)
+    if active:
+        raise ValueError("Finish or stop active work first: " + ", ".join(active))
+    db.execute("DELETE FROM genus2_models WHERE id=?", (int(model_id),))
+    db.commit()
+    return True
+
+
 def register_genus2_model(db, *, label, coefficients, source_curve_id=None,
                           construction=None):
     ensure_pipeline_schema(db)

@@ -334,6 +334,43 @@ _RESPONSIVE_LAYOUT_CSS = """
 """
 
 
+_TOOLTIP_CLICK_DISMISS_JS = """
+<script>
+(() => {
+    if (window.__rhTooltipClickDismissInstalled) return;
+    window.__rhTooltipClickDismissInstalled = true;
+    document.addEventListener('pointerup', event => {
+        const button = event.target?.closest?.('button, [role="button"]');
+        if (!button || button.closest('[data-testid="stTooltipIcon"]')) return;
+
+        // Streamlit keeps a help tooltip open while its trigger retains focus.
+        // A pointer click has finished using that focus; keyboard focus is untouched.
+        const trigger = button.closest('[data-testid="stTooltipHoverTarget"]');
+        if (trigger) {
+            setTimeout(() => {
+                const focused = document.activeElement;
+                if (focused && trigger.contains(focused) &&
+                    typeof focused.blur === 'function') focused.blur();
+            }, 0);
+        }
+
+        // Native title tips can also stay visible over a clicked icon.
+        const titled = event.target.closest('[title]') || button.closest('[title]');
+        if (!titled || !titled.isConnected) return;
+        const title = titled.getAttribute('title');
+        if (!title) return;
+        titled.removeAttribute('title');
+        titled.addEventListener('pointerleave', () => {
+            if (titled.isConnected && !titled.hasAttribute('title')) {
+                titled.setAttribute('title', title);
+            }
+        }, {once: true});
+    }, true);
+})();
+</script>
+"""
+
+
 def configure(theme: Theme | None = None, *, appearance: str = "light"):
     """Configure Streamlit and apply one filesystem theme appearance."""
     app_icon = Path(__file__).resolve().parents[2] / "assets" / "rank-hunter-app-icon.svg"
@@ -354,6 +391,7 @@ def configure(theme: Theme | None = None, *, appearance: str = "light"):
     if native_appearance_css:
         st.html(native_appearance_css)
     st.html(_RESPONSIVE_LAYOUT_CSS)
+    st.html(_TOOLTIP_CLICK_DISMISS_JS, unsafe_allow_javascript=True)
 
 QUARTICS_ICON = ":material/control_camera:"
 
@@ -880,6 +918,10 @@ _PAGE_BAR_GROUPS = (
 )
 _PAGE_BAR_LABELS = {"Corpora": "Libraries", "External Catalog": "Catalogs"}
 _PAGE_LOCAL_ICONS = {
+    "extension:point_hunter:point_hunter": {
+        "Overview": "space_dashboard", "Construct": "architecture",
+        "Hunt": "point_scan", "Evidence": "verified",
+    },
     "Rank Lab": {"Certify points": "verified", "Prove rank": "rule", "Search rank": "search"},
     "Casebook": {"Case file": "description", "Journal": "edit_note", "Evidence": "verified", "Family": "account_tree", "History": "history"},
     "AI Hunt": {"Campaigns": "bookmark", "New hunt": "auto_awesome"},
@@ -897,6 +939,10 @@ _PAGE_LOCAL_ICONS = {
     "Nodes": {"Workers": "computer", "Connect": "add_link", "Remote Tasks": "terminal"},
 }
 _PAGE_LOCAL_VIEWS = {
+    "extension:point_hunter:point_hunter": (
+        ("Overview", "Construct", "Hunt", "Evidence"),
+        "point-hunter-view", None, True,
+    ),
     "Rank Lab": (("Certify points", "Prove rank", "Search rank"), "analysis-hub-lane", None, True),
     "Casebook": (("Case file", "Journal", "Evidence", "Family", "History"), "casebook-section", None, False),
     "AI Hunt": (("Campaigns", "New hunt"), "ai-search-view-v2", None, True),
