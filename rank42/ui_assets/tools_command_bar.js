@@ -2,11 +2,15 @@ export default function (component) {
   const config = component.data;
   const appWindow = window;
   const appDocument = document;
+  const controllerSlot = config.controllerSlot || "__rhToolsCommandBar";
+  const instanceSlot = controllerSlot + "Instance";
+  const instanceToken = {};
+  appWindow[instanceSlot] = instanceToken;
   function initialize() {
+  if (appWindow[instanceSlot] !== instanceToken) return;
 /* The visible controls use native DOM; hidden Streamlit buttons own navigation. */
   const rootId = config.rootId || "rh-tools-commandbar";
   const bridgePrefix = config.bridgePrefix || "tools-select-";
-  const controllerSlot = config.controllerSlot || "__rhToolsCommandBar";
   const queryParam = config.queryParam === undefined ? "rh_tool" : config.queryParam;
   const toolbarLabel = config.toolbarLabel || "Research tools";
   const itemNoun = config.itemNoun || "tools";
@@ -17,6 +21,16 @@ export default function (component) {
     return;
   }
   if (appWindow[controllerSlot]) appWindow[controllerSlot].destroy();
+  function hostWasReset() {
+    const currentRoots = appDocument.querySelectorAll("#" + rootId);
+    return !root.isConnected || currentRoots[currentRoots.length - 1] !== root
+      || root.childElementCount === 0;
+  }
+  function remountIfNeeded(destroy) {
+    if (!hostWasReset()) return;
+    destroy();
+    appWindow.setTimeout(initialize, 0);
+  }
   const controller = new AbortController();
   const signal = controller.signal;
   const tools = config.groups.flatMap(group =>
@@ -65,8 +79,7 @@ export default function (component) {
   }
 
   root.replaceChildren();
-  // Keep the page bar's Axiom surface when Streamlit mounts a toast or dialog.
-  // The resolved token is also available when the theme stylesheet is remounted.
+  // Keep the Axiom surface while Streamlit remounts the toolbar host.
   if (config.surfaceColor) {
     root.style.setProperty("background-color", config.surfaceColor, "important");
   }
@@ -128,7 +141,7 @@ export default function (component) {
       root.appendChild(actionGroup);
     }
     const observer = new MutationObserver(() => {
-      if (!root.isConnected) destroy();
+      remountIfNeeded(destroy);
     });
     observer.observe(appDocument.body, { childList: true, subtree: true });
     function destroy() {
@@ -406,7 +419,7 @@ export default function (component) {
   }, { signal });
   updateUrl(current.name, true);
   const observer = new MutationObserver(() => {
-    if (!root.isConnected) destroy();
+    remountIfNeeded(destroy);
   });
   observer.observe(appDocument.body, { childList: true, subtree: true });
   function destroy() {

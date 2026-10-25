@@ -2,6 +2,8 @@
 
 All notable changes to Rank Hunter are documented here.
 
+## [0.10.6] — Unreleased
+
 ## [0.10.5] — Unreleased
 
 ### Added
@@ -48,6 +50,7 @@ All notable changes to Rank Hunter are documented here.
 
 - Jobs now has Active, Queue, and Results. Results includes the old History
   actions to resume, retry, or delete a job, and can open older jobs by number.
+- Kept the page navigation background steady when a notification appears.
 - Groq requests now identify Rank Hunter so Cloudflare accepts the client.
   Connection errors distinguish that block from a model permission error.
 - Casebook now keeps the case form on the default view, with the research brief

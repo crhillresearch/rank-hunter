@@ -23,7 +23,7 @@ from rank42.gemini_api import (
     read_key,
     write_key,
 )
-from rank42.pipeline_catalog import validate_pipeline
+from rank42.pipeline_catalog import normalize_pipeline, validate_pipeline
 
 
 LIMITS = {
@@ -151,6 +151,26 @@ def test_gemini_can_build_a_valid_bounded_pipeline(monkeypatch):
         validate_decision(raw, options=options,
                           config={**LIMITS, "allow_pipeline_build": False},
                           target_mode="torsion")
+
+
+@pytest.mark.parametrize("geometry_stage", ["pointed_quartic", "mw_growth_loop"])
+def test_ai_candidate_limit_does_not_shrink_geometry_pool_below_anchors(geometry_stage):
+    stages = normalize_pipeline([
+        "integral_seed", geometry_stage, "independence", "stop_goal",
+    ])
+    option = {"id": "built", "stages": stages}
+    decision = {"candidate_limit": 1, "depth": 1, "window": "default",
+                "search_seed": 1}
+
+    scheduled, _ = execution_for_decision(
+        option=option, decision=decision, target_mode="curve",
+        target={"curve_id": 1}, config=LIMITS,
+    )
+
+    geometry = next(stage["config"] for stage in scheduled
+                    if stage["id"] == geometry_stage)
+    assert geometry["pool_size"] >= geometry["anchors"]
+    assert validate_pipeline("curve", scheduled) == []
 
 
 def test_ai_torsion_budget_is_shared_across_providers():

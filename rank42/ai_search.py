@@ -538,7 +538,9 @@ def execution_for_decision(*, option, decision, target_mode, target, config):
         settings = stage["config"]
         if "keep" in settings:
             settings["keep"] = min(int(settings["keep"]), limit)
-        for key in ("max_candidates", "exact_candidates", "pool_size", "max_children",
+        # Candidate limit counts curves entering the Pipeline. Quartic/MW
+        # pool_size counts covering models per curve and must stay ≥ anchors.
+        for key in ("max_candidates", "exact_candidates", "max_children",
                     "max_coverings", "max_sections", "max_conditions", "scan_limit"):
             if key in settings and type(settings[key]) is int and settings[key] > 0:
                 settings[key] = min(int(settings[key]), limit)
