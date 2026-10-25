@@ -25,7 +25,7 @@ from rank42.constructive_artifact import (
 from rank42.torsion import canonical_torsion_label
 
 
-CATALOG_VERSION = 28
+CATALOG_VERSION = 29
 ELLIPTIC_TARGET_MODES = ("family", "torsion", "general", "curve")
 TARGET_MODES = (*ELLIPTIC_TARGET_MODES, "genus2_jacobian")
 EVIDENCE_LEVELS = ("heuristic", "exact", "conditional", "rigorous", "control")
@@ -649,6 +649,32 @@ _STAGE_LIST = (
         "exact",
         "medium",
         {"height": 40, "max_points": 500, "max_x_values": 25000},
+    ),
+    PipelineStageSpec(
+        "genus2_many_points_hunt",
+        "Genus 2 Many Points Hunt",
+        "Genus 2",
+        "Run ratpoints over the next unsearched denominator bands. Verify and retain every rational point, including valid sign symmetries, in a persistent per-model ledger. The count is a lower bound on rational points, not Jacobian rank.",
+        frozenset({"genus2_jacobian"}),
+        frozenset({"genus2_model_valid"}),
+        frozenset({"genus2_point_ledger"}),
+        "exact",
+        "expensive",
+        {"height": 1000000, "band_width": 500, "bands_per_run": 100,
+         "timeout": 300, "backend": "CPU", "goal_points": 649},
+        repeatable=True,
+    ),
+    PipelineStageSpec(
+        "genus2_point_census",
+        "Genus 2 Point Census",
+        "Genus 2",
+        "Recheck every stored point against the exact equation and count distinct affine and rational points at infinity. This certifies a point-count lower bound, not completeness or Jacobian rank.",
+        frozenset({"genus2_jacobian"}),
+        frozenset({"genus2_model_valid"}),
+        frozenset({"genus2_point_count"}),
+        "exact",
+        "medium",
+        {},
     ),
     PipelineStageSpec(
         "genus2_divisor_rank_search",
@@ -2970,6 +2996,22 @@ def validate_pipeline(target_mode, stages):
                 errors.append(
                     f"Step {index} · Genus 2 Rational Point Search: search budgets exceed supported ranges"
                 )
+        elif sid == "genus2_many_points_hunt":
+            try:
+                height = int(cfg.get("height"))
+                band_width = int(cfg.get("band_width"))
+                bands_per_run = int(cfg.get("bands_per_run"))
+                timeout = int(cfg.get("timeout"))
+                goal_points = int(cfg.get("goal_points"))
+            except (TypeError, ValueError):
+                height = band_width = bands_per_run = timeout = goal_points = 0
+            if not (1 <= height <= 1000000000000 and 1 <= band_width <= height
+                    and 1 <= bands_per_run <= 1000 and 1 <= timeout <= 86400
+                    and 1 <= goal_points <= 1000000
+                    and cfg.get("backend") in {"CPU", "GPU"}):
+                errors.append(
+                    f"Step {index} · Genus 2 Many Points Hunt: invalid search budget or backend"
+                )
         elif sid == "genus2_divisor_rank_search":
             try:
                 numerator_bound = int(cfg.get("numerator_bound"))
@@ -4376,6 +4418,11 @@ PRESET_TEMPLATE_BY_ID = {
         "genus2_divisor_rank_search",
         "genus2_project_to_elliptic",
     ],
+    "genus2_many_points": [
+        "genus2_model_audit",
+        "genus2_many_points_hunt",
+        "genus2_point_census",
+    ],
     "historical_seed_funnel": HISTORICAL_SEED_FUNNEL_TEMPLATE,
     "euler_lattice_hunt": EULER_LATTICE_HUNT_TEMPLATE,
     "frontiermath_record_breaker": FRONTIERMATH_RECORD_BREAKER_TEMPLATE,
@@ -4435,6 +4482,11 @@ def pipeline_preset_options(target_mode, *, plugin_id=None):
     mode = str(target_mode)
     if mode == "genus2_jacobian":
         options = [
+            {
+                "id": "genus2_many_points",
+                "label": "Many Points Hunt",
+                "description": "Continue exact point searches over new denominator bands and count every verified rational point on this genus-two model.",
+            },
             {
                 "id": "genus2_research",
                 "label": "Genus 2 Research",
@@ -4555,6 +4607,8 @@ def template_stages(name, target_mode):
 
     mode = str(target_mode)
     if mode == "genus2_jacobian":
+        if name == "genus2_many_points":
+            return [normalize_stage({"id": stage_id}) for stage_id in PRESET_TEMPLATE_BY_ID[name]]
         return [
             normalize_stage({"id": "genus2_model_audit"}),
             normalize_stage({"id": "genus2_elliptic_quotient_rank"}),

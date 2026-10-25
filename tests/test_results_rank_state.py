@@ -111,24 +111,21 @@ def test_results_module_exposes_shared_workspace_and_scientific_detail():
     job_controls = inspect.getsource(jobs_detail_panel._render_job_controls)
     legacy_page = inspect.getsource(results_page.page)
 
-    assert "_scoreboard(db,pairs)" in workspace
-    assert "_detail(db,row,s,ctx.detected_science_python())" in workspace
+    assert "_scoreboard(db,row,s)" in workspace
+    assert "_detail(db,row,s,ctx)" in workspace
     assert "results_page.render_jobs_results(db, ctx)" in jobs
 
     assert "_hunt_recap(db, row, summary, science_python)" in scientific_detail
-    assert "'Parsed scientific result'" in scientific_detail
+    assert "'Parsed scientific result'" not in scientific_detail
     assert "'Load raw log'" not in scientific_detail
     assert "_render_job_raw_log(db, row)" in scientific_detail
     assert scientific_detail.index("_render_job_raw_log(db, row)") < scientific_detail.index(
         "_hunt_recap(db, row, summary, science_python)"
     )
-    assert scientific_detail.index("_render_job_raw_log(db, row)") < scientific_detail.index(
-        "'Parsed scientific result'"
-    )
     assert "with expander('Command'" not in scientific_detail
     assert "command_json" not in scientific_detail
-    assert 'st.markdown("#### Raw log")' in raw_log_detail
-    assert 'render_raw_log(read_log(row["log_path"]))' in raw_log_detail
+    assert 'render_raw_log(' in raw_log_detail
+    assert 'read_log(row["log_path"])' in raw_log_detail
     assert "_render_live_raw_log_fragment" in raw_log_detail
     assert "results_page.render_job_scientific_result(" in job_detail
 

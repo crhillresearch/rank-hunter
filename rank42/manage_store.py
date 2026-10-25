@@ -1685,7 +1685,7 @@ def campaign_research_brief(db, campaign_id):
                 "title": "Review failed or interrupted work",
                 "why": "The campaign has no retained leading curve and at least one failed, stopped, or interrupted job.",
                 "page": "Jobs",
-                "jobs_section": "History",
+                "jobs_section": "Results",
             }
         else:
             next_action = {

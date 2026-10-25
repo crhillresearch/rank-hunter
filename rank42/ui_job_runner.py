@@ -77,15 +77,27 @@ def main():
             log.flush()
             env = child_environment()
             env["RANK_HUNTER_JOB_ID"] = str(args.job_id)
-            proc = subprocess.Popen(
-                command,
-                cwd=cwd,
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                env=env,
-            )
-            rc = proc.wait()
+            if row["kind"] == "pipeline_search":
+                from rank42.node_compute_client import (
+                    full_job_routing_enabled, run_remote_ui_job,
+                )
+                remote = full_job_routing_enabled()
+            else:
+                remote = False
+            if remote:
+                log.write("[nodes] Running full Pipeline on a paired workhorse\n")
+                log.flush()
+                rc = run_remote_ui_job(row, db_path)
+            else:
+                proc = subprocess.Popen(
+                    command,
+                    cwd=cwd,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    env=env,
+                )
+                rc = proc.wait()
         final_status = _terminal_status(db, args.job_id, rc)
         update_job(
             db,

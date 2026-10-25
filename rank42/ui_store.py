@@ -1970,6 +1970,13 @@ def stop_job(db, job_id, *, force=False, pause=False):
         bool(pause) and not bool(force),
         force=bool(force),
     )
+    if str(row["kind"]) == "pipeline_search":
+        try:
+            from rank42.node_cluster import cancel_ui_job_tasks
+
+            cancel_ui_job_tasks(row["cwd"], job_id)
+        except (OSError, sqlite3.Error):
+            pass
 
     def finalize_dead():
         update_job(

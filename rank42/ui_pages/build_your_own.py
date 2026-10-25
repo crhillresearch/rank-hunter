@@ -948,6 +948,40 @@ def _config_editor(rec, index):
             value=int(cfg.get("max_x_values") or 25000), key=f"{key}-x-values",
         ))
         st.caption("Every reported point is checked over Q. Search coverage is recorded with the result.")
+    elif stage_id == "genus2_many_points_hunt":
+        a, b, c = st.columns(3)
+        cfg["height"] = int(a.number_input(
+            "Rational x height", min_value=1, max_value=1000000000000,
+            value=int(cfg.get("height") or 1000000), key=f"{key}-height",
+        ))
+        cfg["band_width"] = int(b.number_input(
+            "Denominators per band", min_value=1, max_value=int(cfg["height"]),
+            value=min(int(cfg.get("band_width") or 500), int(cfg["height"])),
+            key=f"{key}-band-width",
+        ))
+        cfg["bands_per_run"] = int(c.number_input(
+            "Bands this run", min_value=1, max_value=1000,
+            value=int(cfg.get("bands_per_run") or 100), key=f"{key}-bands",
+        ))
+        a, b, c = st.columns(3)
+        cfg["timeout"] = int(a.number_input(
+            "Seconds per band", min_value=1, max_value=86400,
+            value=int(cfg.get("timeout") or 300), key=f"{key}-timeout",
+        ))
+        cfg["backend"] = b.selectbox(
+            "Ratpoints backend", ["CPU", "GPU"],
+            index=0 if cfg.get("backend", "CPU") != "GPU" else 1,
+            key=f"{key}-backend",
+        )
+        cfg["goal_points"] = int(c.number_input(
+            "Point goal", min_value=1, max_value=1000000,
+            value=int(cfg.get("goal_points") or 649), key=f"{key}-goal",
+        ))
+        st.caption(
+            "This run covers at most Bands this run × Denominators per band. "
+            "Completed bands are saved; rerunning continues at the next band for the same x height. "
+            "Raise x height to search a larger numerator range."
+        )
     elif stage_id == "genus2_divisor_rank_search":
         c1, c2, c3, c4 = st.columns(4)
         cfg["numerator_bound"] = int(c1.number_input(
@@ -3840,7 +3874,13 @@ def _render_settings(
 
     goal_key = f"byo-goal-{mode}"
     pending_goal = st.session_state.pop("byo_pending_target_rank", None)
-    if goal_key in st.session_state:
+    point_hunt = mode == "genus2_jacobian" and any(
+        stage.get("id") == "genus2_many_points_hunt" for stage in stages
+    )
+    if point_hunt:
+        target_rank = 1
+        goal_col.caption("Point goal is in Many Points Hunt settings.")
+    elif goal_key in st.session_state:
         target_rank = int(goal_col.number_input(
             "Rank goal",
             min_value=1,
@@ -4278,6 +4318,8 @@ def _render_genus2_run_report(run_row, candidate_row):
     quotient = by_stage.get("genus2_elliptic_quotient_rank") or {}
     local = by_stage.get("genus2_frobenius_profile") or {}
     points = by_stage.get("genus2_rational_point_search") or {}
+    many_points = by_stage.get("genus2_many_points_hunt") or {}
+    census = by_stage.get("genus2_point_census") or many_points
     divisors = by_stage.get("genus2_divisor_rank_search") or {}
     projection = by_stage.get("genus2_project_to_elliptic") or {}
     name = str(target.get("label") or provenance.get("model_label") or "Genus 2 Jacobian")
@@ -4304,8 +4346,17 @@ def _render_genus2_run_report(run_row, candidate_row):
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Jacobian rank lower bound", f"≥{certified}" if certified else "Unknown")
     m2.metric("Good primes", int(local.get("usable_prime_count") or 0))
-    m3.metric("Rational points", int(points.get("points_found") or 0))
+    m3.metric("Rational points found", int(census.get("verified_point_lower_bound") or points.get("points_found") or 0))
     m4.metric("Degree-two divisors", int(divisors.get("divisors_found") or 0))
+    if many_points:
+        if int(census.get("verified_point_lower_bound") or 0) >= int(many_points.get("goal_points") or 649):
+            st.success(f"Point goal reached: {int(census.get('verified_point_lower_bound') or 0)} verified rational points found.")
+        st.caption(
+            f"Many Points Hunt · +{int(many_points.get('new_points') or 0)} this run · "
+            f"x-height ≤{many_points.get('height')} · denominators covered "
+            f"through {many_points.get('covered_denominators_through', 'see coverage below')} · "
+            f"{int(many_points.get('remaining_bands_at_height') or 0)} bands left"
+        )
     if quotient.get("proof_status") == "rigorous_rank_lower_bound":
         st.success(
             f"Elliptic quotient certifies Jacobian rank ≥{quotient['rank_lower_bound']}: "

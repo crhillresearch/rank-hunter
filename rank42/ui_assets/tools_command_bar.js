@@ -65,6 +65,11 @@ export default function (component) {
   }
 
   root.replaceChildren();
+  // Keep the page bar's Axiom surface when Streamlit mounts a toast or dialog.
+  // The resolved token is also available when the theme stylesheet is remounted.
+  if (config.surfaceColor) {
+    root.style.setProperty("background-color", config.surfaceColor, "important");
+  }
   root.setAttribute("role", "toolbar");
   root.setAttribute("aria-label", toolbarLabel);
   if (config.pageTitle) {

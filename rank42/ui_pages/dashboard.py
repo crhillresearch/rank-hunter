@@ -1111,7 +1111,7 @@ def _open_attention_item(item):
         st.session_state["manage_campaign_id"] = int(object_id)
     elif object_type == "job":
         st.session_state["manage_job_id"] = int(object_id)
-        st.session_state["jobs_section_pending"] = "History"
+        st.session_state["jobs_section_pending"] = "Results"
     elif object_type == "pipeline_run":
         st.session_state["byo_focus_run_id"] = int(object_id)
     elif object_type == "schedule":

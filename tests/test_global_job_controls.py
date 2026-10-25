@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from rank42 import manage_store
-from rank42.ui_pages import build_your_own, common, jobs_detail_panel, jobs_page
+from rank42.ui_pages import build_your_own, common, jobs_detail_panel, jobs_page, results_page
 from rank42.ui_store import create_job, ensure_ui_schema, get_job, update_job
 
 
@@ -367,7 +367,7 @@ def test_pipeline_run_handoff_focuses_existing_process_in_jobs(tmp_path, monkeyp
 
     state = {
         "manage_pipeline_run_id": run_id,
-        "jobs-history-select": 999,
+        "results_table_job_id": 999,
     }
     monkeypatch.setattr(
         jobs_page,
@@ -377,9 +377,9 @@ def test_pipeline_run_handoff_focuses_existing_process_in_jobs(tmp_path, monkeyp
 
     jobs_page._pipeline_run_handoff(db, types.SimpleNamespace())
     assert state["manage_job_id"] == jid
-    assert state["jobs_section_pending"] == "History"
+    assert state["jobs_section_pending"] == "Results"
     assert "manage_pipeline_run_id" not in state
-    assert "jobs-history-select" not in state
+    assert "results_table_job_id" not in state
     db.close()
 
 
@@ -436,7 +436,6 @@ def test_jobs_detail_active_history_are_extracted_without_changing_compatibility
     assert jobs_page._campaign_assignment is jobs_detail_panel.campaign_assignment
     assert jobs_page._job_detail is jobs_detail_panel.render_job_detail
     assert jobs_page._active is jobs_detail_panel.render_active
-    assert jobs_page._history is jobs_detail_panel.render_history
     assert jobs_page._job_is_paused is jobs_detail_panel.job_is_paused
     assert jobs_page._job_display_status is jobs_detail_panel.job_display_status
     assert jobs_page._pipeline_run_id is jobs_detail_panel.pipeline_run_id
@@ -445,7 +444,8 @@ def test_jobs_detail_active_history_are_extracted_without_changing_compatibility
     controls_source = inspect.getsource(jobs_detail_panel._render_job_controls)
     campaign_source = inspect.getsource(jobs_detail_panel.campaign_assignment)
     active_source = inspect.getsource(jobs_detail_panel.render_active)
-    history_source = inspect.getsource(jobs_detail_panel.render_history)
+    results_source = inspect.getsource(results_page.render_jobs_results)
+    results_detail_source = inspect.getsource(results_page._detail)
 
     for key in (
         "jobs-campaign-",
@@ -466,9 +466,9 @@ def test_jobs_detail_active_history_are_extracted_without_changing_compatibility
         assert key in controls_source
 
     assert '"jobs-active-select"' in active_source
-    assert '"jobs-history-status"' in history_source
-    assert '"jobs-history-kind"' in history_source
-    assert '"jobs-history-select"' in history_source
+    assert "render_results_job_controls(db, ctx, row)" in results_detail_source
+    assert "campaign_assignment(db, row)" in results_detail_source
+    assert "Open an older job by ID" in results_source
     assert '"manage_job_id"' in inspect.getsource(jobs_detail_panel.job_selector)
 
 
@@ -483,7 +483,7 @@ def test_jobs_owns_results_tab_and_shared_scientific_renderer():
     detail_source = inspect.getsource(jobs_page._job_detail)
     controls_source = inspect.getsource(jobs_detail_panel._render_job_controls)
 
-    assert 'sections = ["Active", "Queue", "History", "Results"]' in page_source
+    assert 'sections = ["Active", "Queue", "Results"]' in page_source
     assert '["Waiting jobs", "Schedules"]' in page_source
     assert 'elif active == "Results":' in page_source
     assert "results_page.render_jobs_results(db, ctx)" in page_source
@@ -648,39 +648,11 @@ def test_job_provenance_surfaces_retry_lineage_without_inventing_fields(tmp_path
     db.close()
 
 
-def test_job_detail_places_separate_campaign_controls_left_and_compact_provenance_right():
+def test_job_detail_keeps_controls_and_campaign_assignment():
     source = inspect.getsource(jobs_page._job_detail)
-    renderer = inspect.getsource(jobs_page._render_job_provenance)
-
-    assert 'left, right = st.columns(2, gap="large")' in source
-    assert 'with left:' in source
-    assert '"#### Campaign"' in source
-    assert '"#### Controls"' in source
-    assert '"#### Campaign & controls"' not in source
-    assert source.count("with st.container(border=True):") >= 2
-    assert "_campaign_assignment(db, row)" in source
     assert "_render_job_controls(" in source
-    assert source.index('"#### Campaign"') < source.index("_campaign_assignment(db, row)")
-    assert source.index("_campaign_assignment(db, row)") < source.index('"#### Controls"')
-    assert source.index('"#### Controls"') < source.index("_render_job_controls(")
-    assert 'with right:' in source
-    assert "_render_job_provenance(db, row)" in source
-    assert source.index("with right:") < source.index("_render_job_provenance(db, row)")
-    assert '"#### Owner & provenance"' in renderer
-    assert 'st.markdown(f"**{label}**: {value}")' in renderer
-    assert '\\n{value}' not in renderer
-    for label in (
-        "Launched from",
-        "Campaign",
-        "Pipeline Run",
-        "Pipeline",
-        "Schedule",
-        "Plugin",
-        "Candidate Pool",
-        "Resume lineage",
-        "Retry lineage",
-    ):
-        assert label in inspect.getsource(jobs_page.job_provenance)
+    assert "_campaign_assignment(db, row)" in source
+    assert source.index("_render_job_controls(") < source.index("results_page.render_job_raw_log(")
 
 
 def test_jobs_page_exposes_resume_separately_from_fresh_retry():
@@ -801,7 +773,7 @@ def test_polling_job_strip_does_not_consume_completion_notifications(monkeypatch
     monkeypatch.setattr(
         common,
         "_render_active_jobs",
-        lambda db, db_path: [],
+        lambda db, db_path, **kwargs: [],
     )
 
     assert common.job_strip(object(), "rank42.db", notifications=False) == []

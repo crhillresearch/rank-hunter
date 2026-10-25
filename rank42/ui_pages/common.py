@@ -860,6 +860,7 @@ PAGE_ICONS = {
     "Families": ":material/extension:",
     "Extensions": ":material/extension:",
     "Database": ":material/database:",
+    "Nodes": ":material/lan:",
     "Diagnostics": ":material/health_and_safety:",
     "Settings": ":material/settings:",
     "ICARM Submit": ":material/cloud_upload:",
@@ -888,11 +889,12 @@ _PAGE_LOCAL_ICONS = {
     "Models": {"Inventory": "category", "Create model": "add_box"},
     "Corpora": {"Browse Library": "library_books", "Build Library": "add_circle"},
     "External Catalog": {"ICARM": "public", "LMFDB": "travel_explore"},
-    "Jobs": {"Active": "play_circle", "Queue": "queue", "History": "history", "Results": "analytics"},
+    "Jobs": {"Active": "play_circle", "Queue": "queue", "Results": "analytics"},
     "Plugins": {"Families": "account_tree", "Extensions": "extension"},
     "Diagnostics": {"Overview": "space_dashboard", "Runtime": "memory", "Plugins & Libraries": "extension", "State": "database", "Legacy Auto": "archive", "Report": "description"},
     "Database": {"Overview": "database", "Import / Export": "import_export", "Advanced SQL": "terminal"},
     "Settings": {"General": "tune", "Runtimes": "memory", "Services": "cloud", "About": "info"},
+    "Nodes": {"Workers": "computer", "Connect": "add_link", "Remote Tasks": "terminal"},
 }
 _PAGE_LOCAL_VIEWS = {
     "Rank Lab": (("Certify points", "Prove rank", "Search rank"), "analysis-hub-lane", None, True),
@@ -904,11 +906,12 @@ _PAGE_LOCAL_VIEWS = {
     "Models": (("Inventory", "Create model"), "models-section", None, False),
     "Corpora": (("Browse Library", "Build Library"), "libraries-section", None, False),
     "External Catalog": (("ICARM", "LMFDB"), "external-catalog-source", None, False),
-    "Jobs": (("Active", "Queue", "History", "Results"), "jobs-main-tabs", "jobs_section", False),
+    "Jobs": (("Active", "Queue", "Results"), "jobs-main-tabs", "jobs_section", False),
     "Plugins": (("Families", "Extensions"), "plugins-main-tabs", "plugins_tab", False),
     "Diagnostics": (("Overview", "Runtime", "Plugins & Libraries", "State", "Legacy Auto", "Report"), "diagnostics-main-tabs", "diagnostics_tab", False),
     "Database": (("Overview", "Import / Export", "Advanced SQL"), "database-main-tabs", "database_tab", False),
     "Settings": (("General", "Runtimes", "Services", "About"), "settings-view-tabs", "settings_view", False),
+    "Nodes": (("Workers", "Connect", "Remote Tasks"), "nodes-view-tabs", "nodes_view", False),
 }
 _PAGE_BAR_JS = (
     Path(__file__).resolve().parents[1] / "ui_assets" / "tools_command_bar.js"
@@ -960,6 +963,10 @@ def _render_page_bar(name, icon):
         if route == "Pipelines":
             tab_key += f"-{int(st.session_state.get('builder_view_revision') or 0)}"
         widget_key = tab_key if direct else rh_key(tab_key)
+        if route == "Jobs" and st.session_state.get("jobs_section") == "History":
+            st.session_state["jobs_section"] = "Results"
+        if route == "Jobs" and st.session_state.get(widget_key) == "History":
+            st.session_state[widget_key] = "Results"
         desired = st.session_state.get(state_key) if state_key else None
         if desired in pages and st.session_state.get(widget_key) != desired:
             st.session_state[widget_key] = desired
@@ -970,7 +977,7 @@ def _render_page_bar(name, icon):
         )
         if route == "Jobs" and st.session_state.get("jobs_section_pending"):
             pending = st.session_state["jobs_section_pending"]
-            selected = "Queue" if pending == "Scheduled" else pending
+            selected = "Queue" if pending == "Scheduled" else "Results" if pending == "History" else pending
         if selected not in pages:
             selected = pages[0]
         # The original widget continues to own its state, but its duplicate
@@ -1007,6 +1014,7 @@ def _render_page_bar(name, icon):
         "controllerSlot": "__rhPageBar",
         "queryParam": None,
         "toolbarLabel": f"{name} page navigation",
+        "surfaceColor": st.session_state.get("_rh_theme_palette", {}).get("rh-card"),
         "pageTitle": str(name),
         "pageIcon": _material_page_icon(icon),
         "simple": len(pages) <= 5,
@@ -1790,7 +1798,7 @@ def _render_active_jobs(
     job_id = int(focus["id"])
     if action == "open":
         st.session_state["manage_job_id"] = job_id
-        st.session_state["jobs_section"] = "History" if is_paused else "Active"
+        st.session_state["jobs_section"] = "Active"
         st.session_state["rh_page"] = "Jobs"
         st.rerun()
 

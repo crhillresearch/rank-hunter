@@ -26,6 +26,7 @@ from rank42.icon_sprite import rh_css_mask_uri
 from rank42.db import connect_existing
 from rank42.migration_manager import open_database_with_migrations
 from rank42.system_metrics import collect_system_metrics
+from rank42.node_cluster import ensure_controller_running, registry_path
 from rank42.ratpoints import vendored_executable
 from rank42.server_control import restart_server, shutdown_server
 from rank42.theme_loader import RELEASE_THEME_ID, resolve_release_theme
@@ -69,6 +70,7 @@ from rank42.ui_pages import (
     analysis_workcenter,
     tools_page,
     database_page,
+    nodes_page,
     diagnostics_page,
     settings_page,
 )
@@ -108,6 +110,7 @@ NAV_ICONS = {
     "Plugin Extensions": PAGE_ICONS["Plugins"],
     "Themes": ":material/palette:",
     "Database": PAGE_ICONS["Database"],
+    "Nodes": PAGE_ICONS["Nodes"],
     "Diagnostics": PAGE_ICONS["Diagnostics"],
     "Settings": PAGE_ICONS["Settings"],
 }
@@ -594,7 +597,7 @@ def navigation(db, ctx, extension_rows):
                 ("Campaigns", "Campaigns"),
                 ("Plugins", "Plugins"),
             ],
-            "System": [("Database", "Database"), ("Settings", "Settings")],
+            "System": [("Nodes", "Nodes"), ("Database", "Database"), ("Settings", "Settings")],
         }
 
         active_page = st.session_state.get("rh_page", "Dashboard")
@@ -707,6 +710,8 @@ def main():
         )
 
         ensure_dispatcher_running(ctx.db_path, ctx.project_root)
+        if registry_path(ctx.project_root).exists():
+            ensure_controller_running(ctx.project_root)
 
         extensions = enabled_extension_pages(db, ctx.project_root)
         if "rh_page" not in st.session_state:
@@ -753,6 +758,7 @@ def main():
             # submission here without adding another permanent sidebar item.
             "ICARM Submit": icarm_submit.page,
             "Database": database_page.page,
+            "Nodes": nodes_page.page,
             "Diagnostics": diagnostics_page.page,
             "Settings": settings_page.page,
         }

@@ -346,6 +346,16 @@ PIPELINE_SCHEMA_MANIFEST = _manifest(
             "id", "label", "model_fingerprint_sha256", "coefficients_json",
             "source_curve_id", "construction_json", "created_at", "updated_at",
         },
+        "genus2_rational_points": {
+            "id", "model_fingerprint_sha256", "x", "y", "source",
+            "first_run_id", "created_at",
+        },
+        "genus2_point_search_bands": {
+            "id", "model_fingerprint_sha256", "height", "denominator_low",
+            "denominator_high", "backend", "status", "new_points",
+            "runtime_seconds", "engine_json", "error", "run_id",
+            "started_at", "finished_at",
+        },
         "search_pipeline_definitions": {
             "id", "name", "target_mode", "stages_json", "config_json",
             "revision", "content_hash", "pipeline_schema_version",
@@ -376,6 +386,8 @@ PIPELINE_SCHEMA_MANIFEST = _manifest(
     },
     indexes={
         "idx_genus2_models_source",
+        "idx_genus2_rational_points_model",
+        "idx_genus2_point_search_bands_model",
         "idx_pipeline_runs_status",
         "idx_pipeline_runs_campaign",
         "idx_pipeline_candidates_run",

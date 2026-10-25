@@ -36,7 +36,6 @@ from . import results_page
 
 
 ACTIVE = {"running", "stopping"}
-WAITING = {"queued"}
 RESUMABLE = {"failed", "interrupted", "stopped", "killed"}
 
 
@@ -385,7 +384,7 @@ _campaign_assignment = campaign_assignment
 _pipeline_run_id = pipeline_run_id
 
 
-def _render_job_controls(db, ctx, row, *, run_id, retired_search):
+def _render_job_controls(db, ctx, row, *, run_id, retired_search, show_results_link=True):
     """Render Jobs-owned lifecycle controls for one durable Job."""
     if str(row["status"]) in ACTIVE:
         a, b, c = st.columns(3)
@@ -441,7 +440,8 @@ def _render_job_controls(db, ctx, row, *, run_id, retired_search):
 
     status = str(row["status"])
     if status in RESUMABLE:
-        a, b, c = st.columns(3)
+        columns = st.columns(3 if show_results_link else 2)
+        a, b = columns[:2]
         if a.button(
             "Resume",
             type="primary",
@@ -459,6 +459,8 @@ def _render_job_controls(db, ctx, row, *, run_id, retired_search):
                 )
             )
             st.session_state["manage_job_id"] = int(new_id)
+            st.session_state["jobs_section_pending"] = "Queue"
+            st.session_state["jobs_queue_view"] = "Waiting jobs"
             st.success(f"Resumed as job #{new_id}.")
             st.rerun()
         if b.button(
@@ -482,9 +484,11 @@ def _render_job_controls(db, ctx, row, *, run_id, retired_search):
                 )
             )
             st.session_state["manage_job_id"] = int(new_id)
+            st.session_state["jobs_section_pending"] = "Queue"
+            st.session_state["jobs_queue_view"] = "Waiting jobs"
             st.success(f"Queued fresh retry as job #{new_id}.")
             st.rerun()
-        if c.button(
+        if show_results_link and columns[2].button(
             "Open Results",
             width="stretch",
             key=f"jobs-results-{row['id']}",
@@ -494,7 +498,8 @@ def _render_job_controls(db, ctx, row, *, run_id, retired_search):
             st.session_state["rh_page"] = "Jobs"
             st.rerun()
     else:
-        a, b = st.columns(2)
+        columns = st.columns(2 if show_results_link else 1)
+        a = columns[0]
         if a.button(
             "Retry",
             width="stretch",
@@ -516,9 +521,11 @@ def _render_job_controls(db, ctx, row, *, run_id, retired_search):
                 )
             )
             st.session_state["manage_job_id"] = int(new_id)
+            st.session_state["jobs_section_pending"] = "Queue"
+            st.session_state["jobs_queue_view"] = "Waiting jobs"
             st.success(f"Queued retry as job #{new_id}.")
             st.rerun()
-        if b.button(
+        if show_results_link and columns[1].button(
             "Open Results",
             width="stretch",
             key=f"jobs-results-{row['id']}",
@@ -544,7 +551,21 @@ def _render_job_controls(db, ctx, row, *, run_id, retired_search):
     ):
         delete_terminal_job(db, int(row["id"]), delete_log=True)
         st.session_state.pop("manage_job_id", None)
+        st.session_state.pop("results_pinned_job_id", None)
+        st.session_state.pop("results_table_job_id", None)
         st.rerun()
+
+
+def render_results_job_controls(db, ctx, row):
+    """Show the existing Jobs lifecycle actions inside the Results detail."""
+    _render_job_controls(
+        db,
+        ctx,
+        row,
+        run_id=pipeline_run_id(row),
+        retired_search=str(row["kind"]) in RETIRED_SEARCH_JOB_KINDS,
+        show_results_link=False,
+    )
 
 
 def render_job_detail(db, ctx, row):
@@ -683,54 +704,3 @@ def render_active(db, ctx):
         )
 
 
-def render_history(db, ctx):
-    reconcile_jobs(db)
-    rows = [
-        row
-        for row in list_jobs(db, limit=1000)
-        if str(row["status"]) not in (ACTIVE | WAITING)
-        and not job_is_paused(row)
-    ]
-    if not rows:
-        st.info("No completed or stopped UI jobs yet.")
-        return
-
-    statuses = sorted({str(row["status"]) for row in rows})
-    kinds = sorted({str(row["kind"]) for row in rows})
-    a, b = st.columns(2)
-    status = a.selectbox(
-        "Status",
-        ["All", *statuses],
-        key="jobs-history-status",
-    )
-    kind = b.selectbox(
-        "Kind",
-        ["All", *kinds],
-        key="jobs-history-kind",
-    )
-    shown = rows
-    if status != "All":
-        shown = [
-            row
-            for row in shown
-            if str(row["status"]) == status
-        ]
-    if kind != "All":
-        shown = [
-            row
-            for row in shown
-            if str(row["kind"]) == kind
-        ]
-    if not shown:
-        st.info("No jobs match those filters.")
-        return
-
-    dataframe(
-        [job_table_row(row) for row in shown],
-        semantic="jobs-history-table",
-        width="stretch",
-        hide_index=True,
-    )
-    row = job_selector(shown, key="jobs-history-select")
-    if row is not None:
-        render_job_detail(db, ctx, row)

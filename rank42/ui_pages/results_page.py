@@ -381,7 +381,7 @@ def _table_row(row,s):
     }
 
 
-def _detail(db,row,s,science_python=None):
+def _detail(db,row,s,ctx):
     st.html(
         '<div class="rh-results-detail-head">'
         '<span>SELECTED JOB</span>'
@@ -405,11 +405,17 @@ def _detail(db,row,s,science_python=None):
     if planned:
         st.progress(min(1.0,float(completed or 0)/max(1,float(planned))),text=f'Candidates completed: {int(completed or 0)}/{int(planned)}')
 
+    if str(row['status']) != 'queued':
+        from .jobs_detail_panel import campaign_assignment, render_results_job_controls
+
+        render_results_job_controls(db, ctx, row)
+        campaign_assignment(db, row)
+
     render_job_scientific_result(
         db,
         row,
         s,
-        science_python=science_python,
+        science_python=ctx.detected_science_python(),
         show_dynamic_stats=False,
     )
 
@@ -768,10 +774,15 @@ def _hunt_recap(db, row, summary, science_python):
 
 
 def render_jobs_results(db, ctx):
-    """Render the scientific Results workspace inside Jobs."""
+    """Browse durable Jobs, their scientific output, and lifecycle actions."""
     render_feature_hook(db, ctx, 'manage.jobs.results.after_header')
 
-    wanted=st.session_state.pop('results_selected_job_id',None)
+    requested = st.session_state.pop('results_selected_job_id', None)
+    if requested is None:
+        requested = st.session_state.pop('manage_job_id', None)
+    if requested is not None:
+        st.session_state['results_pinned_job_id'] = int(requested)
+    wanted = st.session_state.get('results_pinned_job_id')
     with st.container(key='rh-results-hero', border=True):
         intro_col, window_col = st.columns([3.2, 1], gap='medium', vertical_alignment='bottom')
         with intro_col:
@@ -787,7 +798,7 @@ def render_jobs_results(db, ctx):
                     [50,100,250,500],
                     index=1,
                     key='results-history-limit',
-                    help='Only this many recent job logs are parsed. Open a specific older job from Jobs to include it explicitly.',
+                    help='Only this many recent job logs are parsed. Open an older job by ID below.',
                 )
             )
         pairs=_pairs(db,limit=history_limit,wanted_id=wanted)
@@ -820,6 +831,21 @@ def render_jobs_results(db, ctx):
                 ['All kinds',*kinds],
                 semantic='results-kind',
             )
+        with st.expander('Open an older job by ID'):
+            with st.form('results-open-job-form'):
+                id_col, action_col = st.columns([3, 1], vertical_alignment='bottom')
+                with id_col:
+                    older_job_id = st.number_input(
+                        'Job number', min_value=1, step=1, key='results-open-job-id',
+                    )
+                with action_col:
+                    open_older = st.form_submit_button('Open job', width='stretch')
+            if open_older:
+                if get_job(db, int(older_job_id)) is None:
+                    st.warning(f'Job #{int(older_job_id)} was not found.')
+                else:
+                    st.session_state['results_selected_job_id'] = int(older_job_id)
+                    st.rerun()
 
     shown=pairs
     if mode=='Active': shown=[x for x in shown if x[0]['status'] in ACTIVE]
@@ -836,7 +862,7 @@ def render_jobs_results(db, ctx):
     table=[_table_row(r,s) for r,s in shown]
     by_id={int(r['id']):(r,s) for r,s in shown}
     with st.container(key='rh-results-table', border=True):
-        st.markdown('#### Job history')
+        st.markdown('#### Jobs')
         st.caption(f'{len(shown):,} matching jobs · select a row to inspect its result')
         selected=selectable_dataframe(
             table,
@@ -850,10 +876,11 @@ def render_jobs_results(db, ctx):
         hero_stats.info('Select a job to see its results.')
         return
     row,s=by_id[int(selected['job'])]
+    st.session_state['results_pinned_job_id'] = int(row['id'])
     with hero_stats.container():
         _scoreboard(db,row,s)
     with st.container(key='rh-results-detail', border=True):
-        _detail(db,row,s,ctx.detected_science_python())
+        _detail(db,row,s,ctx)
 
 
 def page(db, ctx):

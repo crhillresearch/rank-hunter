@@ -20,7 +20,7 @@ from rank42.pipeline_catalog import (
 )
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 RUN_MANIFEST_VERSION = 3
 
 PIPELINE_SCHEMA = RESEARCH_CAMPAIGN_SCHEMA + """
@@ -36,6 +36,37 @@ CREATE TABLE IF NOT EXISTS genus2_models(
 );
 CREATE INDEX IF NOT EXISTS idx_genus2_models_source
     ON genus2_models(source_curve_id);
+CREATE TABLE IF NOT EXISTS genus2_rational_points (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_fingerprint_sha256 TEXT NOT NULL,
+    x TEXT NOT NULL,
+    y TEXT NOT NULL,
+    source TEXT NOT NULL,
+    first_run_id INTEGER,
+    created_at TEXT NOT NULL,
+    UNIQUE(model_fingerprint_sha256,x,y)
+);
+CREATE INDEX IF NOT EXISTS idx_genus2_rational_points_model
+    ON genus2_rational_points(model_fingerprint_sha256);
+CREATE TABLE IF NOT EXISTS genus2_point_search_bands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_fingerprint_sha256 TEXT NOT NULL,
+    height INTEGER NOT NULL,
+    denominator_low INTEGER NOT NULL,
+    denominator_high INTEGER NOT NULL,
+    backend TEXT NOT NULL,
+    status TEXT NOT NULL,
+    new_points INTEGER NOT NULL DEFAULT 0,
+    runtime_seconds REAL,
+    engine_json TEXT NOT NULL DEFAULT '{}',
+    error TEXT,
+    run_id INTEGER,
+    started_at TEXT,
+    finished_at TEXT,
+    UNIQUE(model_fingerprint_sha256,height,denominator_low,denominator_high)
+);
+CREATE INDEX IF NOT EXISTS idx_genus2_point_search_bands_model
+    ON genus2_point_search_bands(model_fingerprint_sha256,status);
 CREATE TABLE IF NOT EXISTS search_pipeline_definitions(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -580,6 +611,8 @@ def ensure_pipeline_schema(db, *, commit=True):
     lineage_change = ensure_campaign_lineage_schema(db, commit=False)
     wanted_tables = {
         "genus2_models",
+        "genus2_rational_points",
+        "genus2_point_search_bands",
         "search_pipeline_definitions",
         "search_pipeline_runs",
         "search_pipeline_candidates",
@@ -593,6 +626,8 @@ def ensure_pipeline_schema(db, *, commit=True):
             """SELECT name FROM sqlite_master
                WHERE type='table' AND name IN (
                  'genus2_models',
+                 'genus2_rational_points',
+                 'genus2_point_search_bands',
                  'search_pipeline_definitions',
                  'search_pipeline_runs',
                  'search_pipeline_candidates',
@@ -610,6 +645,8 @@ def ensure_pipeline_schema(db, *, commit=True):
                 """SELECT name FROM sqlite_master
                    WHERE type='index' AND name IN (
                      'idx_genus2_models_source',
+                     'idx_genus2_rational_points_model',
+                     'idx_genus2_point_search_bands_model',
                      'idx_pipeline_runs_status',
                      'idx_pipeline_candidates_run',
                      'idx_pipeline_point_attempts_stage',
@@ -628,6 +665,8 @@ def ensure_pipeline_schema(db, *, commit=True):
         tables != wanted_tables
         or not {
             "idx_genus2_models_source",
+            "idx_genus2_rational_points_model",
+            "idx_genus2_point_search_bands_model",
             "idx_pipeline_runs_status",
             "idx_pipeline_candidates_run",
             "idx_pipeline_point_attempts_stage",

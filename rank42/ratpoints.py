@@ -415,6 +415,7 @@ def run_ratpoints(
     denominator_high=None,
     one_point=False,
     extra_args=None,
+    _local_only=False,
 ):
     """Search finite rational points on y^2=f(x).
 
@@ -425,6 +426,15 @@ def run_ratpoints(
     height = int(height)
     if height <= 0:
         raise ValueError("height must be positive")
+    if not _local_only:
+        from rank42.node_compute_client import enabled, run_remote_ratpoints
+        if enabled():
+            return run_remote_ratpoints(
+                coefficients, height, executable=executable, timeout=timeout,
+                denominator_low=denominator_low,
+                denominator_high=denominator_high, one_point=one_point,
+                extra_args=extra_args,
+            )
     exe = resolve_executable(executable)
     normalized = normalize_polynomial(coefficients)
 

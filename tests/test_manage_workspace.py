@@ -124,7 +124,7 @@ def test_jobs_owns_results_and_reuses_scientific_result_renderer():
     raw_log_source = inspect.getsource(results_page._render_job_raw_log)
     results_source = inspect.getsource(results_page.render_jobs_results)
 
-    assert '["Active", "Queue", "History", "Results"]' in jobs_source
+    assert '["Active", "Queue", "Results"]' in jobs_source
     assert '["Waiting jobs", "Schedules"]' in jobs_source
     assert "results_page.render_jobs_results(db, ctx)" in jobs_source
     assert "results_page.render_job_scientific_result(" in detail_source
@@ -132,11 +132,11 @@ def test_jobs_owns_results_and_reuses_scientific_result_renderer():
     assert "_hunt_recap(db, row, summary, science_python)" in shared_source
     assert "_render_job_raw_log(db, row)" in shared_source
     assert "'Parsed scientific result'" not in shared_source
-    assert 'st.markdown("#### Raw log")' in raw_log_source
-    assert 'render_raw_log(read_log(row["log_path"]))' in raw_log_source
-    assert "_scoreboard(db,pairs)" in results_source
+    assert 'render_raw_log(' in raw_log_source
+    assert '_render_live_raw_log_fragment' in raw_log_source
+    assert "_scoreboard(db,row,s)" in results_source
     assert "'Interesting only'" in results_source
-    assert "_detail(db,row,s,ctx.detected_science_python())" in results_source
+    assert "_detail(db,row,s,ctx)" in results_source
 
     state = {"rh_page": "Results"}
     assert ui._normalize_route("Results", state) == "Jobs"

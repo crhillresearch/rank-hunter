@@ -27,7 +27,7 @@
     padding: .3rem .55rem;
     border: 1px solid var(--rh-border);
     border-radius: 9px;
-    background: var(--rh-card);
+    background: var(--rh-card) !important;
     color: var(--rh-text);
     box-sizing: border-box;
     overflow: hidden;

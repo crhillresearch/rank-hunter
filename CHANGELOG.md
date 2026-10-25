@@ -2,16 +2,67 @@
 
 All notable changes to Rank Hunter are documented here.
 
+## [0.10.5] — Unreleased
+
+### Added
+
+- Added a Genus 2 Many Points Hunt preset for saved Models. It uses ratpoints
+  in resumable denominator bands, checks every rational point exactly, and
+  stores a running point count separate from Jacobian rank. Even sextics also
+  get their valid sign-symmetric points. Models now shows the count and can
+  export the exact witnesses; Epoch's 648-point curve and the earlier
+  Elkies–Stoll 642-point curve are available as reference models.
+- The point hunt now reports the actual numerator and denominator coverage in
+  one summary instead of printing a line for every empty band. Models also
+  makes clear that a high-rank elliptic source need not yield many points on
+  its genus-two cover.
+- Added System → Nodes. It shows this computer as the current controller and
+  worker, with dispatcher state, job slots, CPU and RAM use, and running jobs.
+  Its page header stays on Nodes and uses a network icon.
+- Added one-time pairing for remote workers. Nodes shows their heartbeats,
+  capacity, and active tasks; workers keep a local credential and can be
+  removed from the controller. The Workers, Connect, and Remote Tasks views
+  keep node status and setup separate. Workers can compute exact curve
+  invariants or run a bounded rational-point search. The controller checks
+  returned equations before accepting results; found points can be saved to
+  Points without claiming independence.
+- Workers can now be ordered with a default workhorse. Remote tasks fill its
+  available slots first, then spill to the next online worker.
+- Added an opt-in workhorse route for ratpoints scans used by Search and
+  Pipelines. The controller keeps the run and database records; workers run
+  the bounded point scan, return exact hits, and renew their task leases while
+  busy. The controller checks every returned point and projective coordinate.
+- Added full Pipeline Search dispatch to paired workhorses. A worker runs the
+  Pipeline process while the controller keeps the queue, database, and live
+  log. AI Hunt sends its Pipeline rounds through the same route. Family plugins
+  travel with the job, generated files return to the
+  controller, and stopped jobs cancel their worker task. Workers with matching
+  code fill in default-workhorse order and take overflow jobs when slots free
+  up. The route turns on when a matching workhorse first pairs and can be
+  switched off on Nodes.
+- Added Groq for Agent chat and AI Hunt planning. Settings can store and test a
+  Groq key and choose GPT-OSS 120B, GPT-OSS 20B, or Qwen 3.8 27B. Groq uses
+  the selected service for an active hunt's next planning round too.
+
+### Changed
+
+- Jobs now has Active, Queue, and Results. Results includes the old History
+  actions to resume, retry, or delete a job, and can open older jobs by number.
+- Groq requests now identify Rank Hunter so Cloudflare accepts the client.
+  Connection errors distinguish that block from a model permission error.
+- Casebook now keeps the case form on the default view, with the research brief
+  and recommended next step below it. Its picker sits above the case file, and
+  the standard page menu opens Case File, Journal, Evidence, Family, and History.
+  The journal records experiments and decisions without treating them as rank
+  evidence; the full case can be downloaded. Fixed a History crash when one
+  point produced multiple timeline events.
+- Put the AI service and model controls next to each other in General settings.
+- Bumped the development version to 0.10.5.
+
 ## [0.10.4] — Unreleased
 
 ### Changed
 
-- Added Groq as an AI service for Agent and AI Hunt. Settings can store or test
-  a Groq key and choose GPT-OSS 120B, GPT-OSS 20B, or Qwen 3.8 27B as the
-  default model. The selected service also applies to an active hunt's next
-  planning round. Groq requests now identify Rank Hunter to avoid Cloudflare's
-  HTTP-client block, and connection errors distinguish that block from model
-  permissions.
 - General settings now has an Agent switch and a default AI service. The
   selected service handles Agent chat, read-only lookups, action planning, and
   AI Hunt strategy rounds. Each service keeps its own default model. Existing
@@ -30,15 +81,6 @@ All notable changes to Rank Hunter are documented here.
 - Runtimes now shows a compact executable status view and keeps paths, point
   engine, health checks, and time budgets together. Services now shows OpenAI,
   Gemini, and ICARM as credential cards with their current status and actions.
-- Casebook now opens a full research file for a curve: a brief, open lines of
-  inquiry, recent work, a dated journal, rank evidence, family context, and
-  history. Researchers can record hypotheses and experiments, update their
-  outcomes, and download the case with witness and evidence references.
-- Casebook uses the standard page navigation for Case File, Journal, Evidence,
-  Family, and History. Its case picker sits above the research file, and the
-  case form leads the default view with the research brief and next step below.
-  Case File has its own document icon. Fixed a History crash when one point
-  produced multiple timeline events.
 - Agent chat can now create research campaigns, queue bounded AI Hunts, and
   enable or disable installed plugins after showing the exact change for
   confirmation. Plugin activation uses the existing validation job; every

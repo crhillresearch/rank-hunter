@@ -129,6 +129,11 @@ from rank42.genus2_pipeline import (
     rational_point_search as genus2_rational_point_search,
 )
 from rank42.genus2_registry import elliptic_quotient_rank_certificate
+from rank42.genus2_many_points import (
+    point_census as genus2_point_census,
+    search_point_bands as genus2_search_point_bands,
+    stored_points as genus2_stored_points,
+)
 from rank42.genus2_projection import project_to_elliptic_source
 from rank42.pipeline_state import (
     ensure_pipeline_schema,
@@ -7406,6 +7411,20 @@ def main():
                             max_x_values=stage["config"].get("max_x_values", 25000),
                         )
                         known_genus2_points = list(stage_result.get("points") or [])
+                    elif stage_id == "genus2_many_points_hunt":
+                        stage_result = genus2_search_point_bands(
+                            db, coefficients,
+                            height=stage["config"].get("height", 1000000),
+                            band_width=stage["config"].get("band_width", 500),
+                            bands_per_run=stage["config"].get("bands_per_run", 100),
+                            timeout=stage["config"].get("timeout", 300),
+                            backend=stage["config"].get("backend", "CPU"),
+                            goal_points=stage["config"].get("goal_points", 649),
+                            run_id=int(run["id"]),
+                        )
+                        known_genus2_points = genus2_stored_points(db, coefficients)
+                    elif stage_id == "genus2_point_census":
+                        stage_result = genus2_point_census(db, coefficients, recheck=True)
                     elif stage_id == "genus2_divisor_rank_search":
                         stage_result = genus2_divisor_rank_search(
                             coefficients,
@@ -7474,7 +7493,15 @@ def main():
             )
             stopped_on_goal = (
                 final_status == "completed"
-                and rigorous_lower >= int(run_config.get("target_rank") or 1)
+                and (
+                    rigorous_lower >= int(run_config.get("target_rank") or 1)
+                    or bool(stage_result.get("point_goal_hit"))
+                    or any(
+                        genus2_point_census(db, coefficients)["verified_point_lower_bound"]
+                        >= int(stage["config"].get("goal_points", 649))
+                        for stage in stages if stage["id"] == "genus2_many_points_hunt"
+                    )
+                )
             )
         elif run["target_mode"] == "family":
             plugin = get_plugin(project_root, target["plugin_id"])
@@ -7681,6 +7708,12 @@ def main():
             "best_curve_id": progress["best_curve_id"],
             "stopped_on_goal": bool(stopped_on_goal),
         }
+        if run["target_mode"] == "genus2_jacobian" and any(
+            stage["id"] == "genus2_many_points_hunt" for stage in stages
+        ):
+            result["verified_rational_points"] = genus2_point_census(
+                db, target.get("coefficients_ascending") or []
+            )["verified_point_lower_bound"]
         if candidate_generation_result is not None:
             result["candidate_generation"] = dict(candidate_generation_result)
         update_pipeline_run(

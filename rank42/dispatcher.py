@@ -260,6 +260,36 @@ def run(db_path, project_root, *, poll_seconds=2.0):
                         int(setting_value(db, "queue_max_workers", 2) or 2),
                     )
                     limits = resource_limits(db)
+                    from rank42.node_cluster import (
+                        code_fingerprint, connect_registry, full_jobs_enabled,
+                        list_nodes, registry_path,
+                    )
+                    if registry_path(project_root).exists():
+                        nodes_db = connect_registry(project_root)
+                        try:
+                            if full_jobs_enabled(nodes_db):
+                                remote_slots = sum(
+                                    int(node["slots"]) for node in list_nodes(nodes_db)
+                                    if node["online"]
+                                    and node.get("code_fingerprint") == code_fingerprint()
+                                    and node["has_ratpoints_cpu"]
+                                )
+                                max_workers += remote_slots
+                                limits["sage_heavy"] = max(
+                                    int(limits.get("sage_heavy", 0)), remote_slots,
+                                )
+                                gpu_slots = sum(
+                                    int(node["slots"]) for node in list_nodes(nodes_db)
+                                    if node["online"]
+                                    and node.get("code_fingerprint") == code_fingerprint()
+                                    and node["has_ratpoints_cpu"]
+                                    and node["has_ratpoints_gpu"]
+                                )
+                                limits["gpu_ratpoints"] = max(
+                                    int(limits.get("gpu_ratpoints", 0)), gpu_slots,
+                                )
+                        finally:
+                            nodes_db.close()
                     with runtime_lock:
                         runtime_state["max_workers"] = max_workers
                         runtime_state["resource_limits"] = dict(limits)

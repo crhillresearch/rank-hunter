@@ -74,8 +74,24 @@ def _handle_stop(_signum, _frame):
     raise CampaignStopped()
 
 
-def _run_pipeline(command, *, cwd, seconds):
+def _run_pipeline(command, *, cwd, seconds, db=None):
     global _CHILD
+    if db is not None and os.environ.get("RANK_HUNTER_JOB_ID"):
+        from rank42.node_compute_client import (
+            full_job_routing_enabled, run_remote_pipeline_command,
+        )
+        if full_job_routing_enabled():
+            job_id = int(os.environ["RANK_HUNTER_JOB_ID"])
+            job = db.execute(
+                "SELECT log_path FROM ui_jobs WHERE id=?", (job_id,)
+            ).fetchone()
+            if job is None:
+                raise RuntimeError(f"AI Hunt UI job #{job_id} is missing")
+            return run_remote_pipeline_command(
+                job_id=job_id, command=command, project_root=cwd,
+                db_path=command[command.index("--db") + 1],
+                log_path=job["log_path"], seconds=seconds,
+            )
     _CHILD = subprocess.Popen(command, cwd=str(cwd), start_new_session=True)
     try:
         return int(_CHILD.wait(timeout=max(1, int(seconds)))), False
@@ -347,7 +363,7 @@ def run_campaign(db, root, campaign_id):
             command = [science, "-u", "-m", "rank42.pipeline_runner",
                        "--project-root", str(root), "--db", str(config["db_path"]),
                        "--run-id", str(run_id)]
-            exit_code, timed_out = _run_pipeline(command, cwd=root, seconds=seconds)
+            exit_code, timed_out = _run_pipeline(command, cwd=root, seconds=seconds, db=db)
             run = get_pipeline_run(db, run_id)
             if run is not None and run["status"] == "running":
                 update_pipeline_run(

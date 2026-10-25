@@ -32,7 +32,6 @@ from .jobs_detail_panel import (
     job_table_row as _job_table_row,
     pipeline_run_id as _pipeline_run_id,
     render_active as _active,
-    render_history as _history,
     render_job_detail as _job_detail,
     render_job_provenance as _render_job_provenance,
 )
@@ -88,7 +87,7 @@ def _pipeline_job_section(row):
         return "Queue"
     if status in ACTIVE or _job_is_paused(row):
         return "Active"
-    return "History"
+    return "Results"
 
 
 def _launch_pipeline_run_resume_attempt(db, ctx, run):
@@ -163,7 +162,7 @@ def _pipeline_run_handoff(db, ctx):
         selector_key = {
             "Active": "jobs-active-select",
             "Queue": "jobs-queue-select",
-            "History": "jobs-history-select",
+            "Results": "results_table_job_id",
         }.get(section)
         if selector_key:
             st.session_state.pop(selector_key, None)
@@ -234,8 +233,10 @@ def page(db, ctx):
     render_feature_hook(db, ctx, "manage.jobs.after_header")
     _pipeline_run_handoff(db, ctx)
 
-    sections = ["Active", "Queue", "History", "Results"]
+    sections = ["Active", "Queue", "Results"]
     pending = st.session_state.pop("jobs_section_pending", None)
+    if pending == "History":
+        pending = "Results"
     if pending == "Scheduled":
         # Older handoffs and browser sessions still use the former page name.
         pending = "Queue"
@@ -246,6 +247,8 @@ def page(db, ctx):
         if pending == "Queue":
             st.session_state.pop(rh_key("jobs-queue-view"), None)
     current = st.session_state.get("jobs_section") or "Active"
+    if current == "History":
+        current = "Results"
     active = tabs(
         sections,
         value=current if current in sections else "Active",
@@ -267,7 +270,5 @@ def page(db, ctx):
             _scheduled(db, ctx)
         else:
             _queue(db, ctx)
-    elif active == "History":
-        _history(db, ctx)
     elif active == "Results":
         results_page.render_jobs_results(db, ctx)
