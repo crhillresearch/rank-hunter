@@ -56,16 +56,6 @@ All notable changes to Rank Hunter are documented here.
 
 ### Added
 
-- Added a Genus 2 Many Points Hunt preset for saved Models. It uses ratpoints
-  in resumable denominator bands, checks every rational point exactly, and
-  stores a running point count separate from Jacobian rank. Even sextics also
-  get their valid sign-symmetric points. Models now shows the count and can
-  export the exact witnesses; Epoch's 648-point curve and the earlier
-  Elkies–Stoll 642-point curve are available as reference models.
-- The point hunt now reports the actual numerator and denominator coverage in
-  one summary instead of printing a line for every empty band. Models also
-  makes clear that a high-rank elliptic source need not yield many points on
-  its genus-two cover.
 - Added System → Nodes. It shows this computer as the current controller and
   worker, with dispatcher state, job slots, CPU and RAM use, and running jobs.
   Its page header stays on Nodes and uses a network icon.
