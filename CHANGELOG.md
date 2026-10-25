@@ -24,6 +24,14 @@ All notable changes to Rank Hunter are documented here.
   either together or for a named failed job or Pipeline run. It leaves live
   issues and the underlying job history alone.
 
+### Changed
+
+- Hill Rank-19 K3 AI Hunts now widen their integer-index window and exclude
+  fibers already searched, including indices identified by the family's exact
+  symmetry.
+- Ratpoints can read very large exact polynomial coefficients from standard
+  input. This avoids OS argument-size failures on large family specializations.
+
 ## [0.10.5] — Unreleased
 
 ### Added

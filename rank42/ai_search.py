@@ -322,7 +322,7 @@ _BUILDABLE_STAGE_IDS = frozenset({
     "covering_local_height_planner", "selmer_element_fanout",
     "padic_covering_search", "pointed_quartic", "mw_growth_loop",
     "large_height_generator_hunt", "height_lattice_reduction",
-    "half_lattice_hole_enumeration", "lattice_chart_construction",
+    "record_breaker_lane", "half_lattice_hole_enumeration", "lattice_chart_construction",
     "lattice_chart_search", "plugin_geometry", "plugin_family_search",
     # Evidence and stopping. Upper bounds are useful for triage, not rank growth.
     "independence", "saturation", "full_saturation_index_recovery",
@@ -587,7 +587,7 @@ def execution_for_decision(*, option, decision, target_mode, target, config):
             generation.update(a_min=-max(1, numerator // 2),
                               a_max=max(1, numerator // 2),
                               b_min=1, b_max=max(1, denominator // 2))
-        elif window == "positive":
+        elif window in {"default", "positive"}:
             generation.update(a_min=1, a_max=numerator,
                               b_min=1, b_max=denominator)
         elif window == "negative":

@@ -505,6 +505,15 @@ def _family_candidates(
                 "--sample-seed",
                 str(int(defaults.get("sample_seed", 42))),
             ]
+        excluded_parameters = [
+            str(value) for value in (target.get("exclude_parameters") or [])
+            if str(value).strip()
+        ]
+        if excluded_parameters:
+            # Some exact rational parameters are negative (for example -4/1).
+            # Keep the value attached to the option so argparse does not read
+            # a leading minus as another command-line flag.
+            command += [f"--exclude-parameters={','.join(excluded_parameters)}"]
         command += [
             "--corpus-policy",
             _corpus_policy(stages),

@@ -302,6 +302,14 @@ def canonical_candidate_pair(family, a, b):
     return a, b
 
 
+def candidate_is_excluded(family, args, a, b):
+    """Check an exact candidate against previously searched orbit representatives."""
+    excluded = getattr(args, "excluded_candidate_pairs", None) or set()
+    if not excluded:
+        return False
+    return canonical_candidate_pair(family, a, b) in excluded
+
+
 def sign_duplicate_in_requested_range(args, a):
     """True when negative ``a`` has its positive orbit mate in the same scan."""
     a = int(a)
@@ -321,7 +329,7 @@ def stage0_scalar(args, tables, keep, family):
                 continue
             ca, cb = canonical_candidate_pair(family, a, b)
             key = (ca, cb)
-            if key in seen:
+            if key in seen or candidate_is_excluded(family, args, a, b):
                 continue
             seen.add(key)
             score, used = score_rational(a, b, tables)
@@ -388,7 +396,7 @@ def stage0_sampled(args, tables, keep, family):
             continue
         ca, cb = canonical_candidate_pair(family, a, b)
         key = (ca, cb)
-        if key in seen:
+        if key in seen or candidate_is_excluded(family, args, a, b):
             continue
         seen.add(key)
         score, used = score_rational(ca, cb, tables)
@@ -411,7 +419,7 @@ def stage0_sampled(args, tables, keep, family):
             a = abs(a)
         ca, cb = canonical_candidate_pair(family, a, b)
         key = (ca, cb)
-        if key in seen:
+        if key in seen or candidate_is_excluded(family, args, a, b):
             continue
         seen.add(key)
         score, used = score_rational(ca, cb, tables)
@@ -488,7 +496,8 @@ def stage0_sieve(args, tables, keep, family):
                 keep_indices = []
                 for index, numerator in enumerate(aa.tolist()):
                     canonical = canonical_candidate_pair(family, int(numerator), int(b))
-                    if canonical in seen:
+                    if (canonical in seen or
+                            candidate_is_excluded(family, args, int(numerator), int(b))):
                         continue
                     seen.add(canonical)
                     keep_indices.append(index)

@@ -186,7 +186,7 @@ def _terminate_process_group(pgid, *, grace=0.35):
         pass
 
 
-def _managed_run(command, *, timeout):
+def _managed_run(command, *, timeout, stdin_text=None):
     """Run one ratpoints-compatible command with hard process-tree cleanup.
 
     ``subprocess.run(..., timeout=...)`` only guarantees termination of the
@@ -195,11 +195,18 @@ def _managed_run(command, *, timeout):
     rather than pipes: a stray helper inheriting stdout/stderr therefore cannot
     make ``communicate()`` look hung after the wrapper itself has exited.
     """
-    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as out, \
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as input_file, \
+         tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as out, \
          tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as err:
+        stdin = subprocess.DEVNULL
+        if stdin_text is not None:
+            input_file.write(str(stdin_text))
+            input_file.flush()
+            input_file.seek(0)
+            stdin = input_file
         proc = subprocess.Popen(
             command,
-            stdin=subprocess.DEVNULL,
+            stdin=stdin,
             stdout=out,
             stderr=err,
             start_new_session=True,
@@ -426,7 +433,12 @@ def run_ratpoints(
     height = int(height)
     if height <= 0:
         raise ValueError("height must be positive")
-    if not _local_only:
+    normalized = normalize_polynomial(coefficients)
+    polynomial_text = " ".join(str(c) for c in normalized.integer_coefficients)
+    stdin_text = None
+    use_stdin = len(polynomial_text.encode("ascii")) > 64 * 1024
+
+    if not _local_only and not use_stdin:
         from rank42.node_compute_client import enabled, run_remote_ratpoints
         if enabled():
             return run_remote_ratpoints(
@@ -436,11 +448,26 @@ def run_ratpoints(
                 extra_args=extra_args,
             )
     exe = resolve_executable(executable)
-    normalized = normalize_polynomial(coefficients)
+    if use_stdin:
+        # Linux limits the size of an individual argv string.  Large exact
+        # specializations can exceed it, so use the patched vendored CPU
+        # executable's stdin coefficient mode instead of failing at Popen.
+        cpu_executable = vendored_executable("CPU")
+        if not Path(cpu_executable).is_file():
+            raise RatpointsFailure(
+                "polynomial coefficients exceed the OS argument limit and the "
+                "Rank Hunter stdin-capable CPU ratpoints executable is missing; "
+                "run scripts/install-ratpoints.sh"
+            )
+        exe = cpu_executable
+        polynomial_argument = "-"
+        stdin_text = polynomial_text + "\n"
+    else:
+        polynomial_argument = polynomial_text
 
     cmd = [
         exe,
-        " ".join(str(c) for c in normalized.integer_coefficients),
+        polynomial_argument,
         str(height),
         "-q",
         "-i",
@@ -459,7 +486,17 @@ def run_ratpoints(
     engine = ratpoints_engine_identity(exe)
     started = time.monotonic()
     try:
-        cp = _managed_run(cmd, timeout=float(timeout))
+        cp = _managed_run(cmd, timeout=float(timeout), stdin_text=stdin_text)
+    except OSError as exc:
+        runtime = time.monotonic() - started
+        error = RatpointsFailure(
+            f"ratpoints could not start ({exc}); coefficient strings may exceed "
+            "the operating system argument limit"
+        )
+        error.engine_provenance = _invocation_provenance(
+            engine, cmd, timeout=timeout, runtime=runtime, status="error"
+        )
+        raise error from exc
     except subprocess.TimeoutExpired as exc:
         runtime = time.monotonic() - started
         error = RatpointsTimeout(f"ratpoints exceeded {timeout}s")

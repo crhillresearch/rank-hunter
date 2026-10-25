@@ -11,6 +11,13 @@ if [[ ! -f "$SOURCE/Makefile" ]]; then
   exit 2
 fi
 
+# Rank Hunter's exact family specializations can produce coefficient strings
+# longer than the OS per-argument limit.  The small stdin patch lets ratpoints
+# read the coefficient list from standard input when argv[1] is "-".
+if ! grep -q 'RANK_HUNTER_STDIN_POLY' "$SOURCE/main.c"; then
+  patch -d "$SOURCE" -p1 < "$ROOT/patches/ratpoints-stdin-input.patch"
+fi
+
 mkdir -p "$PREFIX/bin"
 
 # Build the pinned vendored source in place.  Do not fetch/pull here: the

@@ -245,6 +245,30 @@ def run_campaign(db, root, campaign_id):
             run_id = None
             current = get_ai_campaign(db, campaign_id)
             config = json.loads(current["config_json"])
+            target_summary = config.get("target_summary") or {}
+            if (mode == "family" and
+                    str(target_summary.get("plugin_id") or "") == "hill_rank19_k3"):
+                start_round = int(config.get("hill_index_expand_start_round") or round_number)
+                initial_limit = int(config.get("hill_index_initial_limit") or 12)
+                step = int(config.get("hill_index_expand_step") or 4)
+                maximum = int(config.get("hill_index_maximum") or 50)
+                index_limit = min(maximum, initial_limit +
+                                  max(0, round_number - start_round) * step)
+                config["numerator_limit"] = max(
+                    int(config.get("numerator_limit") or 1), index_limit
+                )
+                config["max_scan_parameters"] = max(
+                    int(config.get("max_scan_parameters") or 1),
+                    config["numerator_limit"] * 20,
+                )
+                config["hill_index_expand_start_round"] = start_round
+                config["hill_index_initial_limit"] = initial_limit
+                config["hill_index_expand_step"] = step
+                config["hill_index_maximum"] = maximum
+                update_ai_campaign(
+                    db, campaign_id,
+                    config_json=json.dumps(config, sort_keys=True),
+                )
             remaining = float(config["max_total_minutes"]) * 60 - elapsed()
             hard_remaining = float(config.get("hard_stop_minutes") or
                                    config["max_total_minutes"]) * 60 - elapsed()
@@ -329,6 +353,20 @@ def run_campaign(db, root, campaign_id):
                     option=option, decision=decision, target_mode=mode,
                     target=target, config=config,
                 )
+                if mode == "family":
+                    old_parameters = db.execute(
+                        """SELECT DISTINCT pc.parameter
+                           FROM ai_search_rounds ar
+                           JOIN search_pipeline_candidates pc ON pc.run_id=ar.pipeline_run_id
+                           WHERE ar.ai_campaign_id=? AND ar.round_number<?
+                             AND pc.parameter IS NOT NULL
+                             AND pc.status IN ('completed','running','failed')
+                           ORDER BY pc.parameter""",
+                        (int(campaign_id), int(round_number)),
+                    ).fetchall()
+                    execution_target["exclude_parameters"] = [
+                        str(item["parameter"]) for item in old_parameters
+                    ]
                 round_id = create_ai_round(db, campaign_id, round_number, decision)
                 if current["next_decision_json"]:
                     update_ai_campaign(db, campaign_id, next_decision_json=None)

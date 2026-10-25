@@ -1,0 +1,34 @@
+--- a/main.c
++++ b/main.c
+@@ -155,6 +155,8 @@ int main(int argc, char *argv[])
+ {
+   long total;
+   ratpoints_args args;
++  char *stdin_polynomial = NULL;
++  size_t stdin_polynomial_capacity = 0;
+ 
+   { long n;
+@@ -168,6 +170,14 @@ int main(int argc, char *argv[])
+   /* read input */
+   if(argc < 3) { error(2); }
++  /* RANK_HUNTER_STDIN_POLY: exact specializations can have a coefficient string
++     exceeding the operating system's per-argument limit.  A single dash means
++     that the first line on stdin contains the coefficient list. */
++  if(strcmp(argv[1], "-") == 0)
++  { ssize_t input_length = getline(&stdin_polynomial,
++                                   &stdin_polynomial_capacity, stdin);
++    if(input_length < 0)
++    { error(2); }
++    while(input_length > 0 &&
++          (stdin_polynomial[input_length-1] == '\n' ||
++           stdin_polynomial[input_length-1] == '\r'))
++    { stdin_polynomial[--input_length] = 0; }
++    argv[1] = stdin_polynomial;
++  }
+   if(read_input(argc-1, &argv[0], &args))
+@@ -224,6 +234,7 @@ int main(int argc, char *argv[])
+     for(n = 0; n <= RATPOINTS_MAX_DEGREE; n++) { mpz_clear(c[n]); }
+   }
++  free(stdin_polynomial);
+   return(0);
+ }

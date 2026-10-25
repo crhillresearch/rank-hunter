@@ -15,7 +15,7 @@ from rank42.nagao import family_score_provenance
 from rank42.plugins import get_chart, get_plugin, get_variant, load_adapter, plugin_fingerprints
 from rank42.search import (
     canonical_candidate_pair, family_parameter_symmetry, get_tables,
-    rescore_stage, stage0_sampled, stage0_scalar, stage0_sieve,
+    rescore_stage, score_rational, stage0_sampled, stage0_scalar, stage0_sieve,
 )
 
 
@@ -43,6 +43,8 @@ def parse_args():
     ap.add_argument('--score-method', choices=['nagao','mestre_nagao'], default='nagao')
     ap.add_argument('--sample-count',type=int,default=200000)
     ap.add_argument('--sample-seed',type=int,default=42)
+    ap.add_argument('--exclude-parameters',default='',
+                    help='Comma-separated rational parameters already searched by this campaign')
     ap.add_argument(
         '--corpus-policy',
         choices=['annotate','exclude-known','known-only','off'],
@@ -98,6 +100,16 @@ def main():
     else:
         variant=get_variant(plugin,args.variant)
     family=load_family(variant.family_spec)
+    excluded=set()
+    for raw in str(args.exclude_parameters or '').split(','):
+        if not raw.strip():
+            continue
+        try:
+            q=Fraction(raw.strip())
+        except (ValueError, ZeroDivisionError):
+            raise SystemExit(f'invalid excluded parameter {raw!r}') from None
+        excluded.add(canonical_candidate_pair(family,q.numerator,q.denominator))
+    args.excluded_candidate_pairs=excluded
     fingerprints=plugin_fingerprints(plugin,variant)
     bounds,keeps=_stages(args)
     db=connect(args.db)
@@ -110,6 +122,7 @@ def main():
         'compact_b_max':args.compact_b_max if args.compact_share else None,
         'sample_count':args.sample_count if args.engine == 'sampled' else None,
         'sample_seed':args.sample_seed if args.engine == 'sampled' else None,
+        'excluded_parameters':sorted(f'{a}/{b}' for a,b in excluded),
         'corpus_policy':args.corpus_policy,
         'pipeline_run_id':args.pipeline_run_id,
         'family_name':family.name(),'family_spec':variant.family_spec,
@@ -196,6 +209,28 @@ def main():
               f'of requested={args.top}',flush=True)
     else:
         rows=rows[:args.top]
+    # Some algebraic families have a small number of mathematically important
+    # seed fibers that should be examined even when their heuristic score would
+    # place them below the screening cutoff. Keep the configured pool size by
+    # reserving its first slots for those exact parameter values.
+    seed_callback=getattr(family,'candidate_seed_parameters',None)
+    if callable(seed_callback):
+        seeds=[]; seed_keys=set()
+        for value in seed_callback():
+            q=Fraction(str(value))
+            if q.denominator<=0: continue
+            a,b=canonical_candidate_pair(family,q.numerator,q.denominator)
+            key=(int(a),int(b))
+            if key in seed_keys or key in excluded: continue
+            seed_keys.add(key)
+            score,used=score_rational(a,b,tables)
+            seeds.append({'family':family.name(),'a':int(a),'b':int(b),
+                          'score':float(score),'prime_terms':int(used),
+                          'prime_bound':int(bounds[-1]),
+                          'forced_family_seed':True})
+        if seeds:
+            rows=[row for row in rows if (int(row['a']),int(row['b'])) not in seed_keys]
+            rows=seeds+rows[:max(0,args.top-len(seeds))]
     for rec in rows:
         rec['ranking_kind']=args.score_method
         rec['ranking_value']=float(rec['score'])
