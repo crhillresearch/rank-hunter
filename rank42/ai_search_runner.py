@@ -46,6 +46,24 @@ class CampaignStopped(Exception):
     pass
 
 
+def _plugin_search_failed_for_storage(row):
+    """A storage failure did not search the family parameter."""
+    try:
+        stages = json.loads(row["stage_results_json"] or "{}")
+    except (TypeError, ValueError):
+        return False
+    for entry in stages.values():
+        if not isinstance(entry, dict) or entry.get("stage_id") != "plugin_family_search":
+            continue
+        result = entry.get("result") or {}
+        return (
+            isinstance(result, dict)
+            and result.get("status") == "error"
+            and "database or disk is full" in str(result.get("error") or "")
+        )
+    return False
+
+
 def _active_model(db, campaign_model):
     service = selected_service(db)
     try:
@@ -355,7 +373,7 @@ def run_campaign(db, root, campaign_id):
                 )
                 if mode == "family":
                     old_parameters = db.execute(
-                        """SELECT DISTINCT pc.parameter
+                        """SELECT pc.parameter,pc.stage_results_json
                            FROM ai_search_rounds ar
                            JOIN search_pipeline_candidates pc ON pc.run_id=ar.pipeline_run_id
                            WHERE ar.ai_campaign_id=? AND ar.round_number<?
@@ -364,8 +382,16 @@ def run_campaign(db, root, campaign_id):
                            ORDER BY pc.parameter""",
                         (int(campaign_id), int(round_number)),
                     ).fetchall()
+                    completed_parameters = {}
+                    for item in old_parameters:
+                        parameter = str(item["parameter"])
+                        completed_parameters[parameter] = (
+                            completed_parameters.get(parameter, False)
+                            or not _plugin_search_failed_for_storage(item)
+                        )
                     execution_target["exclude_parameters"] = [
-                        str(item["parameter"]) for item in old_parameters
+                        parameter for parameter, completed in completed_parameters.items()
+                        if completed
                     ]
                 round_id = create_ai_round(db, campaign_id, round_number, decision)
                 if current["next_decision_json"]:

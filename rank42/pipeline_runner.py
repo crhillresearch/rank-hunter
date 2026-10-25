@@ -1933,6 +1933,22 @@ def _run_large_height_generator_hunt(
     """
     curve_id = int(context["curve_id"])
     E = context["E"]
+    model_digits = max(len(str(a)) for a in E.a_invariants())
+    if model_digits > 10000:
+        lower = int(_snapshot(db, curve_id)["rigorous_lower"])
+        reason = (
+            f"model coefficient has {model_digits} digits; exact point-search "
+            "strategy is impractical on this specialization"
+        )
+        print(f"[generator hunt] skipped: {reason}", flush=True)
+        return {
+            "status": "skipped",
+            "reason": reason,
+            "model_coefficient_digits": model_digits,
+            "rank_growth": 0,
+            "rigorous_lower": lower,
+            "steps": [],
+        }
     initial_state = _strategy_research_state(
         db, curve_id, E, witness_basis=False
     )

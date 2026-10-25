@@ -693,6 +693,30 @@ def run_pointed_quartic_escalation(
         run_ratpoints,
     )
 
+    # Building hundreds of point-centred quartics requires repeated exact
+    # arithmetic on the Weierstrass coefficients and witness coordinates. On
+    # very large specializations this can consume the entire strategy budget
+    # before the first bounded ratpoints call (and before any progress log).
+    model_digits = max(len(str(a)) for a in E.a_invariants())
+    if model_digits > 10000:
+        from rank42.curve_research_state import get_curve_research_state
+
+        lower = int(get_curve_research_state(db, int(curve_id))["rigorous_lower"])
+        reason = f"model coefficient has {model_digits} digits; pointed quartics are impractical"
+        print(f"[auto:pointed-quartic] skipped: {reason}", flush=True)
+        return {
+            "scheduler_tier": "pointed-quartic",
+            "tier": "pointed-quartic",
+            "status": "skipped",
+            "reason": reason,
+            "model_coefficient_digits": model_digits,
+            "models": 0,
+            "searches": 0,
+            "exact_points": 0,
+            "rank_growth": 0,
+            "rigorous_lower": lower,
+        }
+
     def current_rigorous_lower():
         state = get_curve_research_state(db, int(curve_id))
         return int(state["rigorous_lower"])

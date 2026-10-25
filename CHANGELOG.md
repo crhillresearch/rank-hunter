@@ -26,6 +26,12 @@ All notable changes to Rank Hunter are documented here.
 
 ### Changed
 
+- Plugin family searches now keep their SQLite sandbox on the database drive
+  instead of filling `/tmp`. AI Hunt can retry family parameters whose plugin
+  search failed because that temporary filesystem ran out of space.
+- Large Hill K3 specializations no longer stall the generator hunt while
+  building point-centred quartics from enormous coefficients. Rank Hunter
+  records why that stage was skipped and continues the remaining candidates.
 - Hill Rank-19 K3 AI Hunts now widen their integer-index window and exclude
   fibers already searched, including indices identified by the family's exact
   symmetry.

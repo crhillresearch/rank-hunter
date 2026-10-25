@@ -103,7 +103,20 @@ def load_plugin_geometry_result(path):
 @contextmanager
 def plugin_geometry_sandbox(db):
     """Yield a temporary SQLite backup that legacy plugins may mutate freely."""
-    with tempfile.TemporaryDirectory(prefix="rank42-plugin-geometry-") as root:
+    main_db = next(
+        (Path(path) for _seq, name, path in db.execute("PRAGMA database_list")
+         if name == "main" and path),
+        None,
+    )
+    sandbox_parent = None
+    if main_db is not None:
+        # A live Rank Hunter database can be several GB. The default /tmp is
+        # often a smaller tmpfs, so a full SQLite backup can exhaust it.
+        sandbox_parent = main_db.parent / ".rank42-cache" / "plugin-sandboxes"
+        sandbox_parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="rank42-plugin-geometry-", dir=sandbox_parent
+    ) as root:
         sandbox_path = Path(root) / "rank42-plugin-geometry.db"
         target = sqlite3.connect(str(sandbox_path))
         try:
