@@ -12,6 +12,9 @@ from pathlib import Path
 from rank42.ai_search import (continue_ai_campaign, create_ai_campaign,
                               get_ai_campaign, strategy_options, update_ai_campaign)
 from rank42.db import get_curve
+from rank42.dashboard_snapshot import (
+    acknowledge_dashboard_attention, dashboard_attention_snapshot,
+)
 from rank42.ai_provider import default_model, generate_json, selected_service
 from rank42.manage_store import (create_campaign, ensure_manage_schema,
                                  get_campaign, pause_job, resume_job, update_campaign)
@@ -23,11 +26,65 @@ from rank42.ui_store import (cancel_queue_job, enqueue_job, get_job,
                              hold_queue_job, release_queue_job, stop_job)
 
 
-_INTENT = re.compile(r"\b(?:create|make|start|launch|run|enable|disable|activate|restore|"
+_INTENT = re.compile(r"\b(?:create|make|set\s*up|setup|begin|start|launch|run|enable|disable|activate|restore|"
                      r"archive|sync|refresh|pause|resume|continue|stop|cancel|hold|release|update|rename|set|change|"
-                     r"turn\s+(?:on|off))\b", re.I)
-_OBJECT = re.compile(r"\b(?:campaign|hunt|search|plugin|extension|family|job|queue|icarm|catalog)\b", re.I)
+                     r"turn\s+(?:on|off)|clear|dismiss|acknowledge)\b", re.I)
+_OBJECT = re.compile(r"\b(?:campaign|hunt|search|plugin|extension|family|job|queue|icarm|catalog|attention|notifications?|alerts?)\b", re.I)
 _ICARM_SYNC = re.compile(r"\b(?:sync|refresh|update)\b.{0,35}\bicarm\b", re.I | re.S)
+_ATTENTION_CLEAR = re.compile(
+    r"\b(?:clear|dismiss|acknowledge)\b.{0,100}"
+    r"\b(?:attention|notifications?|alerts?)\b", re.I | re.S,
+)
+_AI_HUNT_START = re.compile(
+    r"\b(?:set\s*up|setup|create|start|launch|run|begin)\b.{0,90}"
+    r"\b(?:ai\s*(?:hunt|search)|hunt)\b", re.I | re.S,
+)
+_KEEP_HUNTING = re.compile(
+    r"\b(?:keep\s+(?:hunting|running|going)|auto(?:matically)?\s*continue|"
+    r"continue\s+(?:after|through|past)|overnight|all\s+night)\b", re.I,
+)
+_TORSION_MENTION = re.compile(
+    r"\b(?:C2\s*[x×]\s*C(?:2|4|6|8)|Z/2Z\s*[x×]\s*Z/(?:2|4|6|8)Z|"
+    r"C(?:10|12|[2-9])|Z/(?:10|12|[2-9])Z|Trivial)\b", re.I,
+)
+
+
+def _mentioned_torsion(message):
+    match = _TORSION_MENTION.search(str(message))
+    return canonical_torsion_label(match.group()) if match else None
+
+
+def _direct_hunt_request(project_root, message, active_curve_id):
+    """Recognize explicit AI Hunt targets before asking a model to classify them."""
+    if not _AI_HUNT_START.search(message):
+        return None
+    raw = {"action": "start_ai_hunt"}
+    curve = re.search(r"\bcurve\s*#?\s*(\d+)\b", message, re.I)
+    torsion = _mentioned_torsion(message)
+    if curve:
+        raw.update(target_mode="curve", curve_id=int(curve.group(1)))
+    elif torsion:
+        raw.update(target_mode="torsion", torsion_group=torsion)
+    elif re.search(r"\b(?:general|random)\s+(?:curves?|pool|hunt|search)\b", message, re.I):
+        raw["target_mode"] = "general"
+    else:
+        matches = [p for p in _plugins(project_root)
+                   if p.plugin_type == "family" and any(
+                       re.search(rf"(?<![\w]){re.escape(label)}(?![\w])", message, re.I)
+                       for label in (p.id, p.name) if label
+                   )]
+        if len(matches) == 1:
+            raw.update(target_mode="family", plugin=matches[0].id,
+                       variant_id=matches[0].default_variant_id)
+        elif active_curve_id and re.search(r"\b(?:this|current|active)\s+curve\b", message, re.I):
+            raw.update(target_mode="curve", curve_id=int(active_curve_id))
+        else:
+            return None
+    goal = re.search(r"\b(?:rank|goal)\s*(?:>=|≥|of|at\s+least)?\s*(\d{1,2})\b", message, re.I)
+    if goal:
+        raw["goal_rank"] = int(goal.group(1))
+    raw["objective"] = message[:500]
+    return raw
 
 
 def _active_icarm_sync(db):
@@ -63,6 +120,27 @@ def plan_action(db, project_root, *, message, active_curve_id=None, history=None
     message = str(message or "").strip()[:1500]
     if not _INTENT.search(message) or not _OBJECT.search(message):
         return None
+    if _ATTENTION_CLEAR.search(message) and not re.match(
+        r"^\s*(?:how|why|what|when)\b", message, re.I
+    ) and not re.search(r"\b(?:do\s+not|don't|never)\s+"
+                        r"(?:clear|dismiss|acknowledge)\b", message, re.I):
+        items = dashboard_attention_snapshot(db, project_root, campaign=None, limit=200)
+        acknowledgeable = [item for item in items if item.get("acknowledgeable")]
+        target = re.search(r"\b(pipeline\s+run|job)\s*#?\s*(\d+)\b", message, re.I)
+        if target:
+            object_type = "pipeline_run" if target.group(1).lower().startswith("pipeline") else "job"
+            acknowledgeable = [item for item in acknowledgeable
+                               if item.get("object_type") == object_type
+                               and str(item.get("object_id")) == target.group(2)]
+        if not acknowledgeable:
+            raise ValueError("There are no matching Attention alerts that can be acknowledged. Live issues stay until resolved.")
+        keys = [str(item["attention_key"]) for item in acknowledgeable]
+        examples = ", ".join(str(item["title"]) for item in acknowledgeable[:3])
+        remainder = f" and {len(keys) - 3} more" if len(keys) > 3 else ""
+        return {"kind": "acknowledge_attention", "attention_keys": keys,
+                "preview": f"Acknowledge {len(keys)} Dashboard Attention alert(s): "
+                           f"{examples}{remainder}. Their job and Pipeline history stays intact. "
+                           "Live research, plugin, and dispatcher issues remain visible until resolved."}
     if _ICARM_SYNC.search(message) and not re.match(r"^\s*(?:how|why|what|when)\b", message, re.I):
         active = _active_icarm_sync(db)
         if active is not None:
@@ -75,8 +153,10 @@ def plan_action(db, project_root, *, message, active_curve_id=None, history=None
                 "Sync the public ICARM catalog into Rank Hunter as a queued job. "
                 f"Last local sync: {last_sync}. This updates the external catalog snapshot; "
                 "it does not submit or change your curves."}
-    plugins = [{"id": p.id, "name": p.name, "type": p.plugin_type,
-                "enabled": is_enabled(db, p)} for p in _plugins(project_root)]
+    direct_hunt = _direct_hunt_request(project_root, message, active_curve_id)
+    plugins = ([{"id": p.id, "name": p.name, "type": p.plugin_type,
+                 "enabled": is_enabled(db, p)} for p in _plugins(project_root)]
+               if direct_hunt is None else [])
     prompt = (
         "Classify the user's requested Rank Hunter action. Return JSON with action "
         "(create_campaign, update_campaign, start_ai_hunt, enable_plugin, "
@@ -86,6 +166,9 @@ def plan_action(db, project_root, *, message, active_curve_id=None, history=None
         "(active/paused/completed/archived), job_id, target_mode "
         "(curve/family/torsion/general), curve_id, variant_id, torsion_group, "
         "goal_rank. Use null for missing values. "
+        "A request to set up or start an AI Hunt is start_ai_hunt, including when "
+        "the user asks it to keep running after checkpoints. Identify the named "
+        "curve, family, torsion group, or general target. "
         "Only classify an explicitly requested action. A question about an action is none. "
         "Do not invent a curve, job, campaign, or plugin ID. "
         "For update_campaign, include only fields the user asked to change. "
@@ -95,7 +178,7 @@ def plan_action(db, project_root, *, message, active_curve_id=None, history=None
         f"Recent chat: {json.dumps((history or [])[-4:], ensure_ascii=True)[:3000]}\n"
         f"User: {json.dumps(message)}"
     )
-    raw = generate_json(project_root, prompt, db=db)
+    raw = direct_hunt or generate_json(project_root, prompt, db=db)
     action = str(raw.get("action") or "none")
     if action == "none":
         return None
@@ -247,7 +330,7 @@ def _plan_hunt(db, project_root, raw, active_curve_id, message):
             raise ValueError("Name the searchable family for this hunt.")
         if plugin.plugin_type != "family" or "candidate_generation" not in plugin.capabilities or not is_enabled(db, plugin):
             raise ValueError(f"{plugin.name} is not an enabled searchable family.")
-        variant_id = str(raw.get("variant_id") or "")
+        variant_id = str(raw.get("variant_id") or plugin.default_variant_id or "")
         if not variant_id and len(plugin.variants) == 1:
             variant_id = plugin.variants[0].id
         variant = next((v for v in plugin.variants if v.id == variant_id or v.name.casefold() == variant_id.casefold()), None)
@@ -259,16 +342,18 @@ def _plan_hunt(db, project_root, raw, active_curve_id, message):
                    "plugin_capabilities": sorted(plugin.capabilities)}
         target_label = f"{plugin.name} · {variant.name}"
     elif mode == "torsion":
+        mentioned = _mentioned_torsion(message)
         try:
-            torsion = canonical_torsion_label(str(raw.get("torsion_group") or ""))
+            torsion = canonical_torsion_label(str(raw.get("torsion_group") or mentioned or ""))
         except ValueError:
             raise ValueError("Name an exact Mazur torsion group for the hunt.") from None
         if torsion not in MAZUR_TORSION_CHOICES:
             raise ValueError("That torsion group is not available in AI Hunt.")
-        if not re.search(re.escape(str(raw.get("torsion_group") or "")), message, re.I):
+        if mentioned != torsion:
             raise ValueError("Name the torsion group for this hunt.")
-        target = {"torsion_group": torsion, "include_secondary_providers": False}
-        summary = {"torsion_group": torsion, "secondary_providers": False}
+        secondary = bool(re.search(r"\b(?:include|use)\s+(?:the\s+)?secondary\s+(?:families|providers)\b", message, re.I))
+        target = {"torsion_group": torsion, "include_secondary_providers": secondary}
+        summary = {"torsion_group": torsion, "secondary_providers": secondary}
         target_label = torsion
     else:
         target = {"pool_mode": "seeded", "pool_size": 200,
@@ -279,30 +364,81 @@ def _plan_hunt(db, project_root, raw, active_curve_id, message):
         target_label = "general seeded curves"
     if not strategy_options(db, target_mode=mode, target=target):
         raise ValueError(f"No compatible Pipeline is available for {target_label}.")
-    goal = _goal(raw.get("goal_rank"))
-    objective = str(raw.get("objective") or "Find a higher rigorously certified rank.").strip()[:500]
+    explicit_goal = re.search(
+        r"\b(?:rank|goal)\s*(?:>=|≥|of|at\s+least)?\s*(\d{1,2})\b",
+        message, re.I,
+    )
+    if explicit_goal:
+        goal = _goal(explicit_goal.group(1))
+    elif mode == "curve":
+        goal = max(1, int(summary.get("stored_lower") or 0) + 1)
+    elif mode == "torsion":
+        columns = {row["name"] for row in db.execute("PRAGMA table_info(curves)")}
+        if "torsion_label" in columns:
+            best = db.execute(
+                """SELECT MAX(COALESCE(e.rigorous_lower,e.exact_rank,0)) AS best
+                   FROM rank_evidence e JOIN curves c ON c.id=e.curve_id
+                   WHERE e.rigorous=1 AND e.status IN ('completed','certified_independent')
+                     AND c.torsion_label=?""",
+                (target["torsion_group"],),
+            ).fetchone()
+            local_best = int(best["best"] or 0)
+        else:
+            local_best = 0
+        goal = max(3, local_best + 1)
+    else:
+        goal = 3 if mode == "family" else 5
+    objective = str(raw.get("objective") or f"Find a higher rigorously certified rank for {target_label}. Change strategies when independent-point growth stalls.").strip()[:500]
     if not objective:
         objective = "Find a higher rigorously certified rank."
     name = str(raw.get("name") or f"AI Hunt · {target_label} · rank ≥{goal}").strip()[:100]
-    config = {"goal_rank": goal, "max_total_minutes": 60, "max_run_minutes": 20,
-              "max_rounds": 2, "max_candidates": 100, "max_scan_parameters": 10000,
-              "max_point_height": 1000000, "numerator_limit": 1000,
-              "denominator_limit": 100, "retention_floor": min(3, goal),
+    auto_continue = bool(_KEEP_HUNTING.search(message))
+    checkpoint_minutes = 240 if auto_continue else 60
+    checkpoint_rounds = 5 if auto_continue else 2
+    hours_match = re.search(r"\b(?:for|up\s+to|cap(?:ped)?\s+at)\s*(\d{1,3})\s*(?:hours?|hrs?)\b", message, re.I)
+    overall_hours = max(1, min(168, int(hours_match.group(1)))) if hours_match else 24
+    rounds_match = re.search(r"\b(?:up\s+to|at\s+most|cap(?:ped)?\s+at)\s*(\d{1,3})\s*pipelines?\b", message, re.I)
+    overall_rounds = max(checkpoint_rounds, min(256, int(rounds_match.group(1)))) if rounds_match else 32
+    config = {"goal_rank": goal, "max_total_minutes": checkpoint_minutes,
+              "max_run_minutes": 45 if auto_continue else 20,
+              "max_rounds": checkpoint_rounds,
+              "max_candidates": 250 if auto_continue else 100,
+              "max_scan_parameters": 50000 if auto_continue else 10000,
+              "max_point_height": 4000000 if auto_continue else 1000000,
+              "numerator_limit": 3000 if auto_continue else 1000,
+              "denominator_limit": 300 if auto_continue else 100,
+              "retention_floor": min(3, goal),
               "share_candidate_parameters": False, "allow_pipeline_build": True,
-              "auto_continue": False, "checkpoint_minutes": 60,
-              "checkpoint_rounds": 2, "hard_stop_minutes": 60,
-              "hard_stop_rounds": 2, "target_summary": summary}
+              "auto_continue": auto_continue, "checkpoint_minutes": checkpoint_minutes,
+              "checkpoint_rounds": checkpoint_rounds,
+              "hard_stop_minutes": max(checkpoint_minutes, overall_hours * 60) if auto_continue else 60,
+              "hard_stop_rounds": overall_rounds if auto_continue else 2,
+              "target_summary": summary}
+    limit = (f"Checkpoint: {checkpoint_minutes} minutes / {checkpoint_rounds} Pipelines; "
+             f"continue automatically up to {config['hard_stop_minutes'] // 60} hours / "
+             f"{config['hard_stop_rounds']} Pipelines, or until the rank goal or a manual stop."
+             if auto_continue else
+             "Limit: 60 minutes, 2 Pipelines, 100 candidates per Pipeline.")
     return {"kind": "start_ai_hunt", "name": name, "objective": objective,
             "target_mode": mode, "target": target, "goal_rank": goal, "config": config,
             "preview": f"Start **{name}** on **{target_label}**. Goal: rigorous rank ≥{goal}. "
-                       f"Objective: {objective} "
-                       "Limit: 60 minutes, 2 Pipelines, 100 candidates per Pipeline. "
+                       f"Objective: {objective} {limit} "
                        f"Keep new curves at rank ≥{min(3, goal)}; Rank Hunter's lead-preservation rule also applies."}
 
 
 def execute_action(db, ctx, plan):
     """Execute only a previously reviewed plan, rechecking mutable targets."""
     kind = plan.get("kind")
+    if kind == "acknowledge_attention":
+        reviewed_keys = {str(key) for key in plan.get("attention_keys", [])}
+        if not reviewed_keys:
+            raise ValueError("No Attention alerts were reviewed.")
+        current = dashboard_attention_snapshot(db, ctx.project_root, campaign=None, limit=200)
+        matches = [item for item in current if item.get("acknowledgeable")
+                   and str(item.get("attention_key")) in reviewed_keys]
+        for item in matches:
+            acknowledge_dashboard_attention(db, item)
+        return f"Acknowledged {len(matches)} Dashboard Attention alert(s)."
     if kind == "sync_icarm":
         active = _active_icarm_sync(db)
         if active is not None:

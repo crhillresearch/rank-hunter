@@ -25,7 +25,7 @@ from rank42.constructive_artifact import (
 from rank42.torsion import canonical_torsion_label
 
 
-CATALOG_VERSION = 29
+CATALOG_VERSION = 30
 ELLIPTIC_TARGET_MODES = ("family", "torsion", "general", "curve")
 TARGET_MODES = (*ELLIPTIC_TARGET_MODES, "genus2_jacobian")
 EVIDENCE_LEVELS = ("heuristic", "exact", "conditional", "rigorous", "control")
@@ -285,6 +285,20 @@ _STAGE_LIST = (
         },
         repeatable=True,
         conditional="Requires derive_pipeline_section_shell(). Height kind/normalization are explicit. Core never invents a family section basis or height pairing, and producer-declared exactness is ignored unless a typed section artifact passes a registered verifier.",
+    ),
+    PipelineStageSpec(
+        "generic_section_independence",
+        "Generic Section Independence",
+        "Constructive",
+        "Recheck sections found by Bounded Q(t) Section Search as exact function-field points. Certify an independent subset on the current exact specialization; independent images prove those sections independent over Q(t), giving a generic rank lower bound without assuming specialization injectivity.",
+        frozenset({"family"}),
+        frozenset({"exact_curve", "section_lead"}),
+        frozenset({"generic_rank_lower_possible"}),
+        "rigorous",
+        "expensive",
+        {"certificate_timeout": 120, "max_sections": 12},
+        repeatable=True,
+        conditional="Requires a JSON FormulaFamily and completed Bounded Q(t) Section Search on the same family. Failure to certify a section is inconclusive; this module gives no generic upper bound or exact generic rank.",
     ),
     PipelineStageSpec(
         "trace_section_constructor",
@@ -1009,6 +1023,20 @@ _STAGE_LIST = (
         {"heights": [100, 1000, 10000], "timeout": 3, "retry_policy": "manual", "retry_timeout": 12, "certificate_timeout": 120, "exact_candidates": 32},
     ),
     PipelineStageSpec(
+        "heegner_point",
+        "Heegner Point Search",
+        "Points",
+        "Ask PARI for a Heegner point on a suitable rank-one curve, then verify its exact coordinates on the stored model and certify independence through Rank Hunter's ordinary point ledger. This does not infer a rank from an analytic calculation.",
+        frozenset(ELLIPTIC_TARGET_MODES),
+        frozenset({"exact_curve"}),
+        frozenset({"point_source", "rigorous_lower_possible"}),
+        "rigorous",
+        "expensive",
+        {"timeout": 120, "certificate_timeout": 120, "max_rigorous_lower": 1},
+        repeatable=True,
+        conditional="Most useful for rank-one curves whose generator escaped direct point search. Curves already certified above the configured lower bound are skipped. PARI failure or no returned point is inconclusive; only exact coordinate validation and an independence certificate raise rank.",
+    ),
+    PipelineStageSpec(
         "integral_seed",
         "Native Model Seed",
         "Points",
@@ -1431,7 +1459,7 @@ _STAGE_LIST = (
         "select_survivors",
         "Select Survivors",
         "Control",
-        "Keep only the strongest fibers for later stages. The rank_then_rea_route policy protects proven rank leads, then follows a preceding REA Population Sort; missing REA routes go last. The legacy rank_then_yield_then_score policy ranks by rigorous lower bound, then total exact-point inventory already stored for the curve, then Pipeline score; it is not run-local fresh point yield. This changes scheduling only and never mathematical evidence.",
+        "Keep only the strongest fibers for later stages. rank_then_growth_then_score prefers certified rank gained by this candidate during the current Pipeline run after rigorous lower bound. rank_then_rea_route follows a preceding REA sort. The legacy rank_then_yield_then_score uses total exact-point inventory, not fresh yield. Selection changes scheduling only, never mathematical evidence.",
         frozenset(ELLIPTIC_TARGET_MODES),
         frozenset({"exact_curve"}),
         frozenset({"selected_population"}),
@@ -2968,7 +2996,7 @@ def validate_pipeline(target_mode, stages):
             if keep <= 0:
                 errors.append(f"Step {index} · Select Survivors: keep must be positive")
             if str(cfg.get("ranking") or "") not in {
-                "rank_then_yield_then_score", "rank_then_score", "score", "rank_then_rea_route"
+                "rank_then_yield_then_score", "rank_then_growth_then_score", "rank_then_score", "score", "rank_then_rea_route"
             }:
                 errors.append(f"Step {index} · Select Survivors: unknown ranking policy")
             if str(cfg.get("ranking") or "") == "rank_then_rea_route" and "rea_sort" not in ids[:index - 1]:
@@ -3085,6 +3113,25 @@ def validate_pipeline(target_mode, stages):
                 errors.append(
                     f"Step {index} · Simon 2-Covering (Legacy): LIMBIGPRIME must be zero or positive"
                 )
+        elif sid == "generic_section_independence":
+            try:
+                certificate_timeout = int(cfg.get("certificate_timeout"))
+                max_sections = int(cfg.get("max_sections"))
+            except (TypeError, ValueError):
+                certificate_timeout, max_sections = 0, 0
+            if certificate_timeout <= 0 or max_sections <= 0:
+                errors.append(f"Step {index} · Generic Section Independence: certificate timeout and section limit must be positive")
+            if "bounded_section_search" not in ids[:index - 1]:
+                errors.append(f"Step {index} · Generic Section Independence: run Bounded Q(t) Section Search first")
+        elif sid == "heegner_point":
+            try:
+                timeout = int(cfg.get("timeout"))
+                certificate_timeout = int(cfg.get("certificate_timeout"))
+                max_lower = int(cfg.get("max_rigorous_lower"))
+            except (TypeError, ValueError):
+                timeout, certificate_timeout, max_lower = 0, 0, -1
+            if timeout <= 0 or certificate_timeout <= 0 or max_lower < 0:
+                errors.append(f"Step {index} · Heegner Point Search: timeouts must be positive and maximum lower bound nonnegative")
         elif sid == "integral_seed":
             try:
                 heights = [int(x) for x in (cfg.get("heights") or [])]
@@ -3192,7 +3239,7 @@ def validate_pipeline(target_mode, stages):
                         f"Step {index} · Adaptive Denominator Ladder: keeps must be positive and nonincreasing"
                     )
             if str(cfg.get("ranking") or "") not in {
-                "rank_then_yield_then_score", "rank_then_score", "score"
+                "rank_then_yield_then_score", "rank_then_growth_then_score", "rank_then_score", "score"
             }:
                 errors.append(
                     f"Step {index} · Adaptive Denominator Ladder: unknown ranking policy"
@@ -3802,14 +3849,14 @@ FRONTIERMATH_RECORD_BREAKER_TEMPLATE = [
     },
     {
         "id": "select_survivors",
-        "config": {"keep": 64, "ranking": "rank_then_yield_then_score"},
+        "config": {"keep": 64, "ranking": "rank_then_growth_then_score"},
     },
     {
         "id": "adaptive_ladder",
         "config": {
             "bands": [[2, 100], [101, 1000], [1001, 10000], [10001, 100000]],
             "keeps": [32, 16, 8, 4],
-            "ranking": "rank_then_yield_then_score",
+            "ranking": "rank_then_growth_then_score",
             "charts": 12,
             "heights": [100000, 1000000],
             "timeout": 12,
@@ -4347,6 +4394,8 @@ _PRESET_DEFS = (
     ("selmer_gate", "Selmer Gate", "Compute a rigorous 2-Selmer upper and expose rank headroom before spending more point-search time."),
     ("covering_forest", "Covering Forest", "Run independent 2-descent/covering branches, fan out stored exact coverings, and certify mapped point growth."),
     ("isogeny_hunt", "2/3-Isogeny Hunt", "Search rational 2- and 3-isogeny neighbors, transfer the known basis, and attack rank-equivalent alternate models."),
+    ("rank_one_point_rescue", "Rank-One Point Rescue", "Try a timed Heegner point search on a saved curve, certify the returned point exactly, then try to close its rank interval."),
+    ("section_discovery", "Section Discovery", "Search a JSON formula family for exact Q(t) sections and prove generic independence using an exact fiber specialization."),
     ("arithmetic_siege", "Arithmetic Siege", "Combine Selmer headroom, covering branches, 2-isogeny neighbors, and deep generator recovery."),
     ("prime_sieve_funnel", "Prime Sieve Funnel", "Cheap-to-medium Frobenius/local filters before point-search spend."),
     ("geometry_grinder", "Geometry Grinder", "Coverings, plugin geometry, and self-feeding MW quartic attacks."),
@@ -4356,6 +4405,20 @@ _PRESET_DEFS = (
 )
 
 PRESET_TEMPLATE_BY_ID = {
+    "rank_one_point_rescue": [
+        {"id": "heegner_point", "config": {"timeout": 120, "certificate_timeout": 120, "max_rigorous_lower": 1}},
+        {"id": "independence"},
+        {"id": "pari_upper_gate", "config": {"timeout": 30, "eliminate_below_goal": False}},
+        {"id": "stop_goal"},
+    ],
+    "section_discovery": [
+        {"id": "nagao_screen", "config": {"prime_bound": 127, "keep": 32}},
+        {"id": "select_survivors", "config": {"keep": 1, "ranking": "score"}},
+        {"id": "bounded_section_search", "config": {"degree": 2, "coefficient_bound": 3, "max_trials": 5000, "timeout": 180}},
+        {"id": "generic_section_independence", "config": {"certificate_timeout": 180, "max_sections": 12}},
+        {"id": "independence"},
+        {"id": "stop_goal"},
+    ],
     "torsion_fast_probe": [
         {"id": "nagao_screen", "config": {"prime_bound": 257, "keep": 300}},
         {"id": "nagao_rescore", "config": {"prime_bound": 997, "keep": 80}},
@@ -4503,6 +4566,10 @@ def pipeline_preset_options(target_mode, *, plugin_id=None):
         if preset_id == "professor_hunt" and mode != "torsion":
             continue
         if preset_id == "torsion_record_hunt" and mode != "torsion":
+            continue
+        if preset_id == "rank_one_point_rescue" and mode != "curve":
+            continue
+        if preset_id == "section_discovery" and mode != "family":
             continue
         if preset_id in {"torsion_fast_probe", "torsion_twist_probe", "torsion_covering_rescue"} and mode != "torsion":
             continue

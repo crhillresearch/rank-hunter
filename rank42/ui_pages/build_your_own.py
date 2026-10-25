@@ -840,7 +840,8 @@ def _format_budget_seconds(seconds):
 
 
 RANKING_OPTIONS = {
-    "rank_then_yield_then_score": "Rigorous rank → exact-point yield → current prime score",
+    "rank_then_yield_then_score": "Rigorous rank → stored exact points → current prime score",
+    "rank_then_growth_then_score": "Rigorous rank → new certified growth → current prime score",
     "rank_then_score": "Rigorous rank → current prime score",
     "rank_then_rea_route": "Rigorous rank → REA relation route",
     "score": "Current prime score only",

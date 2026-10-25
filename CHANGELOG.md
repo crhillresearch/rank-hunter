@@ -4,6 +4,26 @@ All notable changes to Rank Hunter are documented here.
 
 ## [0.10.6] — Unreleased
 
+### Added
+
+- Added a Heegner Point Search module and a Rank-One Point Rescue preset for
+  curves where direct searches have missed a generator. PARI runs with a hard
+  timeout; Rank Hunter checks the returned coordinates and only raises the
+  rank after its normal independence certificate succeeds.
+- Added a Pipeline survivor-ranking choice that favors certified rank growth
+  from the current run over a large inventory of dependent points.
+- Added Generic Section Independence after bounded Q(t) section search. It
+  rechecks each identity symbolically and uses an exact independent fiber
+  specialization to establish a generic rank lower bound for the sections it
+  can certify.
+- Rank Hunter Agent now understands direct requests to start AI Hunts on a
+  named curve, family, torsion group, or general pool. It can carry a request
+  to keep hunting after checkpoints into the reviewed action card, with the
+  overall time and Pipeline caps shown before the job is queued.
+- Agent can acknowledge Dashboard Attention alerts through a review card,
+  either together or for a named failed job or Pipeline run. It leaves live
+  issues and the underlying job history alone.
+
 ## [0.10.5] — Unreleased
 
 ### Added

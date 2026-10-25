@@ -311,11 +311,11 @@ _BUILDABLE_STAGE_IDS = frozenset({
     "specialization_injectivity_certificate", "quadratic_twist_sweep",
     "targeted_twist_search", "isogeny_walk", "rank_jump_base_change",
     "autonomous_rank_jump", "parameter_pullback",
-    "bounded_section_search", "section_height_shell", "trace_section_constructor",
+    "bounded_section_search", "generic_section_independence", "section_height_shell", "trace_section_constructor",
     "forced_bisection_constructor", "square_condition_specializer",
     "constructive_rank_jump_loop", "surface_fibration_switch",
     # Independent point and covering attacks.
-    "small_point_density", "integral_seed", "denominator_band",
+    "small_point_density", "integral_seed", "heegner_point", "denominator_band",
     "point_yield_persistence", "affine_search", "adaptive_ladder",
     "simon_covering", "mwrank_covering", "higher_descent_ladder",
     "covering_selmer_branch", "covering_minimize_reduce",
@@ -330,13 +330,13 @@ _BUILDABLE_STAGE_IDS = frozenset({
     "isogeny_descent", "stop_goal",
 })
 _DISCOVERY_STAGE_IDS = frozenset({
-    "integral_seed", "affine_search", "small_point_density", "denominator_band",
+    "integral_seed", "affine_search", "small_point_density", "heegner_point", "denominator_band",
     "adaptive_ladder", "pointed_quartic", "mwrank_covering",
     "simon_covering", "higher_descent_ladder", "covering_selmer_branch",
     "selmer_element_fanout", "padic_covering_search", "mw_growth_loop",
     "lattice_chart_search", "quadratic_twist_sweep", "targeted_twist_search",
     "isogeny_walk", "rank_jump_base_change", "autonomous_rank_jump",
-    "bounded_section_search", "section_height_shell", "constructive_rank_jump_loop",
+    "bounded_section_search", "generic_section_independence", "section_height_shell", "constructive_rank_jump_loop",
     "square_condition_specializer", "surface_fibration_switch",
     "large_height_generator_hunt", "plugin_geometry", "plugin_family_search",
 })

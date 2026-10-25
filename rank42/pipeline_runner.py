@@ -40,6 +40,8 @@ from rank42.search_family_baseline import (
     attach_family_specialization_seed as _attach_family_specialization_seed,
 )
 from rank42.section_pipeline import bounded_section_search
+from rank42.section_independence import certify_discovered_sections
+from rank42.heegner_point import run_heegner_point
 from rank42.search_materialization import (
     discard_unpromoted_search_curve as _discard_unpromoted_auto_curve,
     materialize_family_curve as _stored_curve,
@@ -3201,6 +3203,43 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
         )
         return _safe(result), None, False
 
+    if stage_id == "generic_section_independence":
+        prior = _latest_prior_stage_result(
+            db, run_id=run["id"], before_stage_index=stage_index,
+            stage_id="bounded_section_search",
+            candidate_id=context.get("pipeline_candidate_id"),
+            curve_id=curve_id,
+        ) or {}
+        result = certify_discovered_sections(
+            context.get("family"), parameter, E, prior,
+            timeout=int(config.get("certificate_timeout") or 120),
+            max_sections=int(config.get("max_sections") or 12),
+        )
+        if int(result.get("generic_lower") or 0) > 0:
+            curve_row = get_curve(db, curve_id)
+            variant = context.get("variant")
+            plugin = context.get("plugin")
+            family_spec = (
+                (curve_row["family_spec"] if curve_row is not None else None)
+                or getattr(variant, "family_spec", None)
+                or f"json-formula:{result['source_sha256']}"
+            )
+            family_sha256 = (
+                (curve_row["family_sha256"] if curve_row is not None else None)
+                or result["source_sha256"]
+            )
+            result["family_evidence_id"] = record_family_evidence(
+                db, family_spec=str(family_spec), family_sha256=family_sha256,
+                plugin_id=getattr(plugin, "id", None),
+                plugin_version=getattr(plugin, "version", None),
+                criterion="independent-section-specialization",
+                specialization_parameter=str(parameter),
+                specialized_curve_id=curve_id,
+                generic_lower=int(result["generic_lower"]),
+                certificate=_safe(result), status="completed",
+            )
+        return _safe(result), None, False
+
     if stage_id == "section_height_shell":
         result = section_height_shell(context=context, config=config)
         return _safe(result), None, False
@@ -3930,6 +3969,48 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
             "search_model_fixed_across_rounds": True,
             "heuristic_only": True,
             "exact_points_use_ordinary_evidence_path": True,
+        }, None, False
+
+    if stage_id == "heegner_point":
+        before = _snapshot(db, curve_id)
+        lower = int(before["rigorous_lower"])
+        if lower > int(config.get("max_rigorous_lower", 1)):
+            return {
+                "status": "skipped", "reason": "rigorous_lower_above_heegner_scope",
+                "rigorous_lower": lower,
+            }, None, False
+        attempt = run_heegner_point(E, timeout=int(config.get("timeout") or 120))
+        if attempt["status"] != "point":
+            return {
+                **_safe(attempt),
+                "status": ("inconclusive" if attempt["status"] in
+                           {"no_point", "not_applicable"} else attempt["status"]),
+                "rigorous_lower": lower,
+            }, None, False
+        xy = attempt["point"]
+        P = E(QQ(xy[0]), QQ(xy[1]))
+        search_ref = f"pipeline:{run['id']}:heegner:{stage_index}"
+        upsert_point(
+            db, curve_id=curve_id, x=P[0], y=P[1],
+            source="pipeline_heegner_point", role="candidate_extra",
+            exact_verified=True, independence_status="unknown",
+            rigorous_independent=False, search_ref=search_ref,
+            metadata={"engine": "PARI ellheegner", "runtime_seconds": attempt["runtime_seconds"]},
+        )
+        certificate = certify_ledger_growth(
+            db, curve_id=curve_id, E=E, source="pipeline_heegner_point",
+            search_ref=search_ref,
+            certificate_timeout=int(config.get("certificate_timeout") or 120),
+            max_candidates=1,
+        )
+        after = _snapshot(db, curve_id)
+        return {
+            "status": "completed", "engine": "PARI ellheegner",
+            "point": xy, "exact_points": 1,
+            "rank_growth": max(0, int(after["rigorous_lower"]) - lower),
+            "rigorous_lower": int(after["rigorous_lower"]),
+            "certificate": _safe(certificate),
+            "runtime_seconds": attempt["runtime_seconds"],
         }, None, False
 
     if stage_id == "integral_seed":
@@ -4951,6 +5032,24 @@ def _exact_point_inventory(db, row):
     return int(found["n"] or 0) if found is not None else 0
 
 
+def _run_certified_growth(row):
+    """Count certified lower-bound gains reported by this run's prior stages."""
+    growth = 0
+    for entry in _stage_results(row).values():
+        if not isinstance(entry, dict):
+            continue
+        result = entry.get("result")
+        if not isinstance(result, dict):
+            continue
+        if str(result.get("status") or "") in {"error", "timeout", "unsupported"}:
+            continue
+        try:
+            growth += max(0, int(result.get("rank_growth") or 0))
+        except (TypeError, ValueError):
+            continue
+    return growth
+
+
 def _rank_population_rows(db, rows, ranking):
     ranking = str(ranking or "rank_then_yield_then_score")
     enriched = []
@@ -4958,7 +5057,9 @@ def _rank_population_rows(db, rows, ranking):
         score = _pipeline_score(row)
         lower = int(row["rigorous_lower"] or 0)
         exact_point_inventory = _exact_point_inventory(db, row)
-        if ranking == "rank_then_rea_route":
+        if ranking == "rank_then_growth_then_score":
+            key = (-lower, -_run_certified_growth(row), -score, int(row["id"]))
+        elif ranking == "rank_then_rea_route":
             rea_rank = None
             for entry in _stage_results(row).values():
                 if not isinstance(entry, dict) or entry.get("stage_id") != "rea_sort":
