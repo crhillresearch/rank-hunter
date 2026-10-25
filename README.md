@@ -16,6 +16,7 @@ bash scripts/run-ui.sh
 ```
 
 ## Major Changes
+- Rank Hunter Agent brings chat-style LLM into core.
 - Major UI redesign makes progress and proven ranks easier to see.
 - One Search page for family, torsion, candidate-pool, curve, and general searches.
 - AI Hunt can plan and run bounded Pipeline rounds, review results, and choose what to try next. Rank claims still require exact checks.
