@@ -13,7 +13,7 @@ WORKER = Path(__file__).with_name("geometry_research_worker.py")
 
 
 def run_experiment(*, science_python, family, mode, config, timeout=90):
-    if mode not in {"sections", "base_change", "rank_jump_constructor"}:
+    if mode not in {"sections", "genus_one_sections", "base_change", "rank_jump_constructor"}:
         raise ValueError("unsupported geometry research mode")
     if not str(science_python or "").strip():
         raise ValueError("scientific Python is not configured")

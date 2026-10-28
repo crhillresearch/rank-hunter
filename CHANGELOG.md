@@ -6,6 +6,10 @@ All notable changes to Rank Hunter are documented here.
 
 ### Added
 
+- Sections now accepts a genus-one base from an installed family or a custom
+  quartic. It searches rational x formulas on the cover, checks each point
+  identity exactly, and identifies torsion translates of known sections.
+  Unresolved sections still need a separate independence proof.
 - Added a Heegner Point Search module and a Rank-One Point Rescue preset for
   curves where direct searches have missed a generator. PARI runs with a hard
   timeout; Rank Hunter checks the returned coordinates and only raises the
@@ -26,8 +30,13 @@ All notable changes to Rank Hunter are documented here.
 
 ### Changed
 
+- Pipelines can verify a family's exact torsion point directly. When that
+  point and Mazur's theorem uniquely determine the torsion group, Rank Hunter
+  records the proof without launching a separate full torsion calculation.
 - Tooltips now dismiss after pointer clicks instead of lingering while a
   control keeps focus. Keyboard focus and Help icons still work normally.
+- The Base Change constructor now converts certified seed-point rows before
+  giving them to Streamlit, preventing a page crash when that selector loads.
 - Agent now answers family and rank curve lookups from the local database,
   including curve IDs and stored rational-point counts. The chat also has
   clear, copy-chat, and compact retry and copy-response controls.
@@ -439,7 +448,6 @@ All notable changes to Rank Hunter are documented here.
 - Added Pipeline modules for classical Mestre–Nagao scoring, REA sorting and
   height-Gram rank certificates, genus-two Jacobian work, and lattice-based
   searches. Heuristic scores remain separate from rank proofs.
-- Added a Z/10Z search path to the Mazur torsion families.
 
 ### Changed
 

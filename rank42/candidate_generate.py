@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -143,6 +144,85 @@ def main():
     if chart:
         print(f'[chart] {chart.id} · {chart.label} · native {chart.native_family_key}')
     print(f'[pool] #{pool["id"]} {pool["name"]}', flush=True)
+    custom_generator = getattr(family, 'generate_rank42_candidate_rows', None)
+    if callable(custom_generator):
+        # Some families parameterize fibers by lattice points on an auxiliary
+        # curve. Score each actual fiber instead of applying a rational-parameter
+        # sieve; custom rows may use either integer selectors or rational t.
+        if chart is not None:
+            raise SystemExit('this family has an indexed parameter generator and does not support parameter charts')
+        denominator_mode = str(getattr(
+            family, 'candidate_denominator_mode', 'generic'))
+        generator_b_min = 1 if denominator_mode == 'family_owned' else args.b_min
+        generator_b_max = 1 if denominator_mode == 'family_owned' else args.b_max
+        rows = custom_generator(
+            a_min=args.a_min, a_max=args.a_max,
+            # A family-owned parameterization may not use rational a/b
+            # selectors; other custom generators keep the generic controls.
+            b_min=generator_b_min, b_max=generator_b_max,
+            top=args.top, prime_bound=bounds[-1],
+            excluded_parameters=excluded,
+        )
+        if denominator_mode == 'family_owned' and (args.b_min != 1 or args.b_max != 1):
+            print(
+                f'[custom family] ignored generic denominator range '
+                f'{args.b_min}..{args.b_max}; parameters come from the family generator',
+                flush=True,
+            )
+        for rec in rows:
+            q = Fraction(str(rec['t'])) if rec.get('t') is not None else Fraction(int(rec['a']), 1)
+            rec.update({
+                't': str(q), 'a': int(q.numerator), 'b': int(q.denominator),
+                'native_family_key': f'{plugin.id}:{variant.id}',
+                'native_variant_id': variant.id,
+                'native_family_spec': variant.family_spec,
+                'native_parameter': str(q),
+                'family_spec': variant.family_spec,
+                'plugin_id': plugin.id,
+                'plugin_variant': variant.id,
+                'family_name': family.name(),
+                'search_engine': 'direct_specialization_mestre_nagao',
+                'stage_bounds': bounds,
+            })
+        generation['candidate_algorithm'] = str(getattr(
+            family, 'candidate_algorithm', 'direct_specialization_mestre_nagao_v1'))
+        generation['parameter_kind'] = str(getattr(
+            family, 'candidate_parameter_kind', 'integer_multiple_on_genus_one_base'))
+        generation['candidate_denominator_mode'] = denominator_mode
+        generation['effective_denominator_range'] = [
+            int(generator_b_min), int(generator_b_max)]
+        db.execute(
+            'UPDATE candidate_pools SET generation_json=?,updated_at=? WHERE id=?',
+            (json.dumps(generation, sort_keys=True), now(), int(pool['id'])),
+        )
+        db.commit()
+        try:
+            rows, corpus_summary = apply_candidate_corpus_policy(
+                project, plugin, variant, rows, args.corpus_policy
+            )
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        if corpus_summary['policy'] != 'off' and corpus_summary['declared']:
+            print(
+                f"[corpus] policy={corpus_summary['policy']} "
+                f"ready={corpus_summary['ready']}/{corpus_summary['declared']} "
+                f"known={corpus_summary['known']} retained={corpus_summary['retained']}",
+                flush=True,
+            )
+        count = replace_pool_rows(db, pool['id'], rows)
+        if args.export_jsonl:
+            path = export_pool_jsonl(db, pool['id'], args.export_jsonl)
+            db.execute(
+                'UPDATE candidate_pools SET source_path=?,updated_at=? WHERE id=?',
+                (str(path), now(), pool['id']),
+            )
+            db.commit()
+            print(f'[export] {path}')
+        print(f'[indexed family scoring] exact fibers={len(rows)} · pool #{int(pool["id"])}', flush=True)
+        print(f'RANK_HUNTER_CANDIDATE_POOL={{"pool_id":{int(pool["id"])},"candidates":{count}}}', flush=True)
+        db.close()
+        return
+
     symmetry=family_parameter_symmetry(family)
     if symmetry: print(f'[symmetry] {symmetry}', flush=True)
 

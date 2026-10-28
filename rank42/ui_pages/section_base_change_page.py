@@ -104,6 +104,65 @@ def _family_selector(ctx, mode, source_kind=None):
     return family, source
 
 
+def _genus_one_family_selector(ctx):
+    choices = {}
+    for plugin in discover_plugins(ctx.project_root):
+        if not isinstance(plugin, Plugin) or plugin.plugin_type != "family":
+            continue
+        manifest_path = plugin.root / "plugin.json"
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        geometry = manifest.get("section_geometry")
+        if isinstance(geometry, dict):
+            choices[f"{plugin.name} [{plugin.id}]"] = (geometry, manifest_path)
+    selected = st.selectbox(
+        "Genus-one family", [*choices, "Custom genus-one formula"],
+        key="rh-geometry-genus-one-family",
+    )
+    if selected == "Custom genus-one formula":
+        name = st.text_input("Family name", value="Genus-one research family",
+                             key="rh-geometry-genus-one-custom-name")
+        parameter = st.text_input("Parameter", value="u", key="rh-geometry-genus-one-parameter").strip() or "u"
+        quartic = st.text_input("Base curve · v² = F(u)", value="-u^4+2*u^3+4*u^2+6*u+9",
+                                key="rh-geometry-genus-one-quartic")
+        coefficient_cols = st.columns(5)
+        defaults = ("0", "-2*(u^2+1)*(u^4-2*u^3-6*u^2+2*u+1)", "0",
+                    "(u^2-1)^5*(u^2-4*u-1)", "0")
+        ainvs = [column.text_input(f"a{index}", value=default,
+                    key=f"rh-geometry-genus-one-a{index}")
+                 for column, index, default in zip(coefficient_cols, (1, 2, 3, 4, 6), defaults)]
+        factors = st.text_input(
+            "x factors · comma separated", value="u, u-1, u+1, u^2-4*u-1, u^2+u-1",
+            key="rh-geometry-genus-one-factors",
+        )
+        with st.expander("Known sections", expanded=False):
+            raw_sections = st.text_area(
+                "Sections as JSON · y may use v",
+                value="[]", height=90, key="rh-geometry-genus-one-known",
+            )
+        try:
+            sections = json.loads(raw_sections)
+            if not isinstance(sections, list):
+                raise ValueError("known sections must be a JSON list")
+        except (TypeError, ValueError) as exc:
+            st.error(f"Known sections: {exc}")
+            return None, None
+        return {
+            "name": name, "parameter": parameter, "base_quartic": quartic,
+            "a_invariants": ainvs, "sections": sections,
+            "x_factors": [item.strip() for item in factors.split(",") if item.strip()],
+        }, None
+    geometry, source = choices[selected]
+    st.caption(f"v² = {geometry['base_quartic']} · {len(geometry.get('sections') or [])} known section(s)")
+    with st.expander("Exact model and search factors", expanded=False):
+        st.code("\n".join([f"v² = {geometry['base_quartic']}",
+                           *[f"a{i} = {value}" for i, value in zip((1, 2, 3, 4, 6), geometry['a_invariants'])],
+                           f"x factors = {', '.join(geometry.get('x_factors') or [])}"]), language="text")
+    return {"name": selected, **geometry}, source
+
+
 def _search_controls(prefix, *, compact=False):
     columns = st.columns(4)
     degree = columns[0].selectbox("x degree", [0, 1, 2, 3], index=1,
@@ -144,7 +203,7 @@ def _result_panel(result, source, path):
     mode = result.get("mode")
     st.success("Exact experiment completed. Equations and provenance were saved.")
     st.caption(f"Source SHA-256: `{result['source_sha256'][:20]}` · artifact: `{path}`")
-    if mode == "sections":
+    if mode in {"sections", "genus_one_sections"}:
         found = body.get("sections") or []
         known = body.get("known_sections_verified") or []
         cards = st.columns(3)
@@ -163,16 +222,18 @@ def _result_panel(result, source, path):
         with st.expander("Pulled-back Weierstrass equation", expanded=False):
             st.code("\n".join(f"a{i}(u) = {expr}" for i, expr in zip((1, 2, 3, 4, 6), body.get("a_invariants") or [])),
                     language="text")
-    found = body.get("sections") if mode == "sections" else (body.get("new_section_search") or {}).get("sections")
+    found = body.get("sections") if mode in {"sections", "genus_one_sections"} else (body.get("new_section_search") or {}).get("sections")
     manual = body.get("manual_candidate")
     if manual:
         st.markdown("**Verified candidate section**")
         st.code(f"x = {manual['x']}\ny = {manual['y']}", language="text")
+        if manual.get("relationship"):
+            st.caption(f"Relation to known sections: {manual['relationship']}")
     if found:
         st.dataframe([{"x": rec["x"], "y": rec["y"], "proof": rec["verification"],
-                       "independence": rec["independence"]} for rec in found],
+                       "independence": rec.get("independence") or rec.get("relationship") or "unchecked"} for rec in found],
                      hide_index=True, width="stretch")
-    if mode == "sections":
+    if mode in {"sections", "genus_one_sections"}:
         if body.get("known_sections_invalid"):
             with st.expander("Declared sections that failed verification", expanded=True):
                 st.dataframe(body["known_sections_invalid"], hide_index=True, width="stretch")
@@ -185,7 +246,10 @@ def _result_panel(result, source, path):
     invalid = body.get("known_sections_invalid") or body.get("inherited_sections_invalid") or []
     if invalid:
         st.warning(f"{len(invalid)} declared sections failed exact verification; inspect the artifact before using them.")
-    if mode == "sections":
+    if mode == "genus_one_sections":
+        st.info("Every listed section satisfies the equation over the displayed genus-one base. "
+                "Torsion translates are identified exactly; unresolved relations need an independence certificate.")
+    elif mode == "sections":
         st.info(
             "Each listed point satisfies the family equation identically over Q(t). "
             "The search does not certify that sections are independent or that the full generic rank is known."
@@ -219,14 +283,14 @@ def _page(db, ctx, mode):
     is_sections = mode == "sections"
     st.markdown("#### Discover rational sections" if is_sections else "#### Construct a base change")
     st.caption(
-        "Search for points whose coordinates are rational functions of the family parameter. "
-        "Rank Hunter checks every proposed section by exact substitution and saves the experiment."
+        "Search exact sections over a rational or genus-one parameter base. "
+        "Rank Hunter checks each identity and saves the experiment."
         if is_sections else
         "Pull a formula family through an explicit rational parameter map, verify inherited sections, "
         "and search the derived family for further exact sections."
     )
     source_kind = st.segmented_control(
-        "Start from", ["Family", "Custom Formula"],
+        "Start from", ["Family", "Genus-one base", "Custom Formula"] if is_sections else ["Family", "Custom Formula"],
         default="Family", key=f"rh-geometry-{mode}-source-kind",
         help="Choose a registered Rank Hunter family or enter an exact Weierstrass formula.",
     ) or "Family"
@@ -234,9 +298,13 @@ def _page(db, ctx, mode):
         if source_kind == "Custom Formula":
             st.markdown("**1 · Define the family**")
             st.caption("Enter the five Weierstrass coefficients as functions of one parameter.")
+        elif source_kind == "Genus-one base":
+            st.markdown("**1 · Choose a genus-one base**")
+            st.caption("Search exact sections on v² = F(u), including installed family plugins that expose their cover model.")
         elif source_kind == "Family":
             st.markdown("**1 · Choose a registered family**")
-        family, source = _family_selector(ctx, mode, source_kind)
+        family, source = (_genus_one_family_selector(ctx) if source_kind == "Genus-one base"
+                          else _family_selector(ctx, mode, source_kind))
     if family is None:
         return
     prefix = f"rh-geometry-{mode}"
@@ -254,7 +322,30 @@ def _page(db, ctx, mode):
                 "Search for new sections", value=True, key=f"{prefix}-search-new",
                 help="Search the pulled-back family for exact sections beyond the listed inherited ones.",
             )
-    if is_sections:
+    genus_one = is_sections and source_kind == "Genus-one base"
+    run_mode = "genus_one_sections" if genus_one else mode
+    if genus_one:
+        st.markdown("**2 · Set the search scope**")
+        with st.container(key="rh-geometry-genus-one-search", border=True):
+            columns = st.columns(4)
+            config["max_trials"] = columns[0].selectbox(
+                "Candidate budget", [20000, 100000, 250000], index=1,
+                key="rh-geometry-genus-one-trials",
+            )
+            config["sample_bound"] = columns[1].selectbox(
+                "Base point bound", [20, 40, 80], index=1,
+                key="rh-geometry-genus-one-sample-bound",
+            )
+            config["max_degree"] = columns[2].selectbox(
+                "x degree limit", [8, 12, 16, 20], index=1,
+                key="rh-geometry-genus-one-degree",
+            )
+            timeout = columns[3].selectbox(
+                "Time budget", [60, 120, 300], index=2,
+                format_func=lambda n: f"{n}s", key="rh-geometry-genus-one-timeout",
+            )
+            config.update({"sample_count": 4, "max_pole": 6, "max_results": 32})
+    elif is_sections:
         st.markdown("**2 · Set the search scope**")
         st.caption("Bounds control which rational-function x-coordinates are tried; a bounded search is not exhaustive.")
         with st.container(key="rh-geometry-sections-search", border=True):
@@ -270,7 +361,7 @@ def _page(db, ctx, mode):
     with st.expander("Verify a candidate section", expanded=False):
         st.caption("Enter both coordinates to check a proposed section by exact substitution into the generic equation.")
         candidate_cols = st.columns(2)
-        symbol = family.get("parameter") or "t" if is_sections else "u"
+        symbol = "u,v" if genus_one else ((family.get("parameter") or "t") if is_sections else "u")
         config["candidate_x"] = candidate_cols[0].text_input(
             f"x({symbol})", key=f"{prefix}-candidate-x",
         ).strip()
@@ -287,7 +378,7 @@ def _page(db, ctx, mode):
         try:
             with st.spinner("Running bounded exact Sage arithmetic…"):
                 result = run_experiment(science_python=science_python, family=family,
-                                        mode=mode, config=config, timeout=timeout)
+                                        mode=run_mode, config=config, timeout=timeout)
                 path = save_experiment(ctx.project_root, result)
             st.session_state[f"{prefix}-result"] = (result, str(path))
         except Exception as exc:
@@ -301,7 +392,7 @@ def _page(db, ctx, mode):
 
     history = [
         path for path in recent_experiments(ctx.project_root, limit=30)
-        if path.name.startswith(f"{mode}-")
+        if path.name.startswith(f"{run_mode}-")
     ][:8]
     if history:
         with st.expander("Recent exact experiments", expanded=False):
@@ -365,7 +456,7 @@ def _rank_jump_constructor_page(db, ctx):
                 "SELECT id,x,y FROM points WHERE curve_id=? AND exact_verified=1 "
                 "AND rigorous_independent=1 ORDER BY id", (curve_id,),
             ).fetchall()
-            anchor_options = [row for row in rows if int(row["id"]) not in used_ids
+            anchor_options = [dict(row) for row in rows if int(row["id"]) not in used_ids
                               and (Fraction(row["x"]), Fraction(row["y"])) in basis_keys]
             if anchor_options:
                 anchor_evidence = {"id": int(evidence_row["id"]), "rigorous": True,

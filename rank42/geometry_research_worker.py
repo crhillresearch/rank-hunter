@@ -212,7 +212,11 @@ def main():
     source_hash = hashlib.sha256(json.dumps(family, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     config = dict(request.get("config") or {})
 
-    if mode == "sections":
+    if mode == "genus_one_sections":
+        from genus_one_sections import run as search_genus_one_sections
+
+        result = search_genus_one_sections(family, config)
+    elif mode == "sections":
         parameter = str(family.get("parameter") or "t")
         polynomial = PolynomialRing(QQ, parameter)
         field = polynomial.fraction_field()

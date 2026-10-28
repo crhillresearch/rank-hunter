@@ -17,6 +17,24 @@ TERMINAL_JOB_STATUSES = frozenset({
 })
 
 
+def _curve_state_if_present(db, curve_id):
+    """Read rank state unless another retention pass already removed the curve.
+
+    Retention can run while a second job is being reconciled. The candidate
+    rows are read before deleting, so a concurrent cleanup may remove a curve
+    between that query and the state lookup. Treat that as already cleaned;
+    preserve real lookup failures for curves that still exist.
+    """
+    try:
+        return get_curve_research_state(db, curve_id)
+    except ValueError:
+        # get_curve_research_state raises ValueError only when its curve query
+        # returns no row. Treat that as already cleaned. A follow-up existence
+        # query is racy too: another retention pass can remove the row between
+        # the two reads, and must not take down the UI reconciliation pass.
+        return None
+
+
 def cleanup_pipeline_run(db, run_id, *, floor_override=None, dry_run=False):
     run = db.execute(
         "SELECT id,started_at,run_config_json FROM search_pipeline_runs WHERE id=?",
@@ -33,6 +51,7 @@ def cleanup_pipeline_run(db, run_id, *, floor_override=None, dry_run=False):
         "run_id": int(run_id), "floor": floor,
         "removed": 0, "preexisting": 0, "active_elsewhere": 0,
         "retained": 0, "frontier_retained": 0,
+        "already_removed": 0,
         "curve_ids_removed": [],
     }
     if floor == 0:
@@ -92,7 +111,10 @@ def cleanup_pipeline_run(db, run_id, *, floor_override=None, dry_run=False):
         if active is not None:
             result["active_elsewhere"] += 1
             continue
-        state = get_curve_research_state(db, curve_id)
+        state = _curve_state_if_present(db, curve_id)
+        if state is None:
+            result["already_removed"] += 1
+            continue
         if int(state.get("rigorous_lower") or 0) >= floor:
             result["retained"] += 1
             continue
@@ -126,6 +148,7 @@ def cleanup_auto_campaign(db, campaign_id):
         "campaign_id": int(campaign_id), "floor": floor,
         "removed": 0, "preexisting": 0, "active_elsewhere": 0,
         "retained": 0, "curve_ids_removed": [],
+        "already_removed": 0,
     }
     started_at = str(campaign["started_at"] or "")
     if not floor or not started_at:
@@ -168,7 +191,10 @@ def cleanup_auto_campaign(db, campaign_id):
         if active is not None:
             result["active_elsewhere"] += 1
             continue
-        state = get_curve_research_state(db, curve_id)
+        state = _curve_state_if_present(db, curve_id)
+        if state is None:
+            result["already_removed"] += 1
+            continue
         if int(state.get("rigorous_lower") or 0) >= floor:
             result["retained"] += 1
             continue

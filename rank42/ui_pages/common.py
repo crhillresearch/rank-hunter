@@ -922,6 +922,11 @@ _PAGE_LOCAL_ICONS = {
         "Overview": "space_dashboard", "Construct": "architecture",
         "Hunt": "point_scan", "Evidence": "verified",
     },
+    "extension:infinity_breaker:infinity_breaker": {
+        "Overview": "space_dashboard", "ICARM Seeds": "filter_alt",
+        "2-Neighbors": "hub", "Fiber Search": "search",
+        "Paired Covers": "all_inclusive", "Jobs": "history",
+    },
     "Rank Lab": {"Certify points": "verified", "Prove rank": "rule", "Search rank": "search"},
     "Casebook": {"Case file": "description", "Journal": "edit_note", "Evidence": "verified", "Family": "account_tree", "History": "history"},
     "AI Hunt": {"Campaigns": "bookmark", "New hunt": "auto_awesome"},
@@ -942,6 +947,10 @@ _PAGE_LOCAL_VIEWS = {
     "extension:point_hunter:point_hunter": (
         ("Overview", "Construct", "Hunt", "Evidence"),
         "point-hunter-view", None, True,
+    ),
+    "extension:infinity_breaker:infinity_breaker": (
+        ("Overview", "ICARM Seeds", "2-Neighbors", "Fiber Search", "Paired Covers", "Jobs"),
+        "infinity-breaker-view", None, True,
     ),
     "Rank Lab": (("Certify points", "Prove rank", "Search rank"), "analysis-hub-lane", None, True),
     "Casebook": (("Case file", "Journal", "Evidence", "Family", "History"), "casebook-section", None, False),
@@ -1063,7 +1072,7 @@ def _render_page_bar(name, icon):
         "surfaceColor": st.session_state.get("_rh_theme_palette", {}).get("rh-card"),
         "pageTitle": str(name),
         "pageIcon": _material_page_icon(icon),
-        "simple": len(pages) <= 5,
+        "simple": len(pages) <= 5 or route == "extension:infinity_breaker:infinity_breaker",
         "simpleShowCurrent": local_spec is not None,
         "itemNoun": "views" if local_spec is not None else "pages",
         "mobileLabel": "Views" if local_spec is not None else "Pages",

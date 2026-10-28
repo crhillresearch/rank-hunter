@@ -22,7 +22,9 @@ from rank42.plugins import (
     set_plugin_state,
     unavailable_plugin_states,
     validation_freshness,
+    variant_torsion_groups,
 )
+from rank42.torsion import MAZUR_TORSION_CHOICES
 from rank42.ui_components import tabs, region, button, rh_key
 from .common import launch, setting, title
 
@@ -36,6 +38,21 @@ def _plugin_icon_html(plugin):
         f'<span class="rh-plugin-card-icon" aria-hidden="true" '
         f'title="{html.escape(symbol, quote=True)}">{html.escape(symbol)}</span>'
     )
+
+
+def _torsion_dropdown_label(value):
+    value = str(value)
+    if value == "Any torsion":
+        return "Any torsion"
+    if value == "Unspecified":
+        return "Unspecified"
+    if value == "Trivial":
+        return "Trivial"
+    if value.startswith("C2 × C"):
+        return "Z/2Z x Z/" + value.removeprefix("C2 × C") + "Z"
+    if value.startswith("C") and value[1:].isdigit():
+        return f"Z/{value[1:]}Z"
+    return value
 
 
 def _experimental_icon_html(plugin):
@@ -1326,14 +1343,27 @@ def page(db, ctx, initial_tab=None):
 
     if choice == "Families":
         families = all_families
+        def declared_torsion_groups(plugin):
+            groups = set()
+            for variant in plugin.variants:
+                groups.update(variant_torsion_groups(plugin, variant))
+            if not plugin.variants:
+                groups.update(variant_torsion_groups(plugin))
+            return groups
+
+        family_torsion_groups = {
+            plugin.id: declared_torsion_groups(plugin)
+            for plugin in all_families
+        }
+        torsion_options = list(MAZUR_TORSION_CHOICES)
         family_capabilities = sorted({
             str(capability)
             for plugin in all_families
             for capability in plugin.capabilities
             if str(capability).strip()
         })
-        search_col, status_col, capability_col, sort_col = st.columns(
-            [2.3, 1.15, 1.35, 0.9],
+        search_col, status_col, capability_col, torsion_col, sort_col = st.columns(
+            [2.0, 1.05, 1.35, 0.85, 0.85],
             gap="small",
             vertical_alignment="center",
         )
@@ -1374,10 +1404,18 @@ def page(db, ctx, initial_tab=None):
                 ),
                 label_visibility="collapsed",
             )
+        with torsion_col:
+            family_torsion_filter = st.selectbox(
+                "Torsion",
+                ["Any torsion", *torsion_options, "Unspecified"],
+                key="plugin-family-manager-torsion",
+                format_func=_torsion_dropdown_label,
+                label_visibility="collapsed",
+            )
         with sort_col:
             family_sort = st.selectbox(
                 "Sort",
-                ["Rank", "Name", "Status", "Version"],
+                ["Rank", "Name", "Status", "Torsion", "Version"],
                 key="plugin-family-manager-sort",
                 label_visibility="collapsed",
             )
@@ -1425,6 +1463,17 @@ def page(db, ctx, initial_tab=None):
                 )
             ]
 
+        if family_torsion_filter == "Unspecified":
+            families = [
+                plugin for plugin in families
+                if not family_torsion_groups.get(plugin.id)
+            ]
+        elif family_torsion_filter != "Any torsion":
+            families = [
+                plugin for plugin in families
+                if family_torsion_filter in family_torsion_groups.get(plugin.id, set())
+            ]
+
         if family_capability_filter != "All capabilities":
             families = [
                 plugin
@@ -1441,6 +1490,20 @@ def page(db, ctx, initial_tab=None):
                 families,
                 key=lambda p: (
                     _family_status_text(db, p, superseded=p.id in superseded_ids).lower(),
+                    p.name.lower(),
+                ),
+            )
+        elif family_sort == "Torsion":
+            torsion_order = {
+                group: index for index, group in enumerate(MAZUR_TORSION_CHOICES)
+            }
+            families = sorted(
+                families,
+                key=lambda p: (
+                    tuple(sorted(
+                        torsion_order.get(group, len(torsion_order))
+                        for group in family_torsion_groups.get(p.id, ())
+                    )) or (len(torsion_order) + 1,),
                     p.name.lower(),
                 ),
             )

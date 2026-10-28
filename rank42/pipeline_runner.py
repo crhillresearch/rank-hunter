@@ -199,6 +199,7 @@ from rank42.torsion import (
     TorsionTimeout,
     canonical_torsion_label,
     persist_curve_torsion,
+    persist_curve_torsion_from_point_witness,
 )
 from rank42.torsion_auto_search import discover_providers
 
@@ -3303,13 +3304,32 @@ def _stage_result(stage_id, *, db, run, run_config, target, context, config, sta
     if stage_id == "exact_torsion":
         timeout = max(1, int(config.get("timeout") or 30))
         try:
-            data = persist_curve_torsion(
-                db,
-                curve_id,
-                E,
-                algorithm="pipeline:sage.torsion_subgroup",
-                timeout=timeout,
-            )
+            data = None
+            family = context.get("family")
+            torsion_point = getattr(family, "torsion_point", None)
+            if callable(torsion_point) and context.get("parameter") is not None:
+                try:
+                    witness = torsion_point(context["parameter"])
+                    data = persist_curve_torsion_from_point_witness(
+                        db,
+                        curve_id,
+                        E,
+                        witness,
+                        algorithm="pipeline:family_torsion_point",
+                    )
+                except Exception:
+                    # The witness is an optional acceleration. A plugin that
+                    # cannot supply a usable point falls back to the usual
+                    # isolated full torsion computation.
+                    data = None
+            if data is None:
+                data = persist_curve_torsion(
+                    db,
+                    curve_id,
+                    E,
+                    algorithm="pipeline:sage.torsion_subgroup",
+                    timeout=timeout,
+                )
         except TorsionTimeout as exc:
             return {
                 "status": "timeout",

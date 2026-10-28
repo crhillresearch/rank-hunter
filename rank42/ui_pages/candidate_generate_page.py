@@ -475,7 +475,7 @@ def page(db, ctx, *, embedded=False, source_method=None, new_search=False):
     if not embedded:
         title(
             "Generate Candidates",
-            "Generate Nagao/Mestre-ranked specialization pools. Candidate pools are search queues, not rank claims.",
+            "Build candidate queues with the ordering method suited to each family. Scores prioritize work; they are not rank claims.",
             icon="group_add",
         )
     render_feature_hook(db, ctx, "candidates.after_header")
@@ -500,8 +500,16 @@ def page(db, ctx, *, embedded=False, source_method=None, new_search=False):
             st.markdown('### Generate from family' if new_search else '### Generate from')
             if not new_search:
                 _source_switch('Family')
-            st.caption('Pick the family and parameter chart that will generate exact rational specializations.')
+            st.caption('Choose a family; its generator supplies the parameterization and candidate ordering.')
             plugin=st.selectbox('Plugin',plugins,format_func=lambda p:f"{p.name} · {family_rank_label(p, compact=True)}",label_visibility='collapsed')
+            generation_mode = str(plugin.manifest.get('candidate_generation_mode') or '')
+            indexed_base = generation_mode == 'indexed_genus_one_base'
+            lattice_base = generation_mode == 'rank_two_genus_one_lattice'
+            parameterized_base = indexed_base or lattice_base
+            if indexed_base:
+                st.caption('This family uses integer multiples nG on a genus-one base; Rank Hunter maps and scores each exact fiber directly.')
+            elif lattice_base:
+                st.caption('This family uses points mG1+nG2 on a rank-two genus-one base; Rank Hunter maps and scores the resulting exact fibers directly.')
             variant=get_variant(plugin)
             if len(plugin.variants)>1:
                 variant=st.selectbox('Family variant',plugin.variants,format_func=lambda v:f"{v.name} ({v.id}) · {family_rank_label(plugin, v, compact=True)}",key=f'cand-variant-{plugin.id}')
@@ -517,21 +525,34 @@ def page(db, ctx, *, embedded=False, source_method=None, new_search=False):
         form_col,guide_col=(st.columns([1.3,.7], gap="medium") if presets else (st.container(),None))
         with form_col:
             with st.container(key='rh-candidates-create', border=True):
-                st.markdown('### Score & save candidates')
-                st.caption('Choose a rational parameter range. Rank Hunter will score it and save the strongest candidates.')
+                st.markdown('### Build indexed fibers' if indexed_base else '### Scan the base lattice' if lattice_base else '### Score & save candidates')
+                st.caption('Each selector gives a rational point on the genus-one base and a section on its elliptic fiber.' if indexed_base else 'Set the lattice shell range. Rank Hunter maps those points to exact fibers and scores them.' if lattice_base else 'Choose a rational parameter range. Rank Hunter will score it and save the strongest candidates.')
                 with st.form('candidate-generate', border=False):
                     suffix=f"-{variant.id}" if len(plugin.variants)>1 else ''
                     if chart is not None: suffix += f'-{chart.id}'
                     name=st.text_input('Pool name',value=f"{plugin.id}{suffix}-{datetime.now().strftime('%Y%m%d-%H%M')}")
-                    c1,c2,c3,c4=st.columns(4)
+                    if parameterized_base:
+                        c1,c2=st.columns(2)
+                        c3=c4=None
+                    else:
+                        c1,c2,c3,c4=st.columns(4)
                     amin_key=f'cand-amin-{plugin.id}-{variant.id}'
                     amax_key=f'cand-amax-{plugin.id}-{variant.id}'
                     bmin_key=f'cand-bmin-{plugin.id}-{variant.id}'
                     bmax_key=f'cand-bmax-{plugin.id}-{variant.id}'
-                    amin=c1.number_input('a min',step=1,key=amin_key,**_widget_default_kwargs(amin_key,value=int(defaults.get('a_min',-5000))))
-                    amax=c2.number_input('a max',step=1,key=amax_key,**_widget_default_kwargs(amax_key,value=int(defaults.get('a_max',5000))))
-                    bmin=c3.number_input('b min',min_value=1,step=1,key=bmin_key,**_widget_default_kwargs(bmin_key,value=int(defaults.get('b_min',1))))
-                    bmax=c4.number_input('b max',min_value=1,step=1,key=bmax_key,**_widget_default_kwargs(bmax_key,value=int(defaults.get('b_max',250))))
+                    if indexed_base:
+                        amin=c1.number_input('First multiple n',step=1,key=amin_key,**_widget_default_kwargs(amin_key,value=int(defaults.get('a_min',1))))
+                        amax=c2.number_input('Last multiple n',step=1,key=amax_key,**_widget_default_kwargs(amax_key,value=int(defaults.get('a_max',500))))
+                        bmin=bmax=1
+                    elif lattice_base:
+                        amin=c1.number_input('First lattice shell',min_value=1,step=1,key=amin_key,**_widget_default_kwargs(amin_key,value=int(defaults.get('a_min',1))))
+                        amax=c2.number_input('Last lattice shell',min_value=1,step=1,key=amax_key,**_widget_default_kwargs(amax_key,value=int(defaults.get('a_max',4))))
+                        bmin=bmax=1
+                    else:
+                        amin=c1.number_input('a min',step=1,key=amin_key,**_widget_default_kwargs(amin_key,value=int(defaults.get('a_min',-5000))))
+                        amax=c2.number_input('a max',step=1,key=amax_key,**_widget_default_kwargs(amax_key,value=int(defaults.get('a_max',5000))))
+                        bmin=c3.number_input('b min',min_value=1,step=1,key=bmin_key,**_widget_default_kwargs(bmin_key,value=int(defaults.get('b_min',1))))
+                        bmax=c4.number_input('b max',min_value=1,step=1,key=bmax_key,**_widget_default_kwargs(bmax_key,value=int(defaults.get('b_max',250))))
                     top_key=f'cand-top-{plugin.id}-{variant.id}'
                     top=st.number_input('Final candidates to keep',min_value=1,step=100,key=top_key,**_widget_default_kwargs(top_key,value=int(defaults.get('top',1000))))
                     with st.expander('Scoring options', expanded=False, icon=':material/tune:'):
@@ -540,19 +561,24 @@ def page(db, ctx, *, embedded=False, source_method=None, new_search=False):
                         keeps_key=f'cand-keeps-{plugin.id}-{variant.id}'
                         bounds=d1.text_input('Prime stages',key=bounds_key,**_widget_default_kwargs(bounds_key,value=str(defaults.get('stage_bounds','1000,5000'))))
                         keeps=d2.text_input('Stage keeps',key=keeps_key,**_widget_default_kwargs(keeps_key,value=str(defaults.get('stage_keeps','10000,1000'))))
-                        score_method=st.selectbox(
-                            'Ranking method', ['mestre_nagao','nagao'],
-                            format_func=lambda value:'Mestre–Nagao' if value=='mestre_nagao' else 'Nagao',
-                            key=f'cand-score-method-{plugin.id}-{variant.id}',
-                            **_widget_default_kwargs(
-                                f'cand-score-method-{plugin.id}-{variant.id}',
-                                index=0 if defaults.get('score_method','mestre_nagao')=='mestre_nagao' else 1,
-                            ),
-                        )
-                        engine_choices=list(CANDIDATE_ENGINES)
-                        engine_default=str(defaults.get('engine','sieve'))
-                        engine_key=f'cand-engine-{plugin.id}-{variant.id}'
-                        engine=st.selectbox('Nagao engine',engine_choices,key=engine_key,**_widget_default_kwargs(engine_key,index=engine_choices.index(engine_default) if engine_default in engine_choices else 0))
+                        if parameterized_base:
+                            st.caption('Direct Mestre–Nagao scores are calculated on the actual fibers, not on residues of the lattice coordinates.')
+                            score_method='mestre_nagao'
+                            engine='sieve'
+                        else:
+                            score_method=st.selectbox(
+                                'Ranking method', ['mestre_nagao','nagao'],
+                                format_func=lambda value:'Mestre–Nagao' if value=='mestre_nagao' else 'Nagao',
+                                key=f'cand-score-method-{plugin.id}-{variant.id}',
+                                **_widget_default_kwargs(
+                                    f'cand-score-method-{plugin.id}-{variant.id}',
+                                    index=0 if defaults.get('score_method','mestre_nagao')=='mestre_nagao' else 1,
+                                ),
+                            )
+                            engine_choices=list(CANDIDATE_ENGINES)
+                            engine_default=str(defaults.get('engine','sieve'))
+                            engine_key=f'cand-engine-{plugin.id}-{variant.id}'
+                            engine=st.selectbox('Nagao engine',engine_choices,key=engine_key,**_widget_default_kwargs(engine_key,index=engine_choices.index(engine_default) if engine_default in engine_choices else 0))
                         sample_count=int(defaults.get('sample_count',200000))
                         sample_seed=int(defaults.get('sample_seed',42))
                         if engine=='sampled':
@@ -561,7 +587,7 @@ def page(db, ctx, *, embedded=False, source_method=None, new_search=False):
                             sample_seed_key=f'cand-sample-seed-{plugin.id}-{variant.id}'
                             sample_count=s1.number_input('Sample count',min_value=1,step=1000,key=sample_count_key,**_widget_default_kwargs(sample_count_key,value=sample_count))
                             sample_seed=s2.number_input('Sample seed',step=1,key=sample_seed_key,**_widget_default_kwargs(sample_seed_key,value=sample_seed))
-                        compact_share=st.slider(
+                        compact_share=0 if parameterized_base else st.slider(
                             'Share reserved for small parameters',0,50,
                             **_widget_default_kwargs(
                                 f'cand-compact-share-{plugin.id}-{variant.id}',
@@ -586,7 +612,7 @@ def page(db, ctx, *, embedded=False, source_method=None, new_search=False):
                                 key=f'cand-corpus-policy-{plugin.id}-{variant.id}',
                                 help='Research Libraries are read-only reference data; this never imports historical library curves into rank42.db.',
                             )
-                    submitted=st.form_submit_button('Generate Nagao pool',type='primary',width='stretch',icon=':material/group_add:')
+                    submitted=st.form_submit_button('Build indexed fiber pool' if indexed_base else 'Build lattice fiber pool' if lattice_base else 'Generate Nagao pool',type='primary',width='stretch',icon=':material/group_add:')
             if submitted:
                 try:
                     pipeline_choice=_candidate_pipeline_choice(

@@ -184,6 +184,83 @@ def compute_torsion_data(E):
     }
 
 
+def _unique_mazur_group_containing_element_order(order):
+    """Return the only Mazur group that can contain an element of this order.
+
+    For a cyclic subgroup of order ``n`` to sit inside a finite abelian group,
+    ``n`` must divide that group's exponent.  If there is exactly one group in
+    Mazur's list with that property, an exact rational point of order ``n``
+    proves the full rational torsion group without computing the whole group.
+    """
+    order = int(order)
+    possible = []
+    for invariants in MAZUR_TORSION_INVARIANTS:
+        exponent = max(invariants, default=1)
+        if exponent % order == 0:
+            possible.append(invariants)
+    return possible[0] if len(possible) == 1 else None
+
+
+def persist_curve_torsion_from_point_witness(
+    db, curve_id, E, point, *, algorithm="plugin:rational_torsion_point_witness"
+):
+    """Persist exact torsion when a verified point forces a unique Mazur group.
+
+    The point is rebuilt on the stored curve over ``QQ`` and its exact order is
+    checked by group operations.  This is useful for families with a supplied
+    torsion section: for example, an order-10 point can only occur in the
+    cyclic order-10 group among Mazur's fifteen possibilities.
+
+    Return ``None`` when the witness does not determine a unique group, leaving
+    the caller to use the full Sage torsion computation.
+    """
+    from sage.all import QQ
+    from rank42.db import now
+
+    try:
+        if point is None or bool(point.is_zero()):
+            return None
+        P = E(QQ(str(point[0])), QQ(str(point[1])))
+        identity = E(0)
+        element_order = None
+        # Mazur's theorem bounds every rational torsion point's order by 12.
+        # Find its exact order with exact additions, avoiding another Sage
+        # subprocess and the full torsion subgroup algorithm.
+        for n in (2, 3, 4, 5, 6, 7, 8, 9, 10, 12):
+            if n * P == identity:
+                element_order = n
+                break
+    except (ArithmeticError, TypeError, ValueError, ZeroDivisionError):
+        return None
+    if element_order is None:
+        return None
+
+    group = _unique_mazur_group_containing_element_order(element_order)
+    if group is None:
+        return None
+    data = {
+        "torsion_order": int(__import__("math").prod(group)),
+        "torsion_invariants_json": json.dumps(list(group)),
+        "torsion_label": torsion_label(group),
+    }
+    _write_torsion_state(
+        db,
+        int(curve_id),
+        **data,
+        torsion_computed_at=now(),
+        torsion_algorithm=(
+            f"{algorithm}:exact_order_{element_order}_point+Mazur_uniqueness"
+        ),
+        torsion_error=None,
+    )
+    return {
+        **data,
+        "torsion_witness_order": int(element_order),
+        "torsion_uniqueness_groups_checked": len(MAZUR_TORSION_INVARIANTS),
+        "torsion_proof": "exact rational point order and Mazur classification",
+    }
+
+
 def compute_torsion_data_bounded(E, *, timeout=30):
     """Compute exact torsion in an isolated Sage subprocess with a hard timeout."""
     timeout = max(1, int(timeout))

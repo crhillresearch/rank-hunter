@@ -51,7 +51,7 @@ _TOOLS = {
     ),
     "Sections": (
         section_base_change_page.sections_page, ":material/function:",
-        "Find and verify rational sections of formula families over Q(t).",
+        "Find and verify sections over rational or genus-one parameter bases.",
     ),
     "Lattices": (
         lattices_page.page, PAGE_ICONS["Lattices"],
